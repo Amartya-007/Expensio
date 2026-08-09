@@ -28,6 +28,7 @@ and it's a `check` constraint change plus new RLS branches later, not a redesign
 | Revoke invite | ✅ | ❌ | ❌ |
 | Join via invite code | — | ✅ (rejoin) | ✅ |
 | Remove another member | **doesn't exist as a feature** — see below | | |
+| Undo a join made through *your own* invite, within 1 hour | ✅ (only your own invite, only that recent) | ❌ | ❌ |
 | Leave trip (self) | ✅, always, no restriction | — | — |
 | Record a payment | ✅ | ❌ | ❌ |
 | Confirm a payment received | ✅ | ❌ | ❌ |
@@ -45,6 +46,25 @@ kicks the other; a disagreement ends with someone getting cut off from shared hi
 have a stake in). Dropping it isn't a missing feature — it's what makes the flat model safe
 to ship. A disruptive member is a social problem the group works out for itself; the app
 doesn't need to arbitrate it.
+
+**The one narrow exception, and why it doesn't count as "destructive power over others":**
+if an invite link ends up somewhere it shouldn't (a group chat, a forward), someone
+unwanted can join before the code is revoked. There's no general fix for this — but there
+*is* a case worth handling: catching it fast. `revoke_recent_join` lets the person who
+generated a specific invite undo that invite's join, and only within an hour of it
+happening. This isn't "any member can remove any member" — it's a person correcting their
+own very recent action, on a short clock, scoped only to people who came in through their
+own link. Past the window, or for a join that wasn't through your invite, there's no
+code-level undo — the honest fallback is everyone else leaving and starting a fresh trip,
+which stays consistent with the philosophy since it's a collective choice, not one member
+exercising power over another.
+
+**Also shrinking the blast radius in the first place:** `generate_invite`'s `max_uses` now
+defaults to **1**, not unlimited. A leaked code seats at most one unwanted person, not
+everyone who happened to see it — it doesn't stop a fast-acting stranger from being that
+one person, but it stops a pile-on. The app can still offer "let multiple people join with
+this code" as a deliberate choice for a real group invite (pass a higher `max_uses`), it's
+just no longer the default.
 
 **Why trip deletion stays narrow while everything else opens up:** archiving is reversible
 and doesn't erase anyone's data, so it's safe to open to any member. A real, cascading
@@ -144,7 +164,9 @@ end; $$;
 -- Expiry and revoke solve different problems and both stay: expiry is passive ("goes
 -- stale on its own"), revoke is active ("kill it right now, regardless of time left") —
 -- e.g. the code went to the wrong group chat and needs to die immediately, not in 24h.
-create function generate_invite(p_trip_id uuid, p_expires_in interval default '24 hours', p_max_uses int default null)
+-- max_uses defaults to 1, not unlimited — a leaked code seats at most one unwanted
+-- person, not everyone who saw it. Pass a higher value explicitly for a real group invite.
+create function generate_invite(p_trip_id uuid, p_expires_in interval default '24 hours', p_max_uses int default 1)
 returns text language plpgsql security definer as $$
 declare v_code text;
 begin
@@ -195,14 +217,44 @@ begin
     raise exception 'trip has reached the maximum number of members';
   end if;
 
-  insert into trip_members (trip_id, user_id, status)
-  values (v_invite.trip_id, auth.uid(), 'active')
-  on conflict (trip_id, user_id) do update set status = 'active', left_at = null;
+  insert into trip_members (trip_id, user_id, status, joined_via_invite_id)
+  values (v_invite.trip_id, auth.uid(), 'active', v_invite.id)
+  on conflict (trip_id, user_id) do update
+    set status = 'active', left_at = null, joined_via_invite_id = v_invite.id, joined_at = now();
 
   update trip_invites set use_count = use_count + 1 where id = v_invite.id;
 
   return v_invite.trip_id;
 end; $$;
+
+-- No remove_member function exists — see §2 for why. This is a narrow exception, not a
+-- general one: the person who generated a specific invite can undo THAT invite's join,
+-- and only within an hour of it happening. Scoped to their own recent action, not
+-- power over the group.
+create function revoke_recent_join(p_trip_id uuid, p_user_id uuid)
+returns void language plpgsql security definer as $$
+declare v_member trip_members; v_invite trip_invites;
+begin
+  select * into v_member from trip_members where trip_id = p_trip_id and user_id = p_user_id;
+  if v_member is null or v_member.status != 'active' then
+    raise exception 'no active membership to undo';
+  end if;
+  if v_member.joined_at < now() - interval '1 hour' then
+    raise exception 'this join is more than an hour old — no longer undoable this way';
+  end if;
+
+  select * into v_invite from trip_invites where id = v_member.joined_via_invite_id;
+  if v_invite is null or v_invite.created_by != auth.uid() then
+    raise exception 'you can only undo a join that happened through an invite you personally generated';
+  end if;
+
+  update trip_members set status = 'left', left_at = now()
+  where trip_id = p_trip_id and user_id = p_user_id;
+end; $$;
+
+-- Membership changes after creation: join_trip_via_code, leave_trip, and this narrow
+-- exception only. Kept together here so the full picture of "how does trip_members ever
+-- change" stays in one place.
 
 -- No remove_member function exists — see §2 for why. This is the only way membership
 -- ever ends: always self-initiated, always allowed, no restriction.
@@ -420,6 +472,13 @@ end; $$;
   group chat stops working the moment it's revoked — it doesn't have to wait out the timer.
 - **Solo user invites someone six months later.** No migration step exists to fail — see
   architecture doc §3.
+- **A code gets shared somewhere it shouldn't, and someone unwanted joins before it's
+  revoked.** If caught within an hour, whoever generated that invite can undo just that
+  join via `revoke_recent_join` — narrow, scoped to their own action. If it's been longer,
+  or the join came through someone else's invite, there's no code-level undo — the honest
+  fallback is the rest of the group leaving and starting a fresh trip. Named explicitly
+  because it's the one real gap this flat model accepts, not something worth pretending
+  away.
 - **Someone deletes their account while three people still owe them money.** `delete_account`
   has nothing to check anymore — no owner to force a transfer first. Their profile is
   scrubbed; every other member's ledger rows stay exactly as they are, and balances stay

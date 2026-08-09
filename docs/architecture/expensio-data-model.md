@@ -43,6 +43,7 @@ erDiagram
         uuid user_id FK
         text status
         timestamptz joined_at
+        uuid joined_via_invite_id FK
         timestamptz left_at
     }
     TRIP_INVITES {
@@ -150,11 +151,14 @@ create table trips (
 -- active member has identical permissions (see permissions doc, "almost nobody has
 -- destructive power over other people"). The only ways a row here changes after
 -- creation are join_trip_via_code and leave_trip — never a forced removal.
+-- joined_via_invite_id enables one narrow exception: an inviter undoing their own
+-- recent mistake — see revoke_recent_join in the permissions doc.
 create table trip_members (
   trip_id uuid not null references trips(id) on delete cascade,
   user_id uuid not null references profiles(id),
   status text not null default 'active' check (status in ('active', 'left')),
   joined_at timestamptz not null default now(),
+  joined_via_invite_id uuid references trip_invites(id),
   left_at timestamptz,
   primary key (trip_id, user_id)
 );
