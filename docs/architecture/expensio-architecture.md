@@ -249,6 +249,37 @@ later because the groundwork already exists.
 - Receipts: store as compressed images, serve via signed URLs, and consider a lifecycle
   policy for archived trips later. Not needed for v1.
 
+### Where caching actually helps in this design
+
+Worth being specific here rather than "add caching everywhere" — most of the read-caching
+problem is already solved by the architecture: **PowerSync's local SQLite mirror on every
+device is the biggest cache in this whole system**, and it's why reads are instant and work
+offline. The remaining opportunities are narrower, and each is a different mechanism:
+
+- **`trip_balances`** — already covered above: a materialized view is exactly a cache of a
+  computed value, refreshed on an event (new ledger entry) rather than recomputed live on
+  every read. Only worth doing once a trip's ledger is genuinely large.
+- **FastAPI's settlement-plan endpoint** — the debt-simplification graph algorithm is
+  deterministic for a given set of balances. If three trip members open the "settle up"
+  screen within the same minute, there's no reason to recompute it three times. A short-TTL
+  cache in FastAPI (in-memory is enough at this scale; Redis only if FastAPI ever runs as
+  multiple instances) keyed on `(trip_id, hash of current balances)` avoids the redundant
+  computation without ever risking a stale result — the hash changes the moment balances do.
+- **FastAPI's OCR endpoint** — this one's about cost, not just speed. Cache the OCR/AI
+  result keyed on a hash of the receipt image, not the request. A retried upload after a
+  flaky connection (common in offline-first apps, see architecture §5) shouldn't trigger a
+  second paid OCR/AI call for the same image.
+- **FX rates**, if you build the optional converted-balance display (§7) — rates don't need
+  a live fetch per request; cache with an hourly-or-so TTL.
+- **Static reference data** — currency list, category icons — this barely needs "caching"
+  as infrastructure at all; just bundle it with the app rather than fetching it from
+  anywhere.
+- **What deliberately isn't cached at an HTTP/CDN layer:** almost every read in this app is
+  RLS-scoped to the requesting user, so there's no shared response to cache the way you
+  would for a public API — each person's "my trips" response is different by construction.
+  That's a reason to lean on PowerSync's per-user local mirror (which is already doing this
+  job) rather than reach for a generic HTTP cache that wouldn't have much to cache anyway.
+
 ---
 
 ## 9. Lessons carried forward from TripSpend, mapped directly

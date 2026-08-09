@@ -137,7 +137,14 @@ end; $$;
 
 -- Any active member. Revokes any existing active invite before creating a new one —
 -- one active invite per trip, matching your original 6-digit-code design intent.
-create function generate_invite(p_trip_id uuid, p_expires_in interval default '7 days', p_max_uses int default null)
+-- Default expiry is short (24h) since most codes get shared and used within minutes of
+-- creation — but this is a parameter, not a hardcoded rule: the client can offer a picker
+-- (30 min / 24 hours / 7 days) depending on whether someone's sharing it directly to one
+-- person right now, or posting it somewhere for a group to join over the next few days.
+-- Expiry and revoke solve different problems and both stay: expiry is passive ("goes
+-- stale on its own"), revoke is active ("kill it right now, regardless of time left") —
+-- e.g. the code went to the wrong group chat and needs to die immediately, not in 24h.
+create function generate_invite(p_trip_id uuid, p_expires_in interval default '24 hours', p_max_uses int default null)
 returns text language plpgsql security definer as $$
 declare v_code text;
 begin
@@ -408,9 +415,9 @@ end; $$;
 - **Someone deletes an expense someone else already synced locally.** Soft delete plus an
   offsetting ledger entry, so every device converges to the same balance regardless of sync
   order — nothing is subtracted twice or missed.
-- **Invite code is reused after being revoked.** `join_trip_via_code` checks
-  `revoked_at is not null` before checking anything else — a stale cached code fails
-  immediately.
+- **Invite code is revoked before its 24h expiry elapses.** `join_trip_via_code` checks
+  `revoked_at is not null` before checking anything else, so a code shared with the wrong
+  group chat stops working the moment it's revoked — it doesn't have to wait out the timer.
 - **Solo user invites someone six months later.** No migration step exists to fail — see
   architecture doc §3.
 - **Someone deletes their account while three people still owe them money.** `delete_account`
