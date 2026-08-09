@@ -4,12 +4,12 @@
 
 Your brief said "Database: Supabase Postgres or clerk." Clerk is an auth provider, not a
 database, and your stack line separately says "Auth: Supabase Auth" — so I've assumed that
-was a slip and designed around **Supabase Auth** throughout. Supabase Auth's anonymous
-sign-in feature turns out to solve your local-mode requirement cleanly (see §3), which is
-a second reason to stay on it rather than bolt Clerk on top of Supabase. If you actually
+was a slip and designed around **Supabase Auth** throughout. It has native phone-OTP and
+Google OAuth support (see `expensio-onboarding-auth.md` for the full sign-up flow), which is
+what this design needs, without a token-exchange layer to another provider. If you actually
 want Clerk for a specific reason (e.g. existing org-wide identity, better MFA/SSO), say so —
-it's possible to wire Clerk JWTs into Supabase as a third-party auth provider, but it adds a
-token-exchange layer for no benefit I can see here, so I've left it out.
+it's possible to wire Clerk JWTs into Supabase as a third-party auth provider, but I don't
+see a benefit here.
 
 Everything below assumes the goals from your brief: offline-first with sync, real-time
 collaboration, strong access control, a schema that doesn't need to be redesigned when you
@@ -25,7 +25,7 @@ add features, and clean separation between client / database / server logic.
 | Local DB | SQLite via **PowerSync Capacitor SDK** | on-device source of truth, works offline |
 | Sync engine | **PowerSync** | streams Postgres ⇄ local SQLite, handles the upload queue |
 | Backend DB | **Supabase Postgres** | source of truth, RLS, RPC functions, realtime (via logical replication, consumed by PowerSync) |
-| Auth | **Supabase Auth**, anonymous sign-in + upgrade | one identity for solo and collaborative use, see §3 |
+| Auth | **Supabase Auth** — mandatory phone OTP + Google OAuth | every account is phone-verified before first use, see §3 |
 | Storage | Supabase Storage | receipt images, RLS-protected by trip membership |
 | Server | **FastAPI** | OCR, AI suggestions, settlement-optimization — stateless helper, never the source of truth for money |
 
@@ -94,22 +94,19 @@ can't drift between client code and rules the way TripSpend's did.
 
 TripSpend's worst bug came from local trips and cloud trips being *different data shapes*
 that had to be translated at the exact moment a person tried to go collaborative — and that
-translation silently dropped the ownership link. Expensio avoids the translation entirely:
+translation silently dropped the ownership link. Expensio avoids the translation entirely,
+by making sure it never happens: **every user completes sign-up and phone verification
+before they can create a trip at all** — see `expensio-onboarding-auth.md` for the full
+flow. There is no anonymous/local-only identity that later needs upgrading.
 
-- Every user — even one who never signs up — gets a real Supabase Auth account via
-  **anonymous sign-in** (`supabase.auth.signInAnonymously()`), created automatically the
-  first time the app opens. It behaves exactly like a normal authenticated user for RLS and
-  for PowerSync's sync rules.
 - A "local, single-person" trip is just a trip with one `trip_members` row (the owner) and
-  no active invite. There is no separate local schema.
-- When that person wants to invite someone, nothing about their identity changes. They call
-  `linkIdentity()` / `updateUser()` to attach an email or OAuth provider to the *same* user
-  ID, and generate an invite as normal. Their existing trips, expenses, and `user_id` foreign
-  keys stay exactly as they are — there's no import step, and so no step where ownership can
-  be silently lost.
-- Offline-first is the default for everyone, solo or collaborative, because it's the same
-  PowerSync/SQLite path either way — collaborative mode just means more than one device is
-  in the sync bucket for that trip.
+  no active invite. There is no separate local schema — solo and collaborative trips are
+  the same table shape from the start.
+- Because the account (and its `user_id`) exists *before* any trip data does, there is no
+  moment where local data has to be re-owned to a different identity. The migration bug
+  class doesn't get a foothold because there's no migration step in the design at all.
+- Offline-first is still the default for everyone, solo or collaborative — that's a property
+  of the PowerSync/SQLite sync layer (§5), independent of how the account was created.
 
 This single decision removes the entire bug class that consumed most of the debugging
 sessions in your TripSpend history (UID mismatch on migration, "members" stored as two
@@ -226,11 +223,11 @@ marking it settled manually"). `record_payment`'s `metadata` column already has 
 schema needs to change, and this generalizes to PayPal/Venmo/bank-transfer later if you ever
 expand beyond India without touching the ledger design.
 
-**Phone verification.** Splitwise collects a phone number for anti-fraud/recovery, via SMS
-OTP, but only as *initial* verification — never as an ongoing second factor. Supabase Auth
-supports phone OTP natively; treat it the same way as the email-linking flow in §3 — fully
-optional, offered as "add a phone number for account recovery" rather than required at
-signup, keeping the anonymous-first onboarding intact.
+**Phone verification.** Splitwise collects a phone number for anti-fraud/recovery via SMS
+OTP, used only as *initial* verification, never an ongoing second factor. Expensio goes
+further and makes this mandatory for every account, not just offered — the full sign-up and
+verification flow, rate limiting, and India SMS-compliance requirements are in their own
+document: `expensio-onboarding-auth.md`.
 
 **Public developer API.** Splitwise exposes an OAuth-protected REST API for third-party
 integrations. You get most of this for free already — Supabase auto-generates a PostgREST
@@ -254,11 +251,11 @@ later because the groundwork already exists.
 
 ---
 
-## 8. Lessons carried forward from TripSpend, mapped directly
+## 9. Lessons carried forward from TripSpend, mapped directly
 
 | TripSpend bug | Root cause | Expensio's fix |
 |---|---|---|
-| "Missing or insufficient permissions" on migration | Local user ID never became the Firebase UID | No migration — same user ID from first launch, anonymous or not (§3) |
+| "Missing or insufficient permissions" on migration | Local user ID never became the Firebase UID | No migration — `user_id` exists before any trip data does, established during mandatory onboarding (§3) |
 | `members` stored as UID array in rules but objects in some app code | No single place owned the shape of membership | `trip_members` join table, written only via RPC (§2) |
 | "Generate Invite Code" created an empty shadow trip | The local→cloud handoff was patched, not designed | There is no handoff to patch |
 | Create rule didn't restrict `members` to creator | Rule written after the fact, not derived from a spec | `create_trip` RPC sets `created_by` server-side from the JWT, not from client input |

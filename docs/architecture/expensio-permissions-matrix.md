@@ -34,14 +34,14 @@ direction.
 
 | Action | Owner | Member (active) | Removed / left member | Non-member |
 |---|:---:|:---:|:---:|:---:|
-| Create a trip | ✅ (becomes owner) | ✅ | ✅ | ✅ (any authenticated user, incl. anonymous) |
+| Create a trip | ✅ (becomes owner) | ✅ | ✅ | ✅ (any signed-in, phone-verified user) |
 | View trip & expenses | ✅ | ✅ | ❌ | ❌ |
 | Add expense | ✅ | ✅ | ❌ | ❌ |
 | Edit/delete **own** expense | ✅ | ✅ | ❌ | ❌ |
 | Edit/delete **another member's** expense | ✅ | Only if `expense_edit_policy = 'any_member'` | ❌ | ❌ |
 | Add a comment on an expense | ✅ | ✅ | ❌ | ❌ |
-| Generate / view invite code | ✅ | ❌ | ❌ | ❌ |
-| Revoke invite | ✅ | ❌ | ❌ | ❌ |
+| Generate / view invite code | ✅ | ✅ | ❌ | ❌ |
+| Revoke invite | ✅ | ✅ | ❌ | ❌ |
 | Join via invite code | — | — | ✅ (rejoin) | ✅ |
 | Remove another member | ✅ | ❌ | ❌ | ❌ |
 | Leave trip (self) | ❌ (must transfer/archive first — see below) | ✅ | — | — |
@@ -95,8 +95,8 @@ returns boolean language sql stable security definer as $$
   );
 $$;
 
--- trips: visible/editable only to active members. Creation is open to any authenticated
--- user (incl. anonymous), but created_by must be the caller — never trust a client-supplied value.
+-- trips: visible/editable only to active members. Creation is open to any signed-in,
+-- phone-verified user, but created_by must be the caller — never trust a client-supplied value.
 create policy trips_select on trips for select
   using (is_active_member(id));
 
@@ -126,9 +126,9 @@ create policy expense_splits_select on expense_splits for select
 create policy ledger_entries_select on ledger_entries for select
   using (is_active_member(trip_id));
 
--- trip_invites: only the owner can see invite codes for their trip.
+-- trip_invites: any active member can see invite codes for their trip.
 create policy trip_invites_select on trip_invites for select
-  using (is_owner(trip_id));
+  using (is_active_member(trip_id));
 ```
 
 ## 4. RPC functions — the one place each rule lives
@@ -154,14 +154,14 @@ begin
   return v_trip_id;
 end; $$;
 
--- Owner only. Revokes any existing active invite before creating a new one —
+-- Any active member. Revokes any existing active invite before creating a new one —
 -- one active invite per trip, matching your original 6-digit-code design intent.
 create function generate_invite(p_trip_id uuid, p_expires_in interval default '7 days', p_max_uses int default null)
 returns text language plpgsql security definer as $$
 declare v_code text;
 begin
-  if not is_owner(p_trip_id) then
-    raise exception 'only the trip owner can generate an invite';
+  if not is_active_member(p_trip_id) then
+    raise exception 'only trip members can generate an invite';
   end if;
 
   update trip_invites set revoked_at = now()
@@ -179,8 +179,8 @@ returns void language plpgsql security definer as $$
 declare v_trip_id uuid;
 begin
   select trip_id into v_trip_id from trip_invites where id = p_invite_id;
-  if not is_owner(v_trip_id) then
-    raise exception 'only the trip owner can revoke an invite';
+  if not is_active_member(v_trip_id) then
+    raise exception 'only trip members can revoke an invite';
   end if;
   update trip_invites set revoked_at = now() where id = p_invite_id;
 end; $$;
