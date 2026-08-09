@@ -1,69 +1,62 @@
-# Expensio — Roles, Permissions & Access Control
+# Expensio — Permissions & Access Control
 
-Companion to `expensio-architecture.md` and `expensio-data-model.md`. This is the document
-TripSpend never had — every action, spelled out for every role, before any code is written
-against it.
+Companion to `expensio-architecture.md` and `expensio-data-model.md`. Fully flat model, per
+your call: "almost nobody has destructive power over other people." No owner, no admin —
+every active member of a trip can do everything a trip-level action requires, and the only
+things withheld are the ones that could hurt *other* people, not the acting member themself.
 
-## 1. Roles
+## 1. Membership, not roles
 
-- **owner** — the trip creator, or anyone promoted (not in v1 — one owner per trip for now).
-- **member** — anyone who joined via invite and hasn't left or been removed.
+There is no `role` column. `trip_members.status` is the only thing that matters:
+**`active`** or **`left`**. Every active member has identical permissions. The only ways a
+membership row changes after a trip is created are `join_trip_via_code` and `leave_trip` —
+there is no `remove_member` function, deliberately (§2).
 
-Deliberately not building a `viewer` / read-only role for v1 — nothing in your brief asked
-for it, and adding it later is a one-line `check` constraint change on `trip_members.role`
-plus new RLS branches, not a redesign. Flagging it here so it's a known extension point, not
-a surprise later.
+Still not building a `viewer` / read-only tier for v1 — nothing in your brief asks for it,
+and it's a `check` constraint change plus new RLS branches later, not a redesign.
 
 ## 2. Permission matrix
 
-**A direct conflict with the Splitwise research, worth deciding on purpose:** Splitwise
-uses a fully open "community edit" model — no admin role, any group member can edit or
-delete *any* expense, full stop. Expensio's design so far restricts editing to the expense's
-creator or the trip owner. Given TripSpend's history was largely bugs in exactly this area
-(unrestricted writes causing data loss and confused state), I'd keep the stricter default —
-but I've made it a **per-trip setting** rather than a hardcoded choice, so a trip that wants
-Splitwise's fully-open model can have it:
+| Action | Active member | Left member | Non-member |
+|---|:---:|:---:|:---:|
+| Create a trip | ✅ (any signed-in, phone-verified user) | ✅ | ✅ |
+| View trip & expenses | ✅ | ❌ | ❌ |
+| Add expense | ✅ | ❌ | ❌ |
+| Edit/delete **any** expense in the trip | ✅ | ❌ | ❌ |
+| Add a comment on an expense | ✅ | ❌ | ❌ |
+| Generate / view invite code | ✅ | ❌ | ❌ |
+| Revoke invite | ✅ | ❌ | ❌ |
+| Join via invite code | — | ✅ (rejoin) | ✅ |
+| Remove another member | **doesn't exist as a feature** — see below | | |
+| Leave trip (self) | ✅, always, no restriction | — | — |
+| Record a payment | ✅ | ❌ | ❌ |
+| Confirm a payment received | ✅ | ❌ | ❌ |
+| Create / manage a recurring expense template | ✅ (any template, same as expenses) | ❌ | ❌ |
+| Archive / unarchive trip | ✅ | ❌ | ❌ |
+| **Hard-delete** trip | ✅, only when caller is the sole remaining active member | ❌ | ❌ |
+| Change own notification preferences | ✅ | ✅ | — |
+| Request own account deletion | ✅, unconditionally — no ownership check needed anymore | ✅ | ✅ |
 
-```
-trips.settings->>'expense_edit_policy'  -- 'creator_or_owner' (default) | 'any_member'
-```
+**Why "remove another member" doesn't exist, on purpose:** the Splitwise research doesn't
+describe a force-remove feature either — people leave voluntarily, full stop. In a fully
+flat model, letting any member forcibly remove any other member is exactly the kind of
+destructive power over other people this design is trying to avoid (two people join, one
+kicks the other; a disagreement ends with someone getting cut off from shared history they
+have a stake in). Dropping it isn't a missing feature — it's what makes the flat model safe
+to ship. A disruptive member is a social problem the group works out for itself; the app
+doesn't need to arbitrate it.
 
-Both `edit_expense` and `delete_expense` read this setting (see §4). This means the decision
-doesn't have to be right on day one — it's a toggle, not an architecture change, in either
-direction.
-
-| Action | Owner | Member (active) | Removed / left member | Non-member |
-|---|:---:|:---:|:---:|:---:|
-| Create a trip | ✅ (becomes owner) | ✅ | ✅ | ✅ (any signed-in, phone-verified user) |
-| View trip & expenses | ✅ | ✅ | ❌ | ❌ |
-| Add expense | ✅ | ✅ | ❌ | ❌ |
-| Edit/delete **own** expense | ✅ | ✅ | ❌ | ❌ |
-| Edit/delete **another member's** expense | ✅ | Only if `expense_edit_policy = 'any_member'` | ❌ | ❌ |
-| Add a comment on an expense | ✅ | ✅ | ❌ | ❌ |
-| Generate / view invite code | ✅ | ✅ | ❌ | ❌ |
-| Revoke invite | ✅ | ✅ | ❌ | ❌ |
-| Join via invite code | — | — | ✅ (rejoin) | ✅ |
-| Remove another member | ✅ | ❌ | ❌ | ❌ |
-| Leave trip (self) | ❌ (must transfer/archive first — see below) | ✅ | — | — |
-| Record a payment | ✅ | ✅ | ❌ | ❌ |
-| Confirm a payment received | ✅ | ✅ | ❌ | ❌ |
-| Create / manage a recurring expense template | ✅ | ✅ (own templates); owner can manage any | ❌ | ❌ |
-| Change own notification preferences | ✅ | ✅ | ✅ | — |
-| Request own account deletion | ✅ (must transfer/archive owned trips first) | ✅ | ✅ | ✅ |
-| Archive / delete trip | ✅ | ❌ | ❌ | ❌ |
-
-**Owner-can't-leave is intentional**, not an oversight: every trip needs exactly one owner
-at all times so "who can revoke invites / remove members" is never ambiguous. If you want
-owner transfer or multi-owner later, that's a `role` value addition plus a
-`transfer_ownership` RPC — not in v1 because your brief didn't ask for it, but noting it so
-it's a conscious decision, not a gap discovered via a bug report.
+**Why trip deletion stays narrow while everything else opens up:** archiving is reversible
+and doesn't erase anyone's data, so it's safe to open to any member. A real, cascading
+delete is not reversible and would destroy other people's shared history — so it's only
+allowed at the one moment it can't hurt anyone else: when the caller is the last active
+member standing. Everyone else already left; there's no one left to lose data.
 
 ## 3. RLS policy design
 
-The principle: **RLS is defense in depth, not where business logic lives.** Every policy
-below is a simple membership check. The actual rules (member caps, invite expiry, who can
-remove whom) live in the RPC functions in §4, where they're one function each, testable in
-isolation, instead of one long boolean expression per table.
+**RLS is defense in depth, not where business logic lives.** Every policy below is a simple
+membership check — one helper function, `is_active_member`. The actual rules (member caps,
+invite expiry, the sole-remaining-member check on delete) live in the RPC functions in §4.
 
 ```sql
 alter table trips enable row level security;
@@ -73,7 +66,7 @@ alter table expenses enable row level security;
 alter table expense_splits enable row level security;
 alter table ledger_entries enable row level security;
 
--- Helper: is the calling user an ACTIVE member of this trip?
+-- The one helper function every policy and RPC in this doc is built on.
 create function is_active_member(p_trip_id uuid)
 returns boolean language sql stable security definer as $$
   select exists (
@@ -81,17 +74,6 @@ returns boolean language sql stable security definer as $$
     where trip_id = p_trip_id
       and user_id = auth.uid()
       and status = 'active'
-  );
-$$;
-
-create function is_owner(p_trip_id uuid)
-returns boolean language sql stable security definer as $$
-  select exists (
-    select 1 from trip_members
-    where trip_id = p_trip_id
-      and user_id = auth.uid()
-      and status = 'active'
-      and role = 'owner'
   );
 $$;
 
@@ -104,15 +86,14 @@ create policy trips_insert on trips for insert
   with check (created_by = auth.uid());
 
 create policy trips_update on trips for update
-  using (is_owner(id));
+  using (is_active_member(id));
 
 -- trip_members: members can see their trip's roster. Direct writes are NOT allowed —
--- every membership change goes through an RPC (§4). This is the fix for TripSpend's
--- "removing a member didn't revoke access" bug: there is no other path to this table.
+-- every membership change goes through an RPC (§4): join_trip_via_code or leave_trip only.
 create policy trip_members_select on trip_members for select
   using (is_active_member(trip_id));
 
--- (no insert/update/delete policy defined for regular clients — RPC functions run as
+-- (no insert/update/delete policy for regular clients — RPC functions run as
 --  SECURITY DEFINER and bypass RLS deliberately, which is the only sanctioned write path)
 
 -- expenses / expense_splits / ledger_entries: read access follows membership.
@@ -139,7 +120,7 @@ calls these via `supabase.rpc(...)` — it never writes to `trip_members`, `expe
 or `ledger_entries` directly.
 
 ```sql
--- Creates a trip and makes the caller its owner, atomically.
+-- Creates a trip; the caller is just its first active member, nothing more.
 create function create_trip(p_name text, p_currency text, p_settings jsonb default '{}')
 returns uuid language plpgsql security definer as $$
 declare v_trip_id uuid;
@@ -148,8 +129,8 @@ begin
   values (p_name, p_currency, p_settings, auth.uid())
   returning id into v_trip_id;
 
-  insert into trip_members (trip_id, user_id, role, status)
-  values (v_trip_id, auth.uid(), 'owner', 'active');
+  insert into trip_members (trip_id, user_id, status)
+  values (v_trip_id, auth.uid(), 'active');
 
   return v_trip_id;
 end; $$;
@@ -207,38 +188,59 @@ begin
     raise exception 'trip has reached the maximum number of members';
   end if;
 
-  insert into trip_members (trip_id, user_id, role, status)
-  values (v_invite.trip_id, auth.uid(), 'member', 'active')
-  on conflict (trip_id, user_id) do update set status = 'active', removed_at = null;
+  insert into trip_members (trip_id, user_id, status)
+  values (v_invite.trip_id, auth.uid(), 'active')
+  on conflict (trip_id, user_id) do update set status = 'active', left_at = null;
 
   update trip_invites set use_count = use_count + 1 where id = v_invite.id;
 
   return v_invite.trip_id;
 end; $$;
 
--- Owner only. Sets status, not a delete — this IS the fix for "remove didn't revoke access,"
--- because every other RLS policy checks status = 'active'.
-create function remove_member(p_trip_id uuid, p_user_id uuid)
-returns void language plpgsql security definer as $$
-begin
-  if not is_owner(p_trip_id) then
-    raise exception 'only the trip owner can remove a member';
-  end if;
-  if p_user_id = auth.uid() then
-    raise exception 'owner cannot remove themselves — archive or transfer the trip instead';
-  end if;
-  update trip_members set status = 'removed', removed_at = now()
-  where trip_id = p_trip_id and user_id = p_user_id;
-end; $$;
-
+-- No remove_member function exists — see §2 for why. This is the only way membership
+-- ever ends: always self-initiated, always allowed, no restriction.
 create function leave_trip(p_trip_id uuid)
 returns void language plpgsql security definer as $$
 begin
-  if is_owner(p_trip_id) then
-    raise exception 'the owner cannot leave — archive or transfer the trip instead';
-  end if;
-  update trip_members set status = 'left', removed_at = now()
+  update trip_members set status = 'left', left_at = now()
   where trip_id = p_trip_id and user_id = auth.uid();
+end; $$;
+
+-- Any active member may archive or unarchive — reversible, doesn't erase anything.
+create function archive_trip(p_trip_id uuid)
+returns void language plpgsql security definer as $$
+begin
+  if not is_active_member(p_trip_id) then
+    raise exception 'not an active member of this trip';
+  end if;
+  update trips set is_archived = true where id = p_trip_id;
+end; $$;
+
+create function unarchive_trip(p_trip_id uuid)
+returns void language plpgsql security definer as $$
+begin
+  if not is_active_member(p_trip_id) then
+    raise exception 'not an active member of this trip';
+  end if;
+  update trips set is_archived = false where id = p_trip_id;
+end; $$;
+
+-- Hard delete, only when it can't affect anyone else. Cascades to trip_members, expenses,
+-- expense_splits, ledger_entries, trip_invites, expense_templates via the FKs already
+-- defined ON DELETE CASCADE in the data model.
+create function delete_trip(p_trip_id uuid)
+returns void language plpgsql security definer as $$
+declare v_active_count int;
+begin
+  if not is_active_member(p_trip_id) then
+    raise exception 'not an active member of this trip';
+  end if;
+  select count(*) into v_active_count from trip_members
+    where trip_id = p_trip_id and status = 'active';
+  if v_active_count > 1 then
+    raise exception 'cannot delete a trip while other members are still active — archive it instead';
+  end if;
+  delete from trips where id = p_trip_id;
 end; $$;
 
 -- Computes expense_splits from split_type + split_config server-side —
@@ -257,7 +259,6 @@ begin
   values (p_trip_id, p_description, p_amount, p_currency, auth.uid(), p_category, p_split_type, p_split_config, auth.uid())
   returning id into v_expense_id;
 
-  -- split computation lives here (per split_type) — omitted for brevity, see data-model doc
   perform compute_expense_splits(v_expense_id);
 
   insert into ledger_entries (trip_id, entry_type, expense_id, amount, currency, created_by)
@@ -266,32 +267,18 @@ begin
   return v_expense_id;
 end; $$;
 
--- Shared by edit_expense and delete_expense: can the caller touch THIS expense?
--- Reads the per-trip setting from §2 rather than hardcoding one policy.
-create function can_modify_expense(p_expense_id uuid)
-returns boolean language plpgsql stable security definer as $$
-declare v_trip_id uuid; v_created_by uuid; v_policy text;
-begin
-  select trip_id, created_by into v_trip_id, v_created_by from expenses where id = p_expense_id;
-  select coalesce(settings->>'expense_edit_policy', 'creator_or_owner') into v_policy
-    from trips where id = v_trip_id;
-
-  return is_owner(v_trip_id)
-      or v_created_by = auth.uid()
-      or (v_policy = 'any_member' and is_active_member(v_trip_id));
-end; $$;
-
+-- Any active member may edit/delete ANY expense — the flat model, unconditionally.
+-- No creator check, no policy toggle: this IS the policy now.
 create function edit_expense(
   p_expense_id uuid, p_description text, p_amount numeric,
   p_split_type text, p_split_config jsonb
 ) returns void language plpgsql security definer as $$
 declare v_trip_id uuid; v_currency text;
 begin
-  if not can_modify_expense(p_expense_id) then
+  select trip_id, currency into v_trip_id, v_currency from expenses where id = p_expense_id;
+  if not is_active_member(v_trip_id) then
     raise exception 'not permitted to edit this expense';
   end if;
-
-  select trip_id, currency into v_trip_id, v_currency from expenses where id = p_expense_id;
 
   update expenses set description = p_description, amount = p_amount,
     split_type = p_split_type, split_config = p_split_config, updated_at = now()
@@ -307,17 +294,15 @@ begin
   values (v_trip_id, 'expense_edited', p_expense_id, p_amount, v_currency, auth.uid());
 end; $$;
 
--- Owner can always modify; a regular member's access depends on trips.settings.expense_edit_policy.
 create function delete_expense(p_expense_id uuid)
 returns void language plpgsql security definer as $$
 declare v_trip_id uuid; v_amount numeric; v_currency text;
 begin
-  if not can_modify_expense(p_expense_id) then
-    raise exception 'not permitted to delete this expense';
-  end if;
-
   select trip_id, amount, currency into v_trip_id, v_amount, v_currency
     from expenses where id = p_expense_id;
+  if not is_active_member(v_trip_id) then
+    raise exception 'not permitted to delete this expense';
+  end if;
 
   update expenses set deleted_at = now() where id = p_expense_id;
   insert into ledger_entries (trip_id, entry_type, expense_id, amount, currency, created_by)
@@ -391,14 +376,12 @@ begin
 end; $$;
 
 -- Pseudonymizes rather than cascade-deletes — see data-model doc, "Account deletion & data
--- rights," for why a shared financial ledger can't tolerate a hard delete.
+-- rights." No ownership check needed anymore: with no owner concept, deleting an account
+-- never blocks on "someone has to hold this trip together" — it just leaves the profile
+-- scrubbed and every other member's ledger history untouched.
 create function delete_account()
 returns void language plpgsql security definer as $$
 begin
-  if exists (select 1 from trip_members where user_id = auth.uid() and role = 'owner' and status = 'active') then
-    raise exception 'transfer or archive owned trips before deleting your account';
-  end if;
-
   update profiles set display_name = 'Deleted user', avatar_url = null, deleted_at = now()
   where id = auth.uid();
   -- strips email/phone/OAuth identities via the Auth admin API — done outside this
@@ -408,25 +391,29 @@ end; $$;
 
 ## 5. Real-world scenarios this design was checked against
 
-- **Someone removed mid-trip still has the app open offline.** Their queued writes replay
-  against RPCs that re-check `is_active_member` server-side — they fail cleanly on
-  reconnect instead of silently succeeding against stale local state.
+- **Someone tries to force-remove a member they disagree with.** Not possible — there is no
+  such RPC. The only paths that change `trip_members` after creation are joining and
+  self-initiated leaving. This is a deliberate, load-bearing property of the flat model, not
+  a missing feature.
+- **Someone tries to delete a trip while others are still active in it.** `delete_trip`
+  checks the active-member count first and refuses with a clear message pointing at
+  `archive_trip` instead — no accidental mass-deletion of other people's shared history.
+- **A left member still has the app open offline.** Their queued writes replay against RPCs
+  that re-check `is_active_member` server-side — they fail cleanly on reconnect instead of
+  silently succeeding against stale local state.
 - **Two people tap "confirm payment" at once.** `confirm_payment` inserts a new ledger row
   each time rather than mutating shared state, so there's no race on a single field — worst
-  case is a duplicate `payment_confirmed` entry, which is a UI-level dedupe on
+  case is a duplicate `payment_confirmed` entry, deduped in the UI on
   `metadata->>'confirms'`, not a data-corruption risk.
-- **Owner deletes an expense someone else already synced locally.** The delete is a soft
-  delete plus an offsetting ledger entry, so every device converges to the same balance
-  regardless of sync order — nothing is subtracted twice or missed.
+- **Someone deletes an expense someone else already synced locally.** Soft delete plus an
+  offsetting ledger entry, so every device converges to the same balance regardless of sync
+  order — nothing is subtracted twice or missed.
 - **Invite code is reused after being revoked.** `join_trip_via_code` checks
-  `revoked_at is not null` before checking anything else — a stale cached code in someone's
-  messages fails immediately.
+  `revoked_at is not null` before checking anything else — a stale cached code fails
+  immediately.
 - **Solo user invites someone six months later.** No migration step exists to fail — see
   architecture doc §3.
-- **A friend group wants Splitwise's fully-open editing instead of the stricter default.**
-  One `update trips set settings = settings || '{"expense_edit_policy": "any_member"}'`
-  — no code change, no redeploy.
 - **Someone deletes their account while three people still owe them money.** `delete_account`
-  refuses if they're an active owner of any trip (forces a transfer/archive first), and for
-  trips where they're a regular member, their historical ledger rows stay exactly as they
-  are — only their profile is scrubbed. The other members' balances stay correct.
+  has nothing to check anymore — no owner to force a transfer first. Their profile is
+  scrubbed; every other member's ledger rows stay exactly as they are, and balances stay
+  correct.

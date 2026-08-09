@@ -99,9 +99,9 @@ by making sure it never happens: **every user completes sign-up and phone verifi
 before they can create a trip at all** — see `expensio-onboarding-auth.md` for the full
 flow. There is no anonymous/local-only identity that later needs upgrading.
 
-- A "local, single-person" trip is just a trip with one `trip_members` row (the owner) and
-  no active invite. There is no separate local schema — solo and collaborative trips are
-  the same table shape from the start.
+- A "local, single-person" trip is just a trip with one `trip_members` row and no active
+  invite. There is no separate local schema — solo and collaborative trips are the same
+  table shape from the start.
 - Because the account (and its `user_id`) exists *before* any trip data does, there is no
   moment where local data has to be re-owned to a different identity. The migration bug
   class doesn't get a foothold because there's no migration step in the design at all.
@@ -261,5 +261,5 @@ later because the groundwork already exists.
 | Create rule didn't restrict `members` to creator | Rule written after the fact, not derived from a spec | `create_trip` RPC sets `created_by` server-side from the JWT, not from client input |
 | Join had no member cap while create did | Two code paths for "add a member," only one had the check | One RPC (`join_trip_via_code`) is the only way `trip_members` rows are created after trip creation |
 | Invite revocation had no rule path at all | Revocation wasn't in the original design | `trip_invites` has `revoked_at` from day one, with a dedicated `revoke_invite` RPC |
-| Removing a member didn't revoke real access | "Remove" only touched a display-layer registry | `trip_members.status = 'removed'` is the *only* thing RLS checks — removal is access removal, not a UI change |
+| Removing a member didn't revoke real access | "Remove" only touched a display-layer registry | `trip_members.status = 'active'` is the *only* thing RLS checks — and now the only way status changes is a member leaving voluntarily (§9 permissions doc) |
 | Seven-path settlement status machine | Payments modeled as mutable state | Append-only `ledger_entries` — see §4 |

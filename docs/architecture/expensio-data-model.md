@@ -41,10 +41,9 @@ erDiagram
     TRIP_MEMBERS {
         uuid trip_id FK
         uuid user_id FK
-        text role
         text status
         timestamptz joined_at
-        timestamptz removed_at
+        timestamptz left_at
     }
     TRIP_INVITES {
         uuid id PK
@@ -115,7 +114,7 @@ erDiagram
 3. **`jsonb` is used deliberately, not everywhere.** `trips.settings` and
    `expenses.split_config` are the two places the schema needs to flex without a migration
    (custom split configurations, per-trip preferences, future expense metadata). Everything
-   load-bearing for permissions or money (`role`, `status`, `amount`, foreign keys) is a real
+   load-bearing for permissions or money (`status`, `amount`, foreign keys) is a real
    typed column — flexibility where you'll actually extend things, rigidity where
    correctness matters.
 4. **The client never computes its own splits.** `expense_splits` rows are generated
@@ -147,13 +146,16 @@ create table trips (
 );
 
 -- The single source of truth for "who can access this trip."
+-- The single source of truth for "who can access this trip." No role column: every
+-- active member has identical permissions (see permissions doc, "almost nobody has
+-- destructive power over other people"). The only ways a row here changes after
+-- creation are join_trip_via_code and leave_trip — never a forced removal.
 create table trip_members (
   trip_id uuid not null references trips(id) on delete cascade,
   user_id uuid not null references profiles(id),
-  role text not null default 'member' check (role in ('owner', 'member')),
-  status text not null default 'active' check (status in ('active', 'removed', 'left')),
+  status text not null default 'active' check (status in ('active', 'left')),
   joined_at timestamptz not null default now(),
-  removed_at timestamptz,
+  left_at timestamptz,
   primary key (trip_id, user_id)
 );
 
@@ -321,7 +323,6 @@ The resolution: deletion **pseudonymizes, it doesn't cascade-delete.**
   `profiles.id` depends on.
 - Add `profiles.deleted_at`, checked by the UI to render "Deleted user" instead of a name,
   but the ledger stays intact and correct for everyone still in a trip with them.
-- This is also exactly the right behavior for someone who was *removed* from a trip,
-  independent of deletion — their historical expenses and ledger entries stay, only their
-  ongoing access is cut (matches the `trip_members.status = 'removed'` design already in
-  place).
+- This is also exactly the right behavior for someone who *leaves* a trip, independent of
+  deletion — their historical expenses and ledger entries stay, only their ongoing access
+  is cut (matches the `trip_members.status = 'left'` design already in place).
