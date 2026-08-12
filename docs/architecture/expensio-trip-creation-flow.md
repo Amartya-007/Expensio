@@ -94,6 +94,15 @@ This also needs its own SMS template, separate from the OTP template — India's
 sender-ID/template registration (already covered in the onboarding doc) is per message type,
 not a blanket approval. Register "you've been invited to a trip" as its own template.
 
+**Email invites — resolved, going with yes.** It was cheap enough to just decide rather
+than leave open: the link/code infrastructure above is identical for SMS and email, and
+`expensio-architecture.md` §7 already commits to a transactional email provider (Resend/
+Postmark) for notifications generally, so this doesn't add a new vendor decision, just a
+second template using one already-planned piece of infrastructure. Sender flow: tap
+"Invite" → choose **SMS** / **Email** / **Copy link** — all three carry the same
+`https://expensio.app/join/ABC123` link and the same 6-digit code as a fallback for anyone
+who'd rather type it in than tap a link.
+
 ## 4. Edge case: mixed manual + contact participants
 
 Your example: 7-person trip, 2–4 added via contacts, the rest entered manually with no phone
@@ -110,7 +119,24 @@ others**, since they're not actually competing:
   invite can be sent retroactively. This is also the moment a manual entry could be
   reconciled with a real account if one already exists for that number — see §5.2.
 
-## 5. Open issues — resolve before this is buildable
+## Default reference data — resolved, static and app-bundled
+
+Two more open items closed with a default rather than left hanging, since both are cheap to
+expand later and don't warrant blocking on:
+
+- **Currency list:** a curated set, not fully-open ISO 4217 — INR plus the currencies
+  actually likely on an India-originated trip: USD, EUR, GBP, AED, SGD, THB, JPY, AUD, CAD,
+  NPR, LKR. Curated beats fully-open because it avoids someone fat-fingering a currency code
+  in a free-text field; expanding the list later is editing a static array, not a migration.
+- **Category list:** Food & Dining, Transportation, Accommodation, Shopping, Groceries,
+  Activities & Sightseeing, Entertainment, Healthcare, Bills & Utilities, Other — each with
+  a bundled icon. This is exactly the free default tier from the monetization doc; custom
+  categories (Plus feature) sit on top of this list, not instead of it.
+
+Both live as static data bundled with the client, not database rows — consistent with how
+`expensio-data-model.md` already treats this kind of reference data.
+
+
 
 ### 5.1 Group size minimum of 2 — resolved
 

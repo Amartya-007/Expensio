@@ -388,6 +388,66 @@ Unchanged in shape from before — the values inside are now **`participant_id`s
 | `itemized` | `{"items": [{"label": "Pizza", "amount": 450, "shared_by": ["pid1","pid2"]}], "tax": 40, "tip": 60, "tax_tip_split": "proportional"}` | line-item receipt splitting |
 | `reimbursement` | `{"reimburse_to": "pid1", "shares": {"pid2": 500, "pid3": 500}}` | inverse of a normal expense |
 
+## `compute_expense_splits` — the rounding rule that was never actually specified
+
+Referenced by name in `add_expense`/`edit_expense` throughout the permissions doc; this is
+what it actually does. The one rule that matters most: **compute in the smallest currency
+unit (integer paise/cents), never floating point** — dividing ₹100 three ways as floats
+gives 33.333... repeating, and floating-point drift on money is exactly the kind of bug that
+looks fine in testing and then someone's balance is off by a paisa in production.
+
+For every `split_type`, the shares must sum to *exactly* the expense total — not
+"approximately," not "off by a rounding unit." The pattern is the same across all seven:
+compute each share proportionally in integer minor units, then any leftover minor units
+(from the proportional division not dividing evenly) go to participants **in a fixed,
+deterministic order — sorted by `participant_id`** — one extra minor unit each until the
+leftover is exhausted.
+
+- **`equal`**: `total_minor_units / N` per participant, integer division; remainder
+  distributed as above. (₹100 ÷ 3 → ₹33.33 / ₹33.33 / ₹33.34, and *which* participant gets
+  the ₹33.34 is always the same for the same input — deterministic, not arbitrary-feeling.)
+- **`exact`**: use the provided shares directly, but **validate they sum to the total in
+  minor units** before accepting — reject with a clear error rather than silently rescaling
+  if they don't match. Never trust the client's arithmetic, same principle as everywhere
+  else in this design.
+- **`percentage`**: each share = `total_minor_units * pct / 100`, rounded down; remainder
+  distributed by the same deterministic rule. Reject if percentages don't sum to 100 before
+  doing any math.
+- **`shares`**: proportional by unit count (`total_minor_units * participant_units /
+  total_units`), same rounding-remainder handling.
+- **`adjustment`**: fixed adjustments applied first, remainder split (equal or by units,
+  per `split_config`) among the rest, same rounding rule for what's left.
+- **`itemized`**: each item's cost divided among its `shared_by` list (equal, unless the
+  item specifies exact amounts); tax and tip allocated proportionally to each participant's
+  running item subtotal, not split equally — someone who ordered a ₹200 dish shouldn't pay
+  the same tax share as someone who ordered ₹800 worth. Same integer-minor-unit rounding
+  throughout, remainder absorbed into the largest line item.
+- **`reimbursement`**: shares are exact reverse amounts (who owes the payer back) — same
+  validation as `exact`, must sum to the total.
+
+## Settlement-plan algorithm (FastAPI, referenced in architecture doc §6)
+
+Also never actually specified until now. Standard greedy debt-simplification, computed
+**per currency separately** — balances in different currencies are never netted against
+each other (data model principle: currencies aren't silently merged, see `trip_balances`):
+
+1. Read `trip_balances` for the trip, one currency at a time.
+2. Split participants into creditors (positive balance, owed money) and debtors (negative).
+3. Repeatedly match the largest-magnitude debtor against the largest-magnitude creditor:
+   settle `min(|debtor balance|, creditor balance)` as one suggested transaction, reduce
+   both by that amount, and repeat until every balance is zero (within a one-minor-unit
+   rounding tolerance).
+4. Return the resulting list of `{from_participant, to_participant, amount, currency}`
+   suggestions — nothing here writes to the ledger; a suggestion only becomes real when
+   someone actually calls `record_payment` for it.
+
+Worth being upfront about what this is and isn't: greedy largest-vs-largest is simple, fast,
+fully deterministic, and it's what most apps in this space actually ship — but it isn't
+guaranteed to produce the mathematically *minimum* possible number of transactions (that's
+a harder, NP-hard-in-general problem). "Good and simple" beats "optimal and complex" here;
+nobody's going to notice the difference between 4 suggested payments and the theoretical
+minimum of 3.
+
 ## Worked example: what "elastic" buys you
 
 Say six months in you want **percentage-based splits with a "who's exempt" list** —
