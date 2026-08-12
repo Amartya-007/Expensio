@@ -1,34 +1,36 @@
 # Expensio — Onboarding & Authentication
 
-Companion to `expensio-architecture.md` §3. Every user completes sign-up and mandatory
-phone verification before reaching the app — no anonymous/guest mode. This document is the
-full flow, screen by screen, plus the production concerns (rate limiting, India SMS
-compliance, identity conflicts) that a "just wire up Supabase Auth" pass tends to skip.
+Companion to `expensio-architecture.md` §3. Every user gets a working account the instant
+the app opens — **guest by default, no forced screens.** Verification (phone or Google) is
+required at exactly one moment: trying to collaborate with someone else. This document is
+the full flow, screen by screen, plus the production concerns (rate limiting, India SMS
+compliance, identity conflicts) a "just wire up Supabase Auth" pass tends to skip.
 
 ## 1. The core design decision
 
-**Every account converges on one universal, verified credential: a phone number.**
-Google sign-in is a faster way to prefill a name — it is never a substitute for phone
-verification. This is simpler than a multi-method "email or phone or OAuth" recovery model:
-there is exactly one canonical identity per user, always phone-based, and everything else
-(username, Google-linked name/email) sits on top of it as profile data, not as an
-alternative login path competing with it.
+**Guests get the entire solo experience for free — creating trips, adding expenses,
+managing placeholder participants, everything except reaching another real account.**
+The moment they try to generate an invite or join one via a code, that's the one gate:
+verify first, then continue. Verification means "not anonymous" — Google sign-in alone
+clears it, same as phone. There's no forced "one more step, give us your phone number too"
+after Google anymore; that only made sense when verification was mandatory for everyone.
+Phone stays the natural default for people who don't want to use Google, and it's still
+what powers the participant-claiming mechanism (permissions doc §4) when it's on file — but
+it's a means, not the only accepted proof of "not anonymous."
 
 ## 2. Screen-by-screen flow
 
-1. **Welcome / onboarding carousel** — a few intro screens on what Expensio does. No auth yet.
-2. **Auth page** — two buttons: **Continue with Google** or **Continue with phone number**.
+1. **Welcome / onboarding carousel** — a few intro screens on what Expensio does.
+2. **Entry screen** — three options, no hierarchy implied by order:
+   **Continue with Google** / **Continue with phone number** / **Continue as Guest.**
 3. **Branch:**
-   - *Google chosen:* standard OAuth consent, returns name + email. Next screen: **"One
-     more step — enter your phone number"** with a "Send OTP" button below the field.
-   - *Phone chosen:* one form, two fields — **Username** and **Phone number** — with a
-     "Send OTP" button below.
-4. **OTP entry screen** — six single-digit boxes centered on screen, auto-advancing between
-   them, with a **Verify** button below. A "Resend code" link appears once the cooldown
-   (§3) expires.
-5. **On successful verify → Home**, with:
-   - A **"Create your first trip"** primary call-to-action, front and center.
-   - A short, skippable setup section — see §5 for what goes here.
+   - *Guest:* nothing else — straight to Home on a fresh anonymous session.
+   - *Google:* standard OAuth consent (name + email) → straight to Home. No forced phone step.
+   - *Phone:* one form, two fields — **Username** and **Phone number** — "Send OTP" below.
+4. **(Phone path only) OTP entry screen** — six single-digit boxes, auto-advancing, **Verify**
+   button below, "Resend code" once the cooldown (§3) expires.
+5. **Home**, for everyone regardless of path: **"Create your first trip"** front and center,
+   plus a short skippable setup section (§5).
 
 ```mermaid
 sequenceDiagram
@@ -38,140 +40,137 @@ sequenceDiagram
     participant SMS as SMS Provider
     participant Google as Google
 
-    U->>App: Finish welcome screens
-    App->>U: Auth page — Google or Username + Phone
-    alt Chooses Google
-        U->>App: Continue with Google
+    U->>App: Open app (first launch)
+    App->>Auth: signInAnonymously()
+    Auth-->>App: guest session, real user_id
+    App->>U: Entry screen — Google / Phone / Continue as Guest
+    alt Continue as Guest
+        App-->>U: Home, immediately
+    else Continue with Google
         App->>Google: OAuth request
         Google-->>App: id_token (name, email)
-        App->>Auth: signInWithIdToken()
-        Auth-->>App: session created — no phone yet
-        App->>U: "One more step — enter your phone number"
-        U->>App: +91XXXXXXXXXX
-    else Chooses Username + Phone
-        U->>App: Enter username + +91XXXXXXXXXX
-        App->>App: hold username locally until OTP verified
+        App->>Auth: linkIdentity() (upgrades the SAME user_id, no new account)
+        Auth-->>App: verified — is_anonymous now false
+        App-->>U: Home
+    else Continue with phone
+        U->>App: Enter username + phone
+        App->>Auth: updateUser({ phone })
+        Auth->>SMS: Send OTP
+        SMS-->>U: "Your Expensio code is 483920"
+        App->>U: Show 6-box OTP entry screen
+        U->>App: Enter code, tap Verify
+        App->>Auth: verifyOtp({ phone, token })
+        Auth-->>App: verified — same user_id, is_anonymous now false
+        App-->>U: Home
     end
-    U->>App: Tap "Send OTP"
-    App->>Auth: updateUser({ phone }) / signInWithOtp({ phone })
-    Auth->>SMS: Send OTP
-    SMS-->>U: "Your Expensio code is 483920"
-    App->>U: Show 6-box OTP entry screen
-    U->>App: Enter code, tap Verify
-    App->>Auth: verifyOtp({ phone, token })
-    Auth-->>App: verified — phone is this account's permanent identity
-    App->>Auth: save profile (username, and name/email if Google was used)
-    App-->>U: Home → "Create your first trip" + setup prompts
 ```
 
-## 3. Phone OTP — rate limiting, abuse, and India-specific compliance
+## 3. The collaborative gate — how a guest actually hits it
 
-Carried over unchanged from the earlier design, since none of this depended on whether
-phone verification was optional or mandatory:
+```mermaid
+sequenceDiagram
+    participant U as Guest user
+    participant App as Expensio App
+    participant Auth as Supabase Auth
+    participant DB as Postgres RPC
+
+    U->>App: Tap "Invite" (or "Join with a code")
+    App->>DB: is caller anonymous? (checked server-side, not just client)
+    DB-->>App: auth.jwt() ->> 'is_anonymous' = true
+    App->>U: "Verify to invite others — takes a second"
+    Note over U,App: same Google/Phone options as the entry screen
+    U->>App: Completes verification (§2, either path)
+    App->>DB: retry generate_invite / join_trip_via_code
+    DB-->>App: succeeds — same user_id as before, every existing trip/expense untouched
+```
+
+The RPC-level check (permissions doc §4) is the real enforcement — the client prompt is
+just good UX, never trusted alone, consistent with every other rule in this design.
+
+## 4. Phone OTP — rate limiting, abuse, and India-specific compliance
+
+Applies whenever phone verification happens, whether that's the initial signup path or a
+guest clearing the collaborative gate later:
 
 - One OTP request per 60 seconds per number (Supabase default) — show a visible countdown
   on the resend button rather than loosening this.
 - CAPTCHA (hCaptcha/Turnstile) in front of the *send* call, not just verify — without it,
   the send endpoint is directly exploitable for SMS-pumping fraud (bots requesting OTPs to
-  premium-rate numbers to drain your SMS budget). Now that phone verification is mandatory
-  for every signup, this endpoint gets hit by every single install, which raises the stakes
-  on getting this right before launch, not after.
+  premium-rate numbers to drain your SMS budget).
 - Cap verify attempts per code (~5) before requiring a fresh send.
 - Twilio for development; move to MSG91 (or similar) via Supabase's Send SMS Hook before
   real India volume — Twilio is noticeably pricier per SMS here.
 - **India's TRAI DLT regulations require sender ID + message template pre-registration**
   before OTPs will deliver to Indian numbers at all. Unregistered messages are dropped
-  silently, not bounced. Register this before it's the reason nobody can sign up.
+  silently, not bounced. Register this before it's the reason nobody can verify.
 
-## 4. Identity conflicts
+## 5. Identity conflicts
 
-If someone enters a phone number already tied to a different account (own phone reused, or
-someone else's), Supabase returns "identity already in use" rather than merging anything.
-Surface it as its own screen state, not a generic error: **"This number is already
-registered — sign in with it instead?"** → drops into the phone-OTP sign-in path for that
-existing account. No automatic merging of two account histories — that's a real feature
-with real edge cases (duplicate trips, conflicting balances) that doesn't belong inside the
-auth flow.
+If someone enters a phone number already tied to a different account, Supabase returns
+"identity already in use" rather than merging anything. Surface it as its own screen state:
+**"This number is already registered — sign in with it instead?"** → drops into the
+phone-OTP sign-in path for that existing account. No automatic merging of two account
+histories — a guest's solo trips and an existing verified account's trips staying separate
+is the correct, safe default, not a gap.
 
-## 5. First-run Home: what to ask for, and in what order
+## 6. First-run Home: what to ask for, and in what order
 
-You asked for suggestions here — ranked by how much they actually belong on this screen
-versus asked for later, contextually:
+Same for every entry path — guest or verified:
 
 **Belongs on this screen, skippable:**
-- **Default currency** — auto-detect from device locale/SIM region (India → INR), shown as
-  a pre-filled but editable dropdown, not a blank field to fill in.
-- **App lock setup** (§6) — a natural moment to offer, right after identity verification,
-  especially for a money app. One toggle: "Secure Expensio with Face ID / fingerprint."
+- **Default currency** — auto-detect from device locale/SIM region (India → INR), editable.
+- **App lock setup** (§7) — natural moment to offer, especially for a money app.
 
 **Deliberately NOT on this screen — ask contextually instead:**
-- **Push notification permission** — requesting this cold, before the person has any reason
-  to want a notification, is exactly when opt-in rates are lowest. Ask when it's earned:
-  right after they create their first trip ("get notified when someone adds an expense") or
-  right after they generate their first invite. Same permission, much better acceptance
-  rate asked in context.
-- **Contacts permission** — optional, and only worth asking when they go to invite someone,
-  framed as "see which of your contacts are already on Expensio." Worth calling out as a
-  feature idea in its own right: since every account now has a verified phone number, a
-  contacts-based "friends already here" lookup becomes possible in a way it wasn't when
-  phone was optional — flagging this as a nice v1.1 candidate, not something to build into
-  the auth flow itself.
-- **Profile photo, language** — fully optional, available in Settings, not part of onboarding.
+- **Push notification permission** — ask when it's earned (after first trip, or right after
+  hitting the collaborative gate), not cold on first launch.
+- **Contacts permission** — only worth asking when they go to invite someone, framed as
+  "see which of your contacts are already on Expensio." A v1.1 candidate, not core.
+- **Profile photo, language** — fully optional, in Settings.
 
-## 6. App lock (biometric / PIN)
+## 7. App lock (biometric / PIN)
 
-A separate, client-side security layer on top of the Supabase session — not a re-login.
+Unchanged by the guest-mode decision — a separate, client-side layer on top of whatever
+Supabase session exists, guest or verified.
 
-- **What it gates:** the app's UI on open/resume, not the backend session. The Supabase
-  session stays valid in the background; app lock just blocks the screen until the device's
-  biometrics or a local PIN clears it.
-- **Trigger:** on app foreground after being backgrounded past a grace period (default
-  ~30–60 seconds) — not on every single app-switch, which trains people to find it
-  annoying and turn it off. Make the grace period configurable in Settings.
-- **Mechanism:** a Capacitor biometric plugin wrapping iOS LocalAuthentication / Android
-  BiometricPrompt for Face ID / fingerprint, with PIN as the fallback when biometrics are
-  unavailable or fail.
-- **Storage:** the "app lock enabled" flag and the PIN (as a salted hash, never plaintext)
-  go in secure device storage (Keychain/Keystore via a Capacitor secure-storage plugin) —
-  the same tier as the refresh token, not the general-purpose Preferences store.
-- **Forgot PIN, not a dead end:** since this only gates the UI, not the account, "forgot
-  PIN" offers "sign out and verify your phone number again" as an escape hatch — re-running
-  the OTP flow re-establishes identity and resets the app lock, rather than locking someone
-  out of their own account.
-- **Default:** off, offered as a toggle both during first-run setup (§5) and anytime after
-  in Settings → Security.
+- **What it gates:** the app's UI on open/resume, not the backend session.
+- **Trigger:** on app foreground after a grace period (default ~30–60s), configurable.
+- **Mechanism:** a Capacitor biometric plugin (Face ID / Android BiometricPrompt), PIN as
+  fallback.
+- **Storage:** enabled-flag and PIN hash in secure device storage (Keychain/Keystore), same
+  tier as the refresh token.
+- **Forgot PIN:** "sign out and verify again" resets it — not a dead end.
+- **Default:** off, offered here and in Settings → Security.
 
-## 7. Sessions & devices
+## 8. Sessions & devices
 
-- Supabase issues a short-lived JWT access token plus a longer-lived refresh token, stored
-  via Capacitor's secure storage — never `localStorage`.
-- Because every account is phone-verified from the start, multi-device sign-in works
-  uniformly for everyone: sign in with the same phone number (or Google account) on a new
-  device, verify OTP, and PowerSync pulls every trip tied to that `user_id`. There's no
-  "anonymous accounts can't do this" caveat to design around anymore.
+- Supabase issues a short-lived JWT plus a longer-lived refresh token, stored via
+  Capacitor's secure storage — never `localStorage`.
+- **Verified accounts are multi-device**: sign in with the same phone or Google account on a
+  new device, and PowerSync pulls every trip tied to that `user_id`.
+- **Guests are single-device, structurally** — there's no credential to sign back in with
+  from a second device or after reinstall. This is the real, honest cost of guest mode, and
+  exactly why the collaborative gate exists: it's the one moment losing that device would
+  also cost someone *else's* shared data, not just the guest's own.
 
-## 8. Security & compliance
+## 9. Security & compliance
 
-- **OTP is identity verification, not 2FA** — requested once at signup or when signing into
-  a new device, never as a recurring mid-session second factor. Keep the UI copy consistent
-  with that ("verify your number," not "enter your security code").
-- **Phone numbers are never shown to other trip members** — used only for verification,
-  recovery, and (if you build it) the contacts-lookup feature above, always opt-in.
+- **OTP is identity verification, not 2FA** — requested once, never as a recurring
+  mid-session second factor.
+- **Phone numbers are never shown to other trip members.**
 - **No accounts for under-13s** — an age acknowledgment checkbox at signup is enough for v1.
 - **Account deletion** strips the phone/Google identity via the Auth admin API — see
-  `expensio-data-model.md`, "Account deletion & data rights," for the full pseudonymization
-  design; this doc is the front half of that same flow.
+  `expensio-data-model.md`, "Account deletion & data rights." A guest who never verified has
+  nothing to strip; deletion for them is closer to just clearing local state.
 
-## 9. Still open
+## 10. Still open
 
-- **Apple Sign-In:** only becomes an App Store requirement the moment Google OAuth ships on
-  iOS — Apple requires offering it as an equivalent option whenever another third-party
-  login is present. Worth deciding before iOS submission, not after.
-- **Is "username" a unique, searchable handle, or just a display name?** I've assumed the
-  latter (no uniqueness constraint, purely a name shown to other members) since nothing in
-  the app needs to look someone up by username — people connect via invite code or phone.
-  Flag if you actually want unique handles; it changes the signup validation and adds a
-  "username taken" error state.
-- **App lock: opt-in or forced?** I've designed it as an off-by-default, prominently
-  offered toggle. If you want it mandatory for a money app, that's a one-line change to
-  §6's default, not a redesign.
+- **Apple Sign-In:** required by App Store review the moment Google OAuth ships on iOS.
+  Worth deciding before iOS submission.
+- **Is "username" a unique, searchable handle, or just a display name?** Assumed the latter
+  — flag if you want unique handles instead.
+- **App lock: opt-in or forced?** Currently off-by-default. One-line change if you want it
+  mandatory for a money app.
+- **Guest data retention:** Supabase has talked about auto-cleaning inactive anonymous users
+  after some period. Worth deciding whether an inactive guest's solo trip should ever
+  actually be purged, or kept indefinitely — affects storage cost at scale, not correctness.

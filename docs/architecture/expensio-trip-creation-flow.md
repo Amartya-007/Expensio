@@ -7,38 +7,57 @@ before it's buildable as-is.
 
 ## 1. Entry flow (recap — full detail in the onboarding doc)
 
-Onboarding carousel → Auth (Google or username+phone) → mandatory phone OTP → **Home**.
+Onboarding carousel → entry screen (**Google**, **phone number**, or **Continue as Guest**)
+→ **Home** — immediately for guests and Google, after OTP for the phone path. Guests get
+the full trip-creation wizard below with no restriction; verification is only triggered
+later, if and when they generate or use an invite code (onboarding doc §3).
 
 **Home, first visit:** two options — **Create a new trip** / **Join an existing trip** —
 with a 6-digit code field and **Join Trip** button beneath both. Code entry calls
-`join_trip_via_code` directly; no wizard needed for joining.
+`join_trip_via_code` directly; no wizard needed for joining (and, per the above, prompts a
+guest to verify first if needed).
 
 ## 2. Trip creation wizard
 
-**Step 1 — Trip setup:** trip name (autofocus), expected group size (2–25 — see §5.1 for
-why this range is a problem as stated). "Next."
+**Step 1 — Trip setup:** trip name (autofocus). "Next."
 
-**Step 2 — Who's who:** two entry modes for populating the roster —
+No headcount question here anymore — this resolves what was §5.1's open issue. The
+original `2–25` range blocked solo trips outright, and even `1–25` would still be
+front-loading a commitment real trips don't actually have (group size changes). Roster
+building in Step 2 is now purely additive: a trip starts with just the creator, and adding
+people — by any method, any number, at any point including after the trip's already
+running — is just an action, not a wizard gate.
 
-- **Manual entry:** creator types in names for everyone. Framed as "one person manages the
-  whole trip" — no phone number collected, no invite sent, no account required for these
-  participants. See §5.2 — this is the biggest open item in this whole doc.
-- **Contact-based selection:** "Speed up with contacts: Person 1 is you. Select up to
-  [N] contacts, then tap OK." Requests contacts permission, stores name + phone number per
-  selected contact. Phone number is required specifically because names collide (two
-  contacts can share a first name) — the phone is the actual disambiguator.
+**Step 2 — Who's who (optional, skippable):** two entry modes for adding participants —
 
-"Next."
+- **Manual entry:** creator types in names. Framed as "one person manages the whole trip" —
+  no phone number required, no invite sent unless one is added later. Becomes a
+  `participants` row with `type = 'placeholder'` (data model doc) — see §5.2, resolved.
+- **Contact-based selection:** "Speed up with contacts: Person 1 is you. Select contacts,
+  then tap OK." Requests contacts permission, stores name + phone number per selected
+  contact — phone is required here specifically because names collide (two contacts can
+  share a first name) and it's the actual disambiguator.
 
-**Step 3 — Budget:** per-person budget (max 1,000,000), with total trip budget shown live
-as per-person × group size. "Next."
+"Next," or skip straight past this step — a trip with zero added participants is just a
+solo trip, no different in the schema (architecture doc §3).
 
-**Step 4 — Dates:** start date via a custom calendar, end date (calendar disables anything
-before the selected start date rather than allowing an invalid pick and erroring after).
-"Start Trip" replaces "Next" on this step.
+**Step 3 — Budget (optional):** per-person budget, with total trip budget shown live as
+per-person × current participant count. "Next."
 
-Every step has a back button. "Start Trip" → **Home**, showing the new trip at the top with
-its name and budget.
+**Step 4 — Dates:** a yes/no choice first, not a calendar straight away —
+**"Are you going on a trip with a fixed start and end date?"**
+- **Yes, enter trip dates** (vacations, business trips) → calendar for start date, then end
+  date (calendar disables anything before the selected start date rather than allowing an
+  invalid pick and erroring after).
+- **No, continue without a time frame** (daily expenses, long-term/ongoing tracking) →
+  skip straight to Home. `trips.start_date`/`end_date` both stay null (data model doc) —
+  this is exactly the case that makes a `2–25`-style rigid wizard the wrong shape in the
+  first place: an ongoing expense tracker isn't really a "trip" with a headcount and a
+  date range at all.
+
+"Start Trip" on either path.
+
+Every step has a back button.
 
 ## 3. Invitation logic
 
@@ -93,16 +112,13 @@ others**, since they're not actually competing:
 
 ## 5. Open issues — resolve before this is buildable
 
-### 5.1 Group size minimum of 2 blocks the solo-trip case
+### 5.1 Group size minimum of 2 — resolved
 
-The architecture doc treats a single-member trip as fully first-class — no special
-handling, same schema, same everything. A hard `2–25` minimum on this screen means the app
-itself can't be used the way it's designed to support. Two ways to resolve, your call:
-- Change the range to `1–25`, and treat "1" as the solo/local-tracking use case.
-- Or keep `2–25` here deliberately, and route a genuine solo use case through a different,
-  lighter entry point ("track my own expenses" vs. "plan a trip with people") — reasonable
-  if you want the wizard to specifically mean "group trip," but then it should be a
-  conscious product decision, not an unexamined default.
+Removed the headcount step entirely rather than just widening the range (§2, Step 1).
+A trip now always starts as solo and people get added additively — matches the architecture
+doc's "a single-member trip is fully first-class" treatment exactly, and also fits the
+"no fixed timeframe / daily expenses" case from §2 Step 4 better than a rigid pre-trip
+headcount ever would have.
 
 ### 5.2 Manual entry — resolved
 
@@ -121,14 +137,13 @@ Keeping them apart means a placeholder never needs a fake access row it can't us
   (matches the field in this flow), and no longer relies on a permanent DB-level
   `UNIQUE(code)` constraint — see the comment on `generate_invite` in the permissions doc
   for why that constraint doesn't hold up at this code length.
+- ~~Budget and trip dates~~ — resolved: `trips` now has nullable `start_date`/`end_date`
+  columns (both null = no fixed timeframe, per §2 Step 4), and budget lives in
+  `trips.settings` since it doesn't affect ledger math.
 - **Email invites** are named in your opening line but never described in the flow itself —
   open question whether that's an actual v1 requirement or just naming apps that do
   invites well in general. Worth a direct answer before I document an email flow that might
   not be wanted.
-- **Budget and trip dates** aren't in the schema yet (`expensio-data-model.md` has no
-  `budget`, `start_date`, or `end_date`). Straightforward to add — budget probably belongs
-  in `trips.settings` (jsonb, doesn't affect ledger math) rather than a dedicated column;
-  dates are simple enough to be real columns.
 - **Contacts data is third-party personal data, not the user's own.** Storing other
   people's phone numbers pulled from someone's address book carries real privacy weight —
   both app stores require a specific, honest permission-prompt disclosure for contacts

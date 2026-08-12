@@ -26,14 +26,17 @@ erDiagram
     TRIPS ||--o{ TRIP_INVITES : "has"
     TRIPS ||--o{ LEDGER_ENTRIES : "has"
     TRIPS ||--o{ EXPENSE_TEMPLATES : "has"
+    TRIPS ||--o{ CUSTOM_CATEGORIES : "has"
     EXPENSE_TEMPLATES ||--o{ EXPENSES : "generates"
     EXPENSES ||--o{ EXPENSE_SPLITS : "splits into"
     EXPENSES ||--o{ LEDGER_ENTRIES : "generates"
     EXPENSES ||--o{ EXPENSE_COMMENTS : "has"
+    EXPENSES ||--o{ EXPENSE_ATTACHMENTS : "has"
     PARTICIPANTS ||--o{ EXPENSES : "paid_by"
     PARTICIPANTS ||--o{ EXPENSE_SPLITS : "owes"
     PARTICIPANTS ||--o{ LEDGER_ENTRIES : "from_participant / to_participant"
     PROFILES ||--o{ EXPENSE_COMMENTS : "writes"
+    PROFILES ||--o{ EXPENSE_ATTACHMENTS : "uploads"
 
     PROFILES {
         uuid id PK
@@ -48,6 +51,8 @@ erDiagram
         text currency
         uuid created_by FK
         jsonb settings
+        date start_date
+        date end_date
         boolean is_archived
         timestamptz created_at
     }
@@ -78,17 +83,31 @@ erDiagram
         timestamptz expires_at
         timestamptz revoked_at
     }
+    CUSTOM_CATEGORIES {
+        uuid id PK
+        uuid trip_id FK
+        text name
+        text icon
+        uuid created_by FK
+    }
     EXPENSES {
         uuid id PK
         uuid trip_id FK
         text description
         numeric amount
         text currency
+        numeric exchange_rate_override
         uuid paid_by FK
         text split_type
         jsonb split_config
         uuid source_template_id FK
         timestamptz deleted_at
+    }
+    EXPENSE_ATTACHMENTS {
+        uuid id PK
+        uuid expense_id FK
+        text storage_path
+        uuid uploaded_by FK
     }
     EXPENSE_SPLITS {
         uuid expense_id FK
@@ -170,10 +189,13 @@ create table trips (
   name text not null,
   currency text not null default 'INR',
   created_by uuid not null references profiles(id),
-  settings jsonb not null default '{}'::jsonb,  -- includes budget_per_person, start_date, end_date
+  settings jsonb not null default '{}'::jsonb,  -- includes budget_per_person
+  start_date date,                    -- both null = "no fixed timeframe" (flow doc §2, step 4)
+  end_date date,                      -- a trip can have dates added/changed/cleared later
   is_archived boolean not null default false,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  constraint valid_date_range check (end_date is null or start_date is null or end_date >= start_date)
 );
 
 -- ACCESS ONLY. Answers "can this auth.uid() read/write this trip" — nothing else. No role
@@ -254,10 +276,11 @@ create table expenses (
   description text not null,
   amount numeric(12,2) not null check (amount > 0),
   currency text not null,             -- per-expense, not inherited — a trip can mix currencies
+  exchange_rate_override numeric(14,6),  -- null = use a live-fetched rate for display conversion;
+                                          -- set = trust this instead (architecture doc §7)
   paid_by uuid not null references participants(id),
   category text,
   expense_date date not null default current_date,
-  receipt_path text,                  -- Supabase Storage path
   split_type text not null default 'equal'
     check (split_type in ('equal', 'exact', 'percentage', 'shares', 'adjustment', 'itemized', 'reimbursement')),
   split_config jsonb not null default '{}'::jsonb,
@@ -266,6 +289,29 @@ create table expenses (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   deleted_at timestamptz
+);
+
+-- Multiple photos per expense — receipts AND general "photo memories," not just one
+-- receipt_path. A trip's shared photo feed is just a query across this table by trip_id.
+create table expense_attachments (
+  id uuid primary key default gen_random_uuid(),
+  expense_id uuid not null references expenses(id) on delete cascade,
+  storage_path text not null,          -- Supabase Storage path
+  uploaded_by uuid not null references profiles(id),
+  created_at timestamptz not null default now()
+);
+
+-- Trip-scoped, shared with all members — a custom category one person creates is visible
+-- and reusable by everyone in the trip, not private to them. Default categories (name +
+-- icon) are static app-bundled data, not rows here — this table exists only for the
+-- custom ones, which is also why it doesn't need to be big or heavily indexed.
+create table custom_categories (
+  id uuid primary key default gen_random_uuid(),
+  trip_id uuid not null references trips(id) on delete cascade,
+  name text not null,
+  icon text not null,                  -- key into the app's bundled icon set
+  created_by uuid not null references profiles(id),
+  created_at timestamptz not null default now()
 );
 
 -- Server-computed, one row per participant's share of an expense.
@@ -320,6 +366,8 @@ group by trip_id, to_participant, currency;
 create index on trip_members(user_id);
 create index on participants(trip_id);
 create index on expenses(trip_id);
+create index on expense_attachments(expense_id);
+create index on custom_categories(trip_id);
 create index on expense_comments(expense_id);
 create index on ledger_entries(trip_id, created_at);
 create index on expense_templates(next_run_date) where is_active;

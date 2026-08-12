@@ -25,7 +25,7 @@ add features, and clean separation between client / database / server logic.
 | Local DB | SQLite via **PowerSync Capacitor SDK** | on-device source of truth, works offline |
 | Sync engine | **PowerSync** | streams Postgres ⇄ local SQLite, handles the upload queue |
 | Backend DB | **Supabase Postgres** | source of truth, RLS, RPC functions, realtime (via logical replication, consumed by PowerSync) |
-| Auth | **Supabase Auth** — mandatory phone OTP + Google OAuth | every account is phone-verified before first use, see §3 |
+| Auth | **Supabase Auth** — anonymous by default, phone OTP or Google to verify | guests use the app freely; verification required only to invite/join (§3) |
 | Storage | Supabase Storage | receipt images, RLS-protected by trip membership |
 | Server | **FastAPI** | OCR, AI suggestions, settlement-optimization — stateless helper, never the source of truth for money |
 
@@ -90,27 +90,39 @@ can't drift between client code and rules the way TripSpend's did.
 
 ---
 
-## 3. Local mode and collaborative mode are the same shape
+## 3. Local mode and collaborative mode are the same shape — and guests get there without ever migrating
 
 TripSpend's worst bug came from local trips and cloud trips being *different data shapes*
 that had to be translated at the exact moment a person tried to go collaborative — and that
-translation silently dropped the ownership link. Expensio avoids the translation entirely,
-by making sure it never happens: **every user completes sign-up and phone verification
-before they can create a trip at all** — see `expensio-onboarding-auth.md` for the full
-flow. There is no anonymous/local-only identity that later needs upgrading.
+translation silently dropped the ownership link. Expensio avoids the translation by making
+the account exist before any trip data does, regardless of how that account was created:
 
+- Every user gets a real Supabase Auth account the moment the app opens — **anonymous
+  sign-in** (`signInAnonymously()`) by default, no forced screens. It behaves exactly like a
+  normal authenticated user for RLS and PowerSync's sync rules, and can create trips, add
+  expenses, and manage placeholder participants freely.
 - A "local, single-person" trip is just a trip with one `trip_members` row and no active
-  invite. There is no separate local schema — solo and collaborative trips are the same
-  table shape from the start.
-- Because the account (and its `user_id`) exists *before* any trip data does, there is no
-  moment where local data has to be re-owned to a different identity. The migration bug
-  class doesn't get a foothold because there's no migration step in the design at all.
-- Offline-first is still the default for everyone, solo or collaborative — that's a property
-  of the PowerSync/SQLite sync layer (§5), independent of how the account was created.
+  invite — the same shape whether the account behind it is a guest or a verified user.
+- **Collaboration is the one gate.** `generate_invite` and `join_trip_via_code` both require
+  a *verified* (non-anonymous) account, checked server-side via the `is_anonymous` JWT claim
+  — never just a client-side prompt. The reasoning is symmetric, not paternalistic: an
+  anonymous session can't be recovered if the device is lost or the app reinstalled — there's
+  no credential to sign back in with. Letting a guest join someone else's shared trip risks
+  them becoming a permanently unreachable member of *someone else's* data; letting a guest
+  invite others risks the same for their own trip. Requiring verification at exactly that
+  moment protects the guest's own stake in collaborative data, not just everyone else's.
+- Hitting that gate triggers the phone (or Google) verification flow in
+  `expensio-onboarding-auth.md`, via `updateUser({ phone })` / `linkIdentity()` — which
+  attaches the credential to the **same `user_id`**. Every trip, expense, and placeholder
+  participant already created stays exactly as it is. Still no migration step to get wrong;
+  verification just adds a way back in, it doesn't change who they are.
+- Offline-first is still the default for everyone, guest or verified — a property of the
+  PowerSync/SQLite sync layer (§5), independent of account type.
 
-This single decision removes the entire bug class that consumed most of the debugging
-sessions in your TripSpend history (UID mismatch on migration, "members" stored as two
-different shapes, invite generation silently creating an empty shadow trip).
+This removes the same bug class TripSpend hit (UID mismatch on migration, "members" stored
+as two different shapes, invite generation silently creating an empty shadow trip) while
+still letting someone use the entire solo side of the app — including managing an entire
+trip's placeholder participants themselves — without ever seeing a signup screen.
 
 ---
 

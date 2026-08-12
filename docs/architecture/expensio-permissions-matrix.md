@@ -5,9 +5,12 @@ your call: "almost nobody has destructive power over other people." No owner, no
 every active member of a trip can do everything a trip-level action requires, and the only
 things withheld are the ones that could hurt *other* people, not the acting member themself.
 
-This now covers **placeholder participants** too (people manually added without an
-account) — see `expensio-data-model.md`'s opening note for why `trip_members` (access) and
-`participants` (financial identity) are two separate tables, not one renamed.
+This now covers **placeholder participants** (people manually added without an account —
+see `expensio-data-model.md`'s opening note for why `trip_members` and `participants` are
+separate tables) and the **guest/verification gate** (architecture doc §3): a guest — an
+unverified, anonymous-auth account — can do everything below except generate an invite or
+join one. Those two actions call `is_verified_user()`, which checks Supabase's own
+`is_anonymous` JWT claim server-side, never just a client-side prompt.
 
 ## 1. Membership, not roles
 
@@ -27,15 +30,15 @@ Still not building a `viewer` / read-only tier for v1 — nothing in your brief 
 
 | Action | Active member | Left member | Non-member |
 |---|:---:|:---:|:---:|
-| Create a trip | ✅ (any signed-in, phone-verified user) | ✅ | ✅ |
+| Create a trip | ✅ (any account, incl. guest) | ✅ | ✅ |
 | View trip & expenses | ✅ | ❌ | ❌ |
 | Add expense (for self or any participant, incl. placeholders) | ✅ | ❌ | ❌ |
 | Edit/delete **any** expense in the trip | ✅ | ❌ | ❌ |
-| Add a placeholder participant | ✅ | ❌ | ❌ |
+| Add a placeholder participant | ✅ (incl. guest) | ❌ | ❌ |
 | Add a comment on an expense | ✅ | ❌ | ❌ |
-| Generate / view invite code | ✅ | ❌ | ❌ |
+| Generate / view invite code | ✅ **if verified** — guest is prompted to verify first | ❌ | ❌ |
 | Revoke invite | ✅ | ❌ | ❌ |
-| Join via invite code | — | ✅ (rejoin) | ✅ |
+| Join via invite code | — | ✅ (rejoin) | ✅ **if verified** — guest is prompted to verify first |
 | Remove another member | **doesn't exist as a feature** — see below | | |
 | Undo a join made through *your own* invite, within 1 hour | ✅ (only your own invite, only that recent) | ❌ | ❌ |
 | Leave trip (self) | ✅, always, no restriction | — | — |
@@ -77,6 +80,8 @@ alter table trip_invites enable row level security;
 alter table expenses enable row level security;
 alter table expense_splits enable row level security;
 alter table ledger_entries enable row level security;
+alter table expense_attachments enable row level security;
+alter table custom_categories enable row level security;
 
 create function is_active_member(p_trip_id uuid)
 returns boolean language sql stable security definer as $$
@@ -84,6 +89,14 @@ returns boolean language sql stable security definer as $$
     select 1 from trip_members
     where trip_id = p_trip_id and user_id = auth.uid() and status = 'active'
   );
+$$;
+
+-- "Not anonymous" — Google sign-in or phone verification both clear this, checked via
+-- Supabase's own is_anonymous JWT claim. Gates only generate_invite and join_trip_via_code
+-- (architecture doc §3) — every other action stays available to guests.
+create function is_verified_user()
+returns boolean language sql stable as $$
+  select coalesce((auth.jwt() ->> 'is_anonymous')::boolean, false) = false;
 $$;
 
 create policy trips_select on trips for select using (is_active_member(id));
@@ -107,6 +120,13 @@ create policy expense_splits_select on expense_splits for select
 create policy ledger_entries_select on ledger_entries for select
   using (is_active_member(trip_id));
 create policy trip_invites_select on trip_invites for select
+  using (is_active_member(trip_id));
+
+-- expense_attachments / custom_categories: same read-follows-membership pattern, writes
+-- go through RPCs (add_attachment, add_custom_category).
+create policy expense_attachments_select on expense_attachments for select
+  using (is_active_member((select trip_id from expenses where id = expense_id)));
+create policy custom_categories_select on custom_categories for select
   using (is_active_member(trip_id));
 ```
 
@@ -151,6 +171,39 @@ begin
   return v_id;
 end; $$;
 
+-- expenses.category stays free text — no FK to this table. It exists only so a custom
+-- name+icon pair is shared and reusable across the trip, not to constrain what category
+-- text an expense can actually hold.
+create function add_custom_category(p_trip_id uuid, p_name text, p_icon text)
+returns uuid language plpgsql security definer as $$
+declare v_id uuid;
+begin
+  if not is_active_member(p_trip_id) then
+    raise exception 'not an active member of this trip';
+  end if;
+  insert into custom_categories (trip_id, name, icon, created_by)
+  values (p_trip_id, p_name, p_icon, auth.uid())
+  returning id into v_id;
+  return v_id;
+end; $$;
+
+-- The actual file upload goes straight to Supabase Storage from the client (RLS-protected
+-- by trip membership on the bucket policy); this just records the resulting path against
+-- the expense. Any active member can attach to any expense, same flat pattern as editing.
+create function add_attachment(p_expense_id uuid, p_storage_path text)
+returns uuid language plpgsql security definer as $$
+declare v_trip_id uuid; v_id uuid;
+begin
+  select trip_id into v_trip_id from expenses where id = p_expense_id;
+  if not is_active_member(v_trip_id) then
+    raise exception 'not an active member of this trip';
+  end if;
+  insert into expense_attachments (expense_id, storage_path, uploaded_by)
+  values (p_expense_id, p_storage_path, auth.uid())
+  returning id into v_id;
+  return v_id;
+end; $$;
+
 -- 6-digit NUMERIC code (matches the app's 6-digit field — earlier drafts generated hex,
 -- fixed here). No DB-level UNIQUE(code): at 1,000,000 combinations, "unique forever" would
 -- eventually block valid new codes as old ones pile up expired-but-unrevoked, and Postgres
@@ -164,6 +217,9 @@ declare v_code text; v_attempts int := 0;
 begin
   if not is_active_member(p_trip_id) then
     raise exception 'only trip members can generate an invite';
+  end if;
+  if not is_verified_user() then
+    raise exception 'verify your account before inviting others';
   end if;
 
   update trip_invites set revoked_at = now()
@@ -206,6 +262,10 @@ create function join_trip_via_code(p_code text, p_phone text default null)
 returns uuid language plpgsql security definer as $$
 declare v_invite trip_invites; v_member_count int; v_claimed_id uuid;
 begin
+  if not is_verified_user() then
+    raise exception 'verify your account before joining a trip';
+  end if;
+
   select * into v_invite from trip_invites
     where code = p_code and revoked_at is null and expires_at > now() for update;
 
@@ -463,6 +523,9 @@ end; $$;
 - **A code is leaked and someone unwanted joins.** Caught within an hour + it was your own
   invite → clean undo via `revoke_recent_join`. Otherwise, no code-level fix — the group
   leaves and starts fresh.
+- **A guest tries to invite someone or join a trip.** `is_verified_user()` blocks it
+  server-side regardless of what the client UI shows — the client prompts them to verify
+  first, but the RPC never trusts that the prompt actually ran.
 - **Someone deletes their account while owed money by three people.** No blocking check
   needed — their profile is scrubbed, every other participant's ledger rows stay correct.
 - **7-person trip, 3 added via contacts, 4 entered manually with no phone.** The 4 manual
