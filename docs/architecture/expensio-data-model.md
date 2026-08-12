@@ -27,6 +27,9 @@ erDiagram
     TRIPS ||--o{ LEDGER_ENTRIES : "has"
     TRIPS ||--o{ EXPENSE_TEMPLATES : "has"
     TRIPS ||--o{ CUSTOM_CATEGORIES : "has"
+    TRIPS ||--o{ TRIP_ACTIVITY_LOG : "has"
+    PARTICIPANTS ||--o{ TRIP_ACTIVITY_LOG : "is subject of"
+    PROFILES ||--o{ TRIP_ACTIVITY_LOG : "acts in"
     EXPENSE_TEMPLATES ||--o{ EXPENSES : "generates"
     EXPENSES ||--o{ EXPENSE_SPLITS : "splits into"
     EXPENSES ||--o{ LEDGER_ENTRIES : "generates"
@@ -89,6 +92,16 @@ erDiagram
         text name
         text icon
         uuid created_by FK
+    }
+    TRIP_ACTIVITY_LOG {
+        uuid id PK
+        uuid trip_id FK
+        text event_type
+        uuid actor_id FK
+        uuid subject_participant_id FK
+        text description
+        jsonb metadata
+        timestamptz created_at
     }
     EXPENSES {
         uuid id PK
@@ -172,7 +185,16 @@ erDiagram
    handling for participants: once a profile is pseudonymized, every registered participant
    row reflects that automatically through the join.
 
-## DDL
+7. **The activity log commits atomically with the change it describes, by construction.**
+   Every RPC that writes a domain change also writes its `trip_activity_log` row inside the
+   same function body — a single Postgres function call is one transaction, so if anything
+   after the log insert fails, the whole thing rolls back together. There's no separate
+   "log the event" step that could succeed while the actual mutation fails, or vice versa.
+8. **Offline-replayed writes are idempotent, not just retried.** Every state-changing RPC
+   takes an optional `p_client_request_id` — a UUID the client generates once per action and
+   reuses if a call has to be retried after a flaky offline reconnect. `processed_requests`
+   is the shared dedup table; a second call with the same key is a no-op, not a duplicate
+   expense or a double join.
 
 ```sql
 -- Extends auth.users with app-facing profile data.
@@ -193,6 +215,9 @@ create table trips (
   start_date date,                    -- both null = "no fixed timeframe" (flow doc §2, step 4)
   end_date date,                      -- a trip can have dates added/changed/cleared later
   is_archived boolean not null default false,
+  deleted_at timestamptz,             -- soft-hide, not a real DELETE — see delete_trip in the
+                                       -- permissions doc for why a true hard delete would have
+                                       -- destroyed the immutable trip_activity_log along with it
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint valid_date_range check (end_date is null or start_date is null or end_date >= start_date)
@@ -362,6 +387,60 @@ select trip_id, to_participant as participant_id, currency, sum(amount) as balan
 from ledger_entries where to_participant is not null
 group by trip_id, to_participant, currency;
 
+-- Idempotency for offline-queued RPCs (architecture doc §5). A client generates one UUID
+-- per user action and passes it as p_client_request_id; a retried call after a flaky
+-- offline reconnect checks this table first and no-ops if already applied, instead of
+-- creating a duplicate expense/payment/join. One dedup table shared by every RPC, not one
+-- idempotency column bolted onto each individual table.
+create table processed_requests (
+  client_request_id uuid primary key,
+  created_at timestamptz not null default now()
+);
+
+-- The trip-wide immutable activity log — separate from ledger_entries (which is
+-- specifically the financial ledger trip_balances sums) and separate from
+-- expense_comments (which is a per-expense discussion thread). This is the comprehensive,
+-- chronological "what happened in this trip" feed: every expense/payment/membership/
+-- category/name-change event, in one place, per trip.
+--
+-- description is a snapshot, generated and frozen at insert time (via the log_activity
+-- helper in the permissions doc) — NOT a live join through profiles. If someone renames
+-- themselves later, old entries still read with the name that was true when the event
+-- happened. This is deliberately different from how participants.display_name resolves
+-- (Design Principle 6) — that's for "who is this, right now"; this is a historical record.
+create table trip_activity_log (
+  id uuid primary key default gen_random_uuid(),
+  trip_id uuid not null references trips(id) on delete cascade,
+  event_type text not null check (event_type in (
+    'trip_created', 'trip_archived', 'trip_unarchived',
+    'expense_added', 'expense_edited', 'expense_deleted',
+    'payment_recorded', 'payment_confirmed',
+    'member_joined', 'member_rejoined', 'member_left',
+    'placeholder_added', 'placeholder_claimed',
+    'invite_generated', 'invite_revoked', 'invite_join_undone',
+    'display_name_changed', 'category_added'
+  )),
+  actor_id uuid references profiles(id),               -- who performed the action
+  subject_participant_id uuid references participants(id),  -- who/what it's about, if applicable
+  description text not null,           -- human-readable, frozen at write time
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+-- Immutable means immutable, enforced by Postgres itself, not just "we don't write RPCs
+-- that touch it." Even a SECURITY DEFINER function bypasses RLS but NOT a trigger — this
+-- fires no matter how the row is approached, which is the actual guarantee you asked for.
+create function prevent_activity_log_mutation()
+returns trigger language plpgsql as $$
+begin
+  raise exception 'trip_activity_log is immutable — % is not permitted', TG_OP;
+end; $$;
+
+create trigger no_update_activity_log before update on trip_activity_log
+  for each row execute function prevent_activity_log_mutation();
+create trigger no_delete_activity_log before delete on trip_activity_log
+  for each row execute function prevent_activity_log_mutation();
+
 -- Indexes
 create index on trip_members(user_id);
 create index on participants(trip_id);
@@ -371,6 +450,12 @@ create index on custom_categories(trip_id);
 create index on expense_comments(expense_id);
 create index on ledger_entries(trip_id, created_at);
 create index on expense_templates(next_run_date) where is_active;
+-- Backs generate_due_recurring_expenses's idempotency claim (permissions doc §5) — a
+-- template can produce at most one expense per calendar date, so even a genuine double-run
+-- of the scheduled job can't duplicate a recurring charge.
+create unique index on expenses(source_template_id, expense_date) where source_template_id is not null;
+create index on trip_activity_log(trip_id, created_at);
+create index on processed_requests(created_at);
 ```
 
 ## `split_config` shapes, one per `split_type`

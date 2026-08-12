@@ -158,23 +158,40 @@ See `expensio-data-model.md` for the concrete tables.
    online or off.
 2. **Simple local writes** (draft state, unsent form fields): pure local SQLite, no sync
    needed until submitted.
-3. **Sensitive writes** (add expense, join trip, remove member, record payment): the client
-   calls the relevant Postgres RPC function through `supabase-js`.
+3. **Sensitive writes** (add expense, join trip, record payment): the client calls the
+   relevant Postgres RPC function through `supabase-js`, generating one
+   `client_request_id` (a UUID) per user action and reusing that same value on every retry
+   of that action — this is what makes replay safe rather than just hopeful (permissions
+   doc §3, `claim_idempotency_key`).
    - **Online:** call succeeds immediately, Postgres applies it, the result flows back down
      through logical replication → PowerSync → local SQLite on every affected device
      (including the caller's, which reconciles any server-computed fields like
      `expense_splits`).
-   - **Offline:** the call is queued in a small app-level "pending actions" table (a plain
-     local SQLite table, not the PowerSync default queue, since PowerSync's built-in upload
-     queue is designed for direct row writes and these are RPC calls). On reconnect, replay
-     the queue in order against the RPC functions. Each RPC should be safe to retry
-     (idempotency key or a natural check like "already a member" returning success) since a
-     retry after a flaky connection is the common case, not the exception.
+   - **Offline:** the call — RPC name, arguments, and its `client_request_id` — is written
+     **synchronously to local SQLite** at the moment of the user's action, not just held in
+     memory. This matters concretely on Android: the OS can kill a backgrounded app process
+     at any time, and an action sitting only in JS state would be lost along with it. Once
+     it's a durable row in the local "pending actions" table, process death is a non-event —
+     the queue survives, and gets replayed in order on next launch or reconnect, whichever
+     comes first.
+   - This is a plain local SQLite table, not the PowerSync default upload queue, since
+     PowerSync's built-in queue is designed for direct row writes and these are RPC calls.
 4. **Conflict handling:** because membership and money both go through RPC functions with
    server-side validation, the server is always the arbiter — a queued "join trip" that
    would exceed the member cap, or hits a revoked invite, simply fails cleanly on replay
    with a message the UI can show, instead of silently corrupting state the way an
    unenforced client-side check would.
+5. **Sync scope must track membership exactly, not just trip existence.** PowerSync's sync
+   rules should bucket data by *active* `trip_members` rows, and — this is the important
+   part — when someone's status flips to `left`, their local device needs to actually stop
+   receiving that trip's updates and ideally purge what it already has, not just stop
+   showing it in the UI while the data quietly sits in local SQLite. This is worth being
+   explicit about because it's exactly the failure mode TripSpend hit: activity logs showing
+   UUIDs of people who didn't belong in that trip, because access was revoked server-side
+   but stale data lingered on-device. The RLS policy on `trip_activity_log` (permissions doc
+   §4) already prevents a live query from crossing trip boundaries — this point is about
+   making sure the *locally cached copy* respects the same boundary once access is revoked,
+   not just the live query path.
 
 ---
 
