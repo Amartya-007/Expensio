@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+*.local
+# android/ and ios/ are intentionally NOT ignored — Capacitor's own convention
+# is to commit the native platform projects (you'll add permissions, signing
+# config, etc. directly in them over time), not regenerate them from scratch
+# on every machine.
