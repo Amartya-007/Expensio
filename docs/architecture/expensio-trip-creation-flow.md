@@ -166,15 +166,15 @@ Keeping them apart means a placeholder never needs a fake access row it can't us
 - ~~Budget and trip dates~~ — resolved: `trips` now has nullable `start_date`/`end_date`
   columns (both null = no fixed timeframe, per §2 Step 4), and budget lives in
   `trips.settings` since it doesn't affect ledger math.
-- **Email invites** are named in your opening line but never described in the flow itself —
-  open question whether that's an actual v1 requirement or just naming apps that do
-  invites well in general. Worth a direct answer before I document an email flow that might
-  not be wanted.
+- ~~Email invites~~ — resolved above (§3): yes, in v1, reusing the same transactional email
+  infra already planned for notifications.
 - **Contacts data is third-party personal data, not the user's own.** Storing other
   people's phone numbers pulled from someone's address book carries real privacy weight —
   both app stores require a specific, honest permission-prompt disclosure for contacts
   access, and the safest default is storing only the numbers of people actually selected,
   not importing or retaining the full contact list.
-- **"Redirect to Play Store"** is Android-specific phrasing — worth confirming whether iOS
-  is in scope for this flow yet. With the Universal Links approach (§3) the iOS equivalent
-  needs its own `apple-app-site-association` setup, but no separate vendor decision.
+- ~~"Redirect to Play Store" / iOS scope~~ — resolved: **Android-first for v1**, iOS
+  deferred. No architecture penalty for deferring it — Supabase Auth, the Postgres RPCs, and
+  PowerSync's sync layer are all platform-agnostic by construction; the only iOS-specific
+  pieces (Apple Sign-In, `apple-app-site-association`) were always additive, never
+  load-bearing for Android. Nothing to re-architect later, just nothing to build yet.
