@@ -1,34 +1,29 @@
 {
-  "name": "expensio-mobile",
-  "private": true,
-  "version": "0.0.1",
-  "description": "Expensio mobile client — PowerSync sync spike phase (Capacitor + React + TS).",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "preview": "vite preview",
-    "cap:sync": "npx cap sync",
-    "cap:android": "npx cap open android"
-  },
+  "name": "mobile",
+  "version": "1.0.0",
+  "main": "index.ts",
   "dependencies": {
-    "@capacitor-community/sqlite": "^8.1.1",
-    "@capacitor/android": "^8.5.0",
-    "@capacitor/core": "^8.5.0",
-    "@journeyapps/wa-sqlite": "^2.0.3",
-    "@powersync/capacitor": "^0.8.2",
-    "@powersync/web": "^2.1.1",
+    "@azure/core-asynciterator-polyfill": "^1.0.2",
+    "@op-engineering/op-sqlite": "^17.2.0",
+    "@powersync/react-native": "^2.1.0",
+    "@react-native-async-storage/async-storage": "^3.1.1",
     "@supabase/supabase-js": "^2.112.3",
-    "buffer": "^6.0.3",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "expo": "~57.0.13",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-native": "0.86.2"
   },
   "devDependencies": {
-    "@capacitor/cli": "^8.5.0",
-    "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0",
-    "@vitejs/plugin-react": "^4.3.1",
-    "typescript": "^5.5.4",
-    "vite": "^5.4.0"
-  }
+    "@babel/plugin-transform-async-generator-functions": "^7.29.7",
+    "@types/react": "~19.2.2",
+    "babel-preset-expo": "^57.0.7",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
+  },
+  "private": true
 }

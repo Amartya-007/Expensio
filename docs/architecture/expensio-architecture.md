@@ -21,23 +21,23 @@ add features, and clean separation between client / database / server logic.
 
 | Layer | Choice | Role |
 |---|---|---|
-| Client | React + TypeScript + Capacitor | UI, local SQLite, offline reads/writes |
-| Local DB | SQLite via **PowerSync Capacitor SDK** | on-device source of truth, works offline |
+| Client | React + TypeScript + React Native/Expo | UI, local SQLite, offline reads/writes |
+| Local DB | SQLite via **PowerSync React Native SDK** (OP-SQLite) | on-device source of truth, works offline |
 | Sync engine | **PowerSync** | streams Postgres ⇄ local SQLite, handles the upload queue |
 | Backend DB | **Supabase Postgres** | source of truth, RLS, RPC functions, realtime (via logical replication, consumed by PowerSync) |
 | Auth | **Supabase Auth** — anonymous by default, phone OTP or Google to verify | guests use the app freely; verification required only to invite/join (§3) |
 | Storage | Supabase Storage | receipt images, RLS-protected by trip membership |
 | Server | **FastAPI** | OCR, AI suggestions, settlement-optimization — stateless helper, never the source of truth for money |
 
-I checked current status before recommending PowerSync: it now ships an official
-`@powersync/capacitor` package (native SQLite on iOS/Android via `@capacitor-community/sqlite`,
-WA-SQLite/IndexedDB on web, same API across both) — as of early 2026 it's still labeled
-alpha/beta. That's the one real risk in this stack: pin versions, and prototype the sync
-path early (week one, not week ten) so you find any rough edges before the rest of the app
-is built on top of it. If it turns out to be too unstable in practice, the fallback is a
-hand-rolled outbox table synced via Supabase Realtime + RPC calls — more work, but zero
-third-party risk. I'd only reach for that fallback if PowerSync's Capacitor SDK actually
-gives you trouble; don't pre-build both.
+I checked current status before recommending PowerSync: its React Native SDK (`@powersync/react-native`,
+using OP-SQLite for native storage) has been shipping since April 2024 and is on the same actively-maintained
+release track as the Web SDK — meaningfully more mature than the Capacitor SDK this project started on, which
+was still pre-1.0 (`@powersync/capacitor`, first published September 2025). Still worth pinning versions and
+prototyping the sync path early (week one, not week ten) so any rough edges surface before the rest of the app
+is built on top of it — see `expensio-react-native-setup.md` for that spike. If it turns out to be unstable in
+practice, the fallback is a hand-rolled outbox table synced via Supabase Realtime + RPC calls — more work, but
+zero third-party risk. I'd only reach for that fallback if PowerSync's React Native SDK actually gives you
+trouble; don't pre-build both.
 
 ---
 
@@ -45,7 +45,7 @@ gives you trouble; don't pre-build both.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│ CLIENT  (React + TS + Capacitor)                         │
+│ CLIENT  (React + TS + React Native/Expo)                  │
 │                                                           │
 │  UI  →  Local SQLite (PowerSync)  ←→  PowerSync sync      │
 │                                          engine            │
@@ -219,9 +219,9 @@ have the client fire notifications (unreliable — it wouldn't run if the person
 off), a Postgres trigger on those two tables writes a row to a small `notification_events`
 queue table; a Supabase Edge Function (invoked via `pg_net` webhook, or polling on a
 schedule) reads the queue and fans out to:
-  - **Push:** `@capacitor/push-notifications` on the client, backed by Firebase Cloud
-    Messaging — the standard pairing for Capacitor apps regardless of backend, since FCM
-    handles both Android and iOS delivery.
+  - **Push:** `expo-notifications` on the client, using Expo's push service (which relays to
+    Firebase Cloud Messaging for Android and APNs for iOS) — the standard pairing for
+    Expo-managed React Native apps regardless of backend.
   - **Email:** a transactional email provider (Resend, Postmark, or similar) — not
     Supabase's built-in auth email, which is only for auth flows.
   - Gated per-user by a `notification_preferences` jsonb column on `profiles`

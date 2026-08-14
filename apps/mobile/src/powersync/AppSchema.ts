@@ -1,16 +1,13 @@
-import { Schema, Table, column } from '@powersync/web';
+import { Schema, Table, column } from '@powersync/react-native';
 
-// The client-side (SQLite) schema — deliberately just the one spike table.
-// This is NOT expensio-data-model.md's real schema; it exists only to prove
-// the sync pipe works. Real tables get added here once the spike passes,
-// mirroring expensio-data-model.md's DDL column-for-column.
-//
-// PowerSync applies this schema when the database is instantiated — no
-// migration step, unlike the Postgres side (supabase/migrations/).
+// Client-side (SQLite) schema — same shape as the earlier Capacitor spike,
+// just imported from @powersync/react-native instead of @powersync/web.
+// Deliberately just the one throwaway spike table; see
+// docs/architecture/expensio-pre-code-checklist.md. Real tables get added
+// here once the spike passes, mirroring expensio-data-model.md's DDL
+// column-for-column.
 export const AppSchema = new Schema({
   spike_items: new Table({
-    // id is implicit — PowerSync always provides a TEXT id column matching
-    // Postgres's uuid primary key.
     note: column.text,
     created_at: column.text,
   }),

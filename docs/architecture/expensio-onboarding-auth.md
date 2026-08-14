@@ -135,7 +135,7 @@ Supabase session exists, guest or verified.
 
 - **What it gates:** the app's UI on open/resume, not the backend session.
 - **Trigger:** on app foreground after a grace period (default ~30–60s), configurable.
-- **Mechanism:** a Capacitor biometric plugin (Face ID / Android BiometricPrompt), PIN as
+- **Mechanism:** `expo-local-authentication` (Face ID / Android BiometricPrompt), PIN as
   fallback.
 - **Storage:** enabled-flag and PIN hash in secure device storage (Keychain/Keystore), same
   tier as the refresh token.
@@ -145,7 +145,8 @@ Supabase session exists, guest or verified.
 ## 8. Sessions & devices
 
 - Supabase issues a short-lived JWT plus a longer-lived refresh token, stored via
-  Capacitor's secure storage — never `localStorage`.
+  `expo-secure-store` (Keychain on iOS, Keystore-backed on Android) — never plain
+  `AsyncStorage`.
 - **Verified accounts are multi-device**: sign in with the same phone or Google account on a
   new device, and PowerSync pulls every trip tied to that `user_id`.
 - **Guests are single-device, structurally** — there's no credential to sign back in with

@@ -1,8 +1,7 @@
-import type { AbstractPowerSyncDatabase, PowerSyncBackendConnector } from '@powersync/web';
-import { UpdateType } from '@powersync/web';
+import type { AbstractPowerSyncDatabase, PowerSyncBackendConnector } from '@powersync/react-native';
+import { UpdateType } from '@powersync/react-native';
 import { supabase } from '../supabaseClient';
-
-const powersyncUrl = import.meta.env.VITE_POWERSYNC_URL as string;
+import { env } from '../env';
 
 // Postgres error codes that will NEVER succeed on retry (bad data, a
 // constraint violation) — as opposed to a network blip, which should stay
@@ -13,14 +12,12 @@ const powersyncUrl = import.meta.env.VITE_POWERSYNC_URL as string;
 // Constraint Violation (NOT NULL / FK / UNIQUE).
 const FATAL_POSTGRES_RESPONSE_CODES = [/^22...$/, /^23...$/];
 
-// Bridges PowerSync's local upload queue to Supabase. This is the ONLY place
-// client writes reach Postgres — same principle as
-// expensio-architecture.md's "every write goes through one place," just
-// applied to the sync layer instead of an RPC. For the spike, writes go
-// straight to the table (spike_items has an open RLS policy); once real
-// tables are wired up, this should call the RPCs in
-// expensio-permissions-matrix.md instead of raw table writes, same as
-// everywhere else in this design.
+// Bridges PowerSync's local upload queue to Supabase — identical logic to
+// the earlier Capacitor spike's connector, just re-imported from
+// @powersync/react-native. For the spike, writes go straight to the table
+// (spike_items has an open RLS policy); once real tables are wired up, this
+// should call the RPCs in expensio-permissions-matrix.md instead of raw
+// table writes, same as everywhere else in this design.
 export class SupabaseConnector implements PowerSyncBackendConnector {
   async fetchCredentials() {
     const {
@@ -32,19 +29,16 @@ export class SupabaseConnector implements PowerSyncBackendConnector {
       throw error;
     }
     if (!session) {
-      // Shouldn't happen once App.tsx's anonymous sign-in on startup lands
-      // (architecture doc §3) — surfacing loudly here rather than silently
-      // stalling the sync connection if it ever does.
       throw new Error('No Supabase session — anonymous sign-in must run before connecting PowerSync.');
     }
 
     return {
-      endpoint: powersyncUrl,
+      endpoint: env.powersyncUrl,
       // PowerSync instance must have "Use Supabase Auth" enabled, pointed at
-      // your project's JWKS endpoint — see the runbook doc for the exact
-      // dashboard steps. That's what lets the same Supabase session token
-      // authenticate both supabase-js calls AND the PowerSync connection,
-      // with no separate token-minting step (matches architecture doc §6).
+      // your project's JWKS endpoint — see
+      // docs/architecture/expensio-react-native-setup.md. That's what lets
+      // the same Supabase session token authenticate both supabase-js calls
+      // AND the PowerSync connection, matching architecture doc §6.
       token: session.access_token,
     };
   }
@@ -87,9 +81,6 @@ export class SupabaseConnector implements PowerSyncBackendConnector {
       const isFatal = code != null && FATAL_POSTGRES_RESPONSE_CODES.some((re) => re.test(code));
 
       if (isFatal) {
-        // Data PowerSync will never be able to upload as-is — drop it rather
-        // than retry forever. Logged loudly since this is a real bug
-        // (bad local write) that silently discarding shouldn't hide.
         console.error('Discarding un-uploadable local write', lastOp, ex);
         await transaction.complete();
         return;
