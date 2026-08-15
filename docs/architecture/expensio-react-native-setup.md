@@ -1,20 +1,26 @@
 # Expensio — React Native client setup & DB connection
 
-Supersedes the earlier Capacitor-based `expensio-powersync-spike.md` (removed — the client
-was rebuilt on Expo + React Native, see `expensio-architecture.md` §1 for why). Same goal as
-before: prove Postgres → PowerSync → local SQLite on a real device works, both directions,
-including offline, before any real feature code is built on top of it.
+The client is Expo + React Native (see `expensio-architecture.md` §1 for why, over
+Capacitor). This doc has grown twice now: first to prove Postgres → PowerSync → local SQLite
+works at all (the `spike_items` throwaway table), then again once the real schema and RPCs
+existed (`0002_core_schema.sql`, `0003_rls_and_rpcs.sql`) to wire up an actual feature —
+create a trip, add an expense, watch its activity log update — instead of a dummy table.
+Both layers are covered below; skip to §4 if you already have the spike table's sync rule
+working and just need the real one.
 
-Code lives in `apps/mobile/` and `supabase/migrations/0001_powersync_spike.sql` (unchanged —
-the backend doesn't care which client framework talks to it). This doc is the part that can't
-be committed: what to click, in what order, and what "it worked" actually looks like.
+Code lives in `apps/mobile/` and `supabase/migrations/`. This doc is the part that can't be
+committed: what to click, in what order, and what "it worked" actually looks like.
 
-## 1. Apply the migration
+## 1. Apply the migrations
 
-In the Supabase SQL Editor (or via `supabase db push`), run
-`supabase/migrations/0001_powersync_spike.sql`. Creates a throwaway `spike_items` table with
-an open RLS policy, `REPLICA IDENTITY FULL`, and its own `powersync` publication — deliberately
-not the real schema, see `expensio-pre-code-checklist.md`.
+In the Supabase SQL Editor (or via `supabase db push`), run all three, in order:
+`0001_powersync_spike.sql` (the throwaway `spike_items` table — still useful as a quick
+connectivity sanity check, separate from the real schema), then `0002_core_schema.sql` and
+`0003_rls_and_rpcs.sql` (the actual tables, RLS policies, and RPCs). All three were verified
+against a real local PostgreSQL 16 instance before being committed — see `0003`'s commit
+message for exactly what was tested and what wasn't (Supabase's real `auth.users`/JWKS
+weren't part of that local verification, applying to your actual project is the next real
+checkpoint).
 
 ## 2. Connect Supabase as PowerSync's source database
 
@@ -38,13 +44,14 @@ matches `expensio-architecture.md` §6.
 ## 4. Define what syncs
 
 PowerSync's dashboard shows either **Sync Rules** or **Sync Streams** depending on your
-instance version — same idea. Define a bucket/stream:
-
-```sql
-SELECT * FROM spike_items
-```
-
-No per-user filtering for this spike. Deploy it.
+instance version — same underlying format either way. Paste in
+`supabase/powersync/sync-rules.yaml` from this repo. Unlike the spike table's trivial
+`SELECT * FROM spike_items` (one global bucket, no filtering — fine for a connectivity
+check, wrong for real data), this defines two real per-user buckets: one keyed by
+`trip_id` for trips/participants/expenses/the activity log, and a second keyed by
+`expense_id` for `expense_splits` — that split exists because PowerSync data queries can't
+join, and `expense_splits` doesn't carry `trip_id` directly (see the file's own header
+comment for the full reasoning). Deploy it.
 
 ## 5. Install and configure the client
 
@@ -90,31 +97,59 @@ If Metro complains about a missing Babel plugin or preset, it's almost always on
 `node_modules` — run `npm ls babel-preset-expo` and reinstall as a direct devDependency if it's
 only showing up nested under another package.
 
-## 7. What "pass" actually means
+## 7. Two ways to test it: the spike table, and the real feature
 
-Work through all four before calling this settled:
+**Quick connectivity check (optional, if you haven't already):** same four checks as
+before, just against `spike_items` — add an item, confirm it reaches Postgres; insert one
+via the SQL Editor, confirm it reaches the device; test offline-then-reconnect; force-quit
+and relaunch. This isolates "is the sync pipe itself working" from "does the real app logic
+work," which is worth keeping separate if something goes wrong.
 
-1. **Local write reaches Postgres.** Add an item on the device. Confirm the row shows up in
-   Supabase (Table Editor or `select * from spike_items`) within a few seconds.
-2. **Remote write reaches the device.** Insert a row directly via the Supabase SQL Editor.
-   Confirm it appears in the app without touching the device.
-3. **Offline write survives and syncs later.** Airplane mode on, add an item — it should appear
-   in the list instantly (local-SQLite read, not a round trip). Airplane mode off, confirm it
-   reaches Postgres without any manual action.
-4. **Kill and relaunch.** Force-stop the app, reopen it. Everything added earlier should be
-   there immediately, before any network activity — that's the native-SQLite persistence
-   claim, not an in-memory cache.
+**The real feature — this is what to actually put in front of someone:**
 
-If all four hold: the React Native SDK is validated for this stack, proceed with the real
-schema. `expensio-architecture.md` §1 already names the fallback (a hand-rolled outbox table
-synced via Supabase Realtime + RPC calls) if real trouble shows up — though this SDK's had two
-years longer to mature than the Capacitor one this project started on, so that's less likely
-to be needed than it was before.
+1. **Sign in and create a trip.** App opens, signs in anonymously, shows an empty trip list.
+   Tap **+ New Trip**, name it, pick a currency, create it. It should appear in the list
+   within a couple seconds (round-tripped through `create_trip` → Postgres → PowerSync →
+   back down).
+2. **Add an expense.** Open the trip, tap **+ Add Expense**, add one. It calls `add_expense`
+   directly — `compute_expense_splits` runs server-side, so the split math (equal split, for
+   this first slice) is happening for real, not simulated client-side.
+3. **Check the Activity Log tab.** This is the feature the whole project started from
+   (`trip_created`, `expense_added` should both be there by now) — confirm it's populating,
+   and that it reads back correctly after a force-quit and relaunch (immutability +
+   persistence, both for real).
+4. **Offline test.** Airplane mode on, add another expense. It won't appear in the list (see
+   "Why writes don't show up instantly offline" below) — instead the trips list should show
+   a small "N changes waiting to sync" banner. Airplane mode off, pull down to refresh: the
+   banner should clear and the expense should appear.
+5. **Two-device or two-session cross-check**, if you can: open the same trip on a second
+   device/emulator (or a second Supabase anonymous session) and confirm an expense added on
+   one appears on the other without any manual action.
 
-## Known gap: session storage
+## Why writes don't show up instantly offline (a real design choice, not a bug)
 
-`src/supabaseClient.ts` uses plain `AsyncStorage` for the Supabase session — fine for this
-throwaway anonymous-session spike (same "test sync, not security" scope as `spike_items`'
-wide-open RLS policy), but `expensio-onboarding-auth.md` §8 specifies `expo-secure-store`
-(Keychain/Keystore-backed) for the real app. Swap it in before any real auth flow (phone OTP,
-Google) gets built on top of this.
+The spike used PowerSync's default pattern: local writes go into its own CRUD queue, and a
+connector uploads them by mirroring each INSERT/UPDATE/DELETE onto the matching Postgres
+table. That doesn't work here — a real expense needs `compute_expense_splits`, a
+`trip_activity_log` entry, and a `ledger_entries` row, none of which a raw table write can
+produce. So real writes (`src/rpc.ts`) call the RPC directly instead of going through
+PowerSync's queue at all. Online, this is invisible — the RPC runs immediately and the
+result syncs back down in about as long as the spike's writes took. Offline, there's a real
+trade-off: rather than fake an optimistic local copy of a split calculation the client
+doesn't actually know how to do correctly, a queued action just waits (visibly, via the
+pending-count banner) until it can run for real. `src/AppSchema.ts`'s comment block and
+`src/rpc.ts` have the full reasoning — worth reading before extending this pattern to a new
+screen.
+
+## Known gaps, flagged rather than left silent
+
+- **Session storage:** `src/supabaseClient.ts` uses plain `AsyncStorage`, not the
+  `expo-secure-store` that `expensio-onboarding-auth.md` §8 specifies for the real app.
+  Swap it in before any real auth flow (phone OTP, Google) is built on top of this.
+- **No network-state listener.** Queued actions replay on app launch and on manual
+  pull-to-refresh (`src/rpc.ts`), not automatically the instant connectivity returns — add
+  `@react-native-community/netinfo` and a listener if that matters for real usage.
+- **This slice's scope is deliberately narrow:** paying as anyone other than yourself
+  (placeholders, other members), non-equal splits, editing/deleting an expense, and trip
+  membership screens all exist as RPCs already but have no UI yet — `src/rpc.ts`'s
+  `callRpc` helper is the same one to use for wiring each of them up.

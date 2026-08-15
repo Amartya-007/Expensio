@@ -12,12 +12,13 @@ import { env } from '../env';
 // Constraint Violation (NOT NULL / FK / UNIQUE).
 const FATAL_POSTGRES_RESPONSE_CODES = [/^22...$/, /^23...$/];
 
-// Bridges PowerSync's local upload queue to Supabase — identical logic to
-// the earlier Capacitor spike's connector, just re-imported from
-// @powersync/react-native. For the spike, writes go straight to the table
-// (spike_items has an open RLS policy); once real tables are wired up, this
-// should call the RPCs in expensio-permissions-matrix.md instead of raw
-// table writes, same as everywhere else in this design.
+// Bridges PowerSync's local upload queue to Supabase — but for this app, that queue
+// should normally stay empty. Real writes go through src/rpc.ts's direct RPC calls
+// instead (see that file for why), and pending_actions (the offline fallback) is a
+// LOCAL-ONLY table, excluded from PowerSync's upload queue by design. uploadData below
+// is kept as a defensive fallback, not the primary write path — it only matters if
+// something ever writes to a synced table (trips, expenses, ...) via db.execute()
+// directly, which nothing in this app's screens should do.
 export class SupabaseConnector implements PowerSyncBackendConnector {
   async fetchCredentials() {
     const {
