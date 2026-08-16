@@ -114,15 +114,20 @@ work," which is worth keeping separate if something goes wrong.
 2. **Add an expense.** Open the trip, tap **+ Add Expense**, add one. It calls `add_expense`
    directly — `compute_expense_splits` runs server-side, so the split math (equal split, for
    this first slice) is happening for real, not simulated client-side.
-3. **Check the Activity Log tab.** This is the feature the whole project started from
+3. **Add a person and split an expense with them.** Members tab → **+ Add Person** → give
+   them a name. Add another expense and tap their chip in the **Paid by** row instead of
+   your own — then check the expense's split line (under the amount) shows both of you
+   owing a share. This is the placeholder-participant path — no second device or account
+   needed to test real multi-person splitting.
+4. **Check the Activity Log tab.** This is the feature the whole project started from
    (`trip_created`, `expense_added` should both be there by now) — confirm it's populating,
    and that it reads back correctly after a force-quit and relaunch (immutability +
    persistence, both for real).
-4. **Offline test.** Airplane mode on, add another expense. It won't appear in the list (see
+5. **Offline test.** Airplane mode on, add another expense. It won't appear in the list (see
    "Why writes don't show up instantly offline" below) — instead the trips list should show
    a small "N changes waiting to sync" banner. Airplane mode off, pull down to refresh: the
    banner should clear and the expense should appear.
-5. **Two-device or two-session cross-check**, if you can: open the same trip on a second
+6. **Two-device or two-session cross-check**, if you can: open the same trip on a second
    device/emulator (or a second Supabase anonymous session) and confirm an expense added on
    one appears on the other without any manual action.
 
@@ -149,7 +154,15 @@ screen.
 - **No network-state listener.** Queued actions replay on app launch and on manual
   pull-to-refresh (`src/rpc.ts`), not automatically the instant connectivity returns — add
   `@react-native-community/netinfo` and a listener if that matters for real usage.
-- **This slice's scope is deliberately narrow:** paying as anyone other than yourself
-  (placeholders, other members), non-equal splits, editing/deleting an expense, and trip
-  membership screens all exist as RPCs already but have no UI yet — `src/rpc.ts`'s
-  `callRpc` helper is the same one to use for wiring each of them up.
+- **This slice's scope is still narrow, but less than before:** placeholder participants
+  (people without the app) can now be added and picked as who-paid — see the Members tab
+  and the `paid_by` picker in Add Expense. Still missing: non-equal splits, editing/deleting
+  an expense.
+- **Real invites (`generate_invite`/`join_trip_via_code`) are deliberately not wired up
+  yet, and won't work if you try to call them from this client as-is.** Both RPCs require
+  `is_verified_user()` (permissions-matrix doc — phone or Google sign-in, not anonymous),
+  and this client only does anonymous sign-in (`App.tsx`). Placeholder participants are the
+  workaround that needs zero new auth work; a real verification flow is a substantial
+  feature of its own (Supabase phone/SMS or Google OAuth setup on your project, an OTP
+  screen) — worth its own pass, not something to bolt on silently alongside everything
+  else here.

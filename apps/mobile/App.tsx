@@ -8,8 +8,9 @@ import TripsListScreen from './src/screens/TripsListScreen';
 import CreateTripScreen from './src/screens/CreateTripScreen';
 import TripDetailScreen from './src/screens/TripDetailScreen';
 import AddExpenseScreen from './src/screens/AddExpenseScreen';
+import AddParticipantScreen from './src/screens/AddParticipantScreen';
 
-// No navigation library — just enough state to move between four screens without
+// No navigation library — just enough state to move between five screens without
 // adding React Navigation's setup surface to what's already a lot of new plumbing
 // (PowerSync, RPC-vs-CRUD-queue, offline queueing) for one pass. Swap this for real
 // navigation whenever screen count or transition needs (deep links, native back gestures
@@ -19,7 +20,8 @@ type Screen =
   | { name: 'trips' }
   | { name: 'createTrip' }
   | { name: 'tripDetail'; tripId: string; currency: string }
-  | { name: 'addExpense'; tripId: string; currency: string };
+  | { name: 'addExpense'; tripId: string; currency: string }
+  | { name: 'addParticipant'; tripId: string; currency: string };
 
 export default function App() {
   const [ready, setReady] = useState(false);
@@ -94,12 +96,20 @@ export default function App() {
           tripId={screen.tripId}
           onBack={() => setScreen({ name: 'trips' })}
           onAddExpense={() => setScreen({ name: 'addExpense', tripId: screen.tripId, currency: screen.currency })}
+          onAddParticipant={() => setScreen({ name: 'addParticipant', tripId: screen.tripId, currency: screen.currency })}
         />
       )}
       {screen.name === 'addExpense' && (
         <AddExpenseScreen
           tripId={screen.tripId}
           currency={screen.currency}
+          onDone={() => setScreen({ name: 'tripDetail', tripId: screen.tripId, currency: screen.currency })}
+          onCancel={() => setScreen({ name: 'tripDetail', tripId: screen.tripId, currency: screen.currency })}
+        />
+      )}
+      {screen.name === 'addParticipant' && (
+        <AddParticipantScreen
+          tripId={screen.tripId}
           onDone={() => setScreen({ name: 'tripDetail', tripId: screen.tripId, currency: screen.currency })}
           onCancel={() => setScreen({ name: 'tripDetail', tripId: screen.tripId, currency: screen.currency })}
         />
