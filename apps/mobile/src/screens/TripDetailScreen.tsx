@@ -25,11 +25,13 @@ export default function TripDetailScreen({
   onBack,
   onAddExpense,
   onAddParticipant,
+  onOpenExpense,
 }: {
   tripId: string;
   onBack: () => void;
   onAddExpense: () => void;
   onAddParticipant: () => void;
+  onOpenExpense: (expenseId: string) => void;
 }) {
   const [trip, setTrip] = useState<Trip | null>(null);
   const [tab, setTab] = useState<'expenses' | 'log' | 'members'>('expenses');
@@ -52,7 +54,7 @@ export default function TripDetailScreen({
   useEffect(() => {
     const abortController = new AbortController();
     db.watch(
-      'SELECT id, description, amount, currency, paid_by, created_at FROM expenses WHERE trip_id = ? ORDER BY created_at DESC',
+      'SELECT id, description, amount, currency, paid_by, created_at FROM expenses WHERE trip_id = ? AND deleted_at IS NULL ORDER BY created_at DESC',
       [tripId],
       { onResult: (result) => setExpenses(result.rows?._array ?? []) },
       { signal: abortController.signal }
@@ -137,14 +139,14 @@ export default function TripDetailScreen({
           keyExtractor={(item) => item.id}
           ListEmptyComponent={<Text style={styles.empty}>No expenses yet.</Text>}
           renderItem={({ item }) => (
-            <View style={styles.row}>
+            <TouchableOpacity style={styles.row} onPress={() => onOpenExpense(item.id)}>
               <Text style={styles.rowTitle}>{item.description}</Text>
               <Text style={styles.rowAmount}>
                 {item.currency} {item.amount.toFixed(2)} · paid by {nameFor(item.paid_by)}
               </Text>
               <Text style={styles.rowSplit}>{splitSummary(item.id, item.currency)}</Text>
               <Text style={styles.rowMeta}>{formatTimestamp(item.created_at)}</Text>
-            </View>
+            </TouchableOpacity>
           )}
         />
       )}

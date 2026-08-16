@@ -39,6 +39,11 @@ export const AppSchema = new Schema({
     split_type: column.text,
     created_by: column.text,
     created_at: column.text,
+    // Soft-delete marker (0002_core_schema.sql) — delete_expense sets this rather than
+    // removing the row, so every query against this table needs to filter
+    // "WHERE deleted_at IS NULL" itself. Missing this filter was caught before it shipped:
+    // see TripDetailScreen.tsx's expense query.
+    deleted_at: column.text,
   }),
 
   expense_splits: new Table({

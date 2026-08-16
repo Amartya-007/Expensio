@@ -9,8 +9,9 @@ import CreateTripScreen from './src/screens/CreateTripScreen';
 import TripDetailScreen from './src/screens/TripDetailScreen';
 import AddExpenseScreen from './src/screens/AddExpenseScreen';
 import AddParticipantScreen from './src/screens/AddParticipantScreen';
+import ExpenseDetailScreen from './src/screens/ExpenseDetailScreen';
 
-// No navigation library — just enough state to move between five screens without
+// No navigation library — just enough state to move between six screens without
 // adding React Navigation's setup surface to what's already a lot of new plumbing
 // (PowerSync, RPC-vs-CRUD-queue, offline queueing) for one pass. Swap this for real
 // navigation whenever screen count or transition needs (deep links, native back gestures
@@ -21,7 +22,8 @@ type Screen =
   | { name: 'createTrip' }
   | { name: 'tripDetail'; tripId: string; currency: string }
   | { name: 'addExpense'; tripId: string; currency: string }
-  | { name: 'addParticipant'; tripId: string; currency: string };
+  | { name: 'addParticipant'; tripId: string; currency: string }
+  | { name: 'expenseDetail'; expenseId: string; tripId: string; currency: string };
 
 export default function App() {
   const [ready, setReady] = useState(false);
@@ -97,6 +99,9 @@ export default function App() {
           onBack={() => setScreen({ name: 'trips' })}
           onAddExpense={() => setScreen({ name: 'addExpense', tripId: screen.tripId, currency: screen.currency })}
           onAddParticipant={() => setScreen({ name: 'addParticipant', tripId: screen.tripId, currency: screen.currency })}
+          onOpenExpense={(expenseId) =>
+            setScreen({ name: 'expenseDetail', expenseId, tripId: screen.tripId, currency: screen.currency })
+          }
         />
       )}
       {screen.name === 'addExpense' && (
@@ -112,6 +117,12 @@ export default function App() {
           tripId={screen.tripId}
           onDone={() => setScreen({ name: 'tripDetail', tripId: screen.tripId, currency: screen.currency })}
           onCancel={() => setScreen({ name: 'tripDetail', tripId: screen.tripId, currency: screen.currency })}
+        />
+      )}
+      {screen.name === 'expenseDetail' && (
+        <ExpenseDetailScreen
+          expenseId={screen.expenseId}
+          onBack={() => setScreen({ name: 'tripDetail', tripId: screen.tripId, currency: screen.currency })}
         />
       )}
     </SafeAreaView>
