@@ -48,6 +48,23 @@ syntax check):**
 
 That's a real, tested foundation, not just a pile of documents.
 
+**Correction made after this was first written:** the first version of `0002`/`0003` had
+real bugs local testing didn't catch, because that testing manually seeded both
+`auth.users` and `profiles` together — never exercising how Supabase actually creates a
+user (`auth.users` only; nothing else, unless something is watching for it). Two were
+critical enough that the app wouldn't have worked at all against a real Supabase project:
+none of the real tables were ever added to the `powersync` publication (PowerSync would
+sync zero rows for any of them, silently, regardless of sync rules), and there was no
+trigger populating `profiles` on signup (so `create_trip`'s own step to add its creator as
+a participant would silently insert nothing). Also fixed: RLS was completely missing on
+`profiles`, `expense_templates`, `expense_comments`, and `processed_requests` — the last of
+which meant any authenticated user could read every other user's RPC results directly,
+including generated invite codes; two overly-permissive `trips` policies that let a client
+bypass the RPC-only + activity-log design were removed; and all 27 `SECURITY DEFINER`
+functions got `search_path` hardening (a real, known Postgres/Supabase vulnerability class,
+not a style nitpick). Re-verified against a full clean re-apply plus the entire original
+test suite afterward — nothing broke, and each fix has its own passing test.
+
 ## Real gaps — things referenced by name but never actually specified
 
 - **Notifications.** Architecture doc §7 describes the *shape* (Postgres trigger → queue →

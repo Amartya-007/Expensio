@@ -34,7 +34,7 @@
 -- ----------------------------------------------------------------------------
 
 create function is_active_member(p_trip_id uuid)
-returns boolean language sql stable security definer as $$
+returns boolean language sql stable security definer set search_path = public as $$
   select exists (
     select 1 from trip_members
     where trip_id = p_trip_id and user_id = auth.uid() and status = 'active'
@@ -55,7 +55,7 @@ $$;
 create function log_activity(
   p_trip_id uuid, p_event_type text, p_detail text,
   p_subject_participant_id uuid default null, p_metadata jsonb default '{}'
-) returns void language plpgsql security definer as $$
+) returns void language plpgsql security definer set search_path = public as $$
 declare v_actor_name text;
 begin
   select coalesce(display_name, 'Someone') into v_actor_name from profiles where id = auth.uid();
@@ -70,7 +70,7 @@ end; $$;
 -- archive_trip, unarchive_trip) — see claim_idempotency_key_with_result below for the ones
 -- that DO need their original result back on replay.
 create function claim_idempotency_key(p_key uuid)
-returns boolean language plpgsql security definer as $$
+returns boolean language plpgsql security definer set search_path = public as $$
 begin
   insert into processed_requests (client_request_id) values (p_key);
   return true;
@@ -83,7 +83,7 @@ end; $$;
 -- return that instead of null. On first call, records nothing yet — the caller stores its
 -- own result once it has one, via store_idempotent_result below.
 create function claim_idempotency_key_with_result(p_key uuid, out is_new boolean, out found_result jsonb)
-returns record language plpgsql security definer as $$
+returns record language plpgsql security definer set search_path = public as $$
 begin
   insert into processed_requests (client_request_id) values (p_key);
   is_new := true;
@@ -94,7 +94,7 @@ exception when unique_violation then
 end; $$;
 
 create function store_idempotent_result(p_key uuid, p_result jsonb)
-returns void language sql security definer as $$
+returns void language sql security definer set search_path = public as $$
   update processed_requests set result = p_result where client_request_id = p_key;
 $$;
 
@@ -164,7 +164,7 @@ returns jsonb language sql stable as $$
 $$;
 
 create function compute_expense_splits(p_expense_id uuid)
-returns void language plpgsql security definer as $$
+returns void language plpgsql security definer set search_path = public as $$
 declare
   v_expense expenses;
   v_total_minor bigint;
@@ -298,10 +298,37 @@ alter table expense_attachments enable row level security;
 alter table custom_categories enable row level security;
 alter table trip_activity_log enable row level security;
 
+-- Four tables missing from the original version of this migration's RLS coverage —
+-- real gaps, not stylistic:
+--   profiles: with RLS off, ANY authenticated user could read or WRITE any other user's
+--   profile row directly via the REST API, bypassing update_display_name entirely
+--   (e.g. renaming someone else's account with a raw PATCH request).
+--   expense_templates, expense_comments: same shape of gap — direct read/write access to
+--   any trip's recurring-expense templates or expense comments, bypassing membership
+--   checks and the RPCs that are supposed to be the only way in.
+--   processed_requests: the most serious of the four — its `result` column holds
+--   generate_invite's actual invite codes, trip ids, expense ids from EVERY user's RPC
+--   calls. With RLS off, any authenticated user could run `select * from
+--   processed_requests` and read other people's invite codes directly.
+alter table profiles enable row level security;
+alter table expense_templates enable row level security;
+alter table expense_comments enable row level security;
+alter table processed_requests enable row level security;
+-- No policies on processed_requests at all, deliberately — it should never be readable
+-- by a normal client. Every RPC that touches it is SECURITY DEFINER (owned by a role that
+-- bypasses RLS on Supabase), so this doesn't break anything RPCs do; it just closes off
+-- direct client access, which nothing legitimate needs.
+
 create policy trips_select on trips for select
   using (is_active_member(id) and deleted_at is null);
-create policy trips_insert on trips for insert with check (created_by = auth.uid());
-create policy trips_update on trips for update using (is_active_member(id));
+-- No INSERT/UPDATE policy on trips, deliberately (removed from the original version of
+-- this migration, which had both). create_trip/archive_trip/unarchive_trip/delete_trip
+-- are all SECURITY DEFINER RPCs that bypass RLS for their own writes regardless — the
+-- policies weren't needed for those to work. What they actually did was let a client
+-- write directly to trips via the REST API (rename a trip, or insert an orphaned one
+-- missing its trip_members/participants rows) completely bypassing activity-log entries,
+-- contradicting the "every write goes through one RPC, gets logged" design stated
+-- throughout this project. Removing them closes that gap; nothing legitimate used it.
 
 create policy trip_members_select on trip_members for select
   using (is_active_member(trip_id));
@@ -320,6 +347,19 @@ create policy expense_attachments_select on expense_attachments for select
   using (is_active_member((select trip_id from expenses where id = expense_id)));
 create policy custom_categories_select on custom_categories for select
   using (is_active_member(trip_id));
+create policy expense_templates_select on expense_templates for select
+  using (is_active_member(trip_id));
+create policy expense_comments_select on expense_comments for select
+  using (is_active_member((select trip_id from expenses where id = expense_id)));
+
+-- profiles: readable by anyone (display names need to resolve across every trip a user
+-- shares with someone, and there's no single-table way to scope that to "shared trips
+-- only" without a much more expensive policy) but writable only by the row's own owner —
+-- update_display_name is SECURITY DEFINER so it doesn't strictly need this, but unlike
+-- trips there's real value in still letting a client patch their OWN row directly
+-- (avatar_url, say) without needing a dedicated RPC for every single profile field.
+create policy profiles_select on profiles for select using (true);
+create policy profiles_update on profiles for update using (id = auth.uid());
 
 -- The cross-trip isolation invariant, stated as an actual policy, not left to the client:
 -- a user can only ever see activity_log rows for a trip they're currently an active member
@@ -341,7 +381,7 @@ create policy trip_activity_log_select on trip_activity_log for select
 
 create function create_trip(
   p_name text, p_currency text, p_settings jsonb default '{}', p_client_request_id uuid default null
-) returns uuid language plpgsql security definer as $$
+) returns uuid language plpgsql security definer set search_path = public as $$
 declare v_trip_id uuid; v_claim record;
 begin
   if p_client_request_id is not null then
@@ -372,7 +412,7 @@ end; $$;
 
 create function add_placeholder_participant(
   p_trip_id uuid, p_display_name text, p_phone text default null, p_client_request_id uuid default null
-) returns uuid language plpgsql security definer as $$
+) returns uuid language plpgsql security definer set search_path = public as $$
 declare v_id uuid; v_claim record;
 begin
   if p_client_request_id is not null then
@@ -400,7 +440,7 @@ begin
 end; $$;
 
 create function add_custom_category(p_trip_id uuid, p_name text, p_icon text, p_client_request_id uuid default null)
-returns uuid language plpgsql security definer as $$
+returns uuid language plpgsql security definer set search_path = public as $$
 declare v_id uuid; v_claim record;
 begin
   if p_client_request_id is not null then
@@ -427,7 +467,7 @@ end; $$;
 -- would repeat, and that's a separate step the client controls; recording the same
 -- storage_path twice is a harmless duplicate row, not a duplicated side effect.
 create function add_attachment(p_expense_id uuid, p_storage_path text)
-returns uuid language plpgsql security definer as $$
+returns uuid language plpgsql security definer set search_path = public as $$
 declare v_trip_id uuid; v_id uuid;
 begin
   select trip_id into v_trip_id from expenses where id = p_expense_id;
@@ -443,7 +483,7 @@ end; $$;
 create function generate_invite(
   p_trip_id uuid, p_expires_in interval default '24 hours', p_max_uses int default 1,
   p_client_request_id uuid default null
-) returns text language plpgsql security definer as $$
+) returns text language plpgsql security definer set search_path = public as $$
 declare v_code text; v_attempts int := 0; v_claim record;
 begin
   if p_client_request_id is not null then
@@ -485,7 +525,7 @@ begin
 end; $$;
 
 create function revoke_invite(p_invite_id uuid)
-returns void language plpgsql security definer as $$
+returns void language plpgsql security definer set search_path = public as $$
 declare v_trip_id uuid;
 begin
   select trip_id into v_trip_id from trip_invites where id = p_invite_id;
@@ -501,7 +541,7 @@ end; $$;
 -- client-passed phone would let anyone claim someone else's placeholder just by knowing
 -- (or guessing) their number.
 create function join_trip_via_code(p_code text, p_client_request_id uuid default null)
-returns uuid language plpgsql security definer as $$
+returns uuid language plpgsql security definer set search_path = public as $$
 declare v_invite trip_invites; v_member_count int; v_claimed_id uuid;
 declare v_verified_phone text; v_was_previously_member boolean; v_claim record;
 begin
@@ -570,7 +610,7 @@ end; $$;
 -- No remove_member function exists, deliberately. Person who generated a specific invite
 -- can undo THAT invite's join, only within an hour. Not power over the group.
 create function revoke_recent_join(p_trip_id uuid, p_user_id uuid)
-returns void language plpgsql security definer as $$
+returns void language plpgsql security definer set search_path = public as $$
 declare v_member trip_members; v_invite trip_invites; v_undone_name text;
 begin
   select * into v_member from trip_members where trip_id = p_trip_id and user_id = p_user_id;
@@ -593,7 +633,7 @@ begin
 end; $$;
 
 create function leave_trip(p_trip_id uuid)
-returns void language plpgsql security definer as $$
+returns void language plpgsql security definer set search_path = public as $$
 begin
   update trip_members set status = 'left', left_at = now()
   where trip_id = p_trip_id and user_id = auth.uid();
@@ -601,7 +641,7 @@ begin
 end; $$;
 
 create function archive_trip(p_trip_id uuid)
-returns void language plpgsql security definer as $$
+returns void language plpgsql security definer set search_path = public as $$
 begin
   if not is_active_member(p_trip_id) then raise exception 'not an active member of this trip'; end if;
   update trips set is_archived = true where id = p_trip_id;
@@ -609,7 +649,7 @@ begin
 end; $$;
 
 create function unarchive_trip(p_trip_id uuid)
-returns void language plpgsql security definer as $$
+returns void language plpgsql security definer set search_path = public as $$
 begin
   if not is_active_member(p_trip_id) then raise exception 'not an active member of this trip'; end if;
   update trips set is_archived = false where id = p_trip_id;
@@ -621,7 +661,7 @@ end; $$;
 -- moment someone hit this button. Only allowed when the caller is the sole remaining
 -- active member.
 create function delete_trip(p_trip_id uuid)
-returns void language plpgsql security definer as $$
+returns void language plpgsql security definer set search_path = public as $$
 declare v_active_count int;
 begin
   if not is_active_member(p_trip_id) then raise exception 'not an active member of this trip'; end if;
@@ -638,7 +678,7 @@ end; $$;
 create function add_expense(
   p_trip_id uuid, p_paid_by uuid, p_description text, p_amount numeric, p_currency text,
   p_split_type text, p_split_config jsonb, p_category text default null, p_client_request_id uuid default null
-) returns uuid language plpgsql security definer as $$
+) returns uuid language plpgsql security definer set search_path = public as $$
 declare v_expense_id uuid; v_claim record;
 begin
   if p_client_request_id is not null then
@@ -679,7 +719,7 @@ end; $$;
 create function edit_expense(
   p_expense_id uuid, p_description text, p_amount numeric, p_split_type text, p_split_config jsonb,
   p_client_request_id uuid default null
-) returns void language plpgsql security definer as $$
+) returns void language plpgsql security definer set search_path = public as $$
 declare v_trip_id uuid; v_currency text;
 begin
   if p_client_request_id is not null and not claim_idempotency_key(p_client_request_id) then
@@ -704,7 +744,7 @@ begin
 end; $$;
 
 create function delete_expense(p_expense_id uuid, p_client_request_id uuid default null)
-returns void language plpgsql security definer as $$
+returns void language plpgsql security definer set search_path = public as $$
 declare v_trip_id uuid; v_amount numeric; v_currency text; v_description text;
 begin
   if p_client_request_id is not null and not claim_idempotency_key(p_client_request_id) then
@@ -721,7 +761,7 @@ begin
 end; $$;
 
 create function add_comment(p_expense_id uuid, p_body text)
-returns uuid language plpgsql security definer as $$
+returns uuid language plpgsql security definer set search_path = public as $$
 declare v_trip_id uuid; v_id uuid;
 begin
   select trip_id into v_trip_id from expenses where id = p_expense_id;
@@ -735,7 +775,7 @@ end; $$;
 -- always pays as themselves, never on behalf of someone else.
 create function record_payment(
   p_trip_id uuid, p_to_participant uuid, p_amount numeric, p_currency text, p_client_request_id uuid default null
-) returns uuid language plpgsql security definer as $$
+) returns uuid language plpgsql security definer set search_path = public as $$
 declare v_id uuid; v_from_participant uuid; v_claim record;
 begin
   if p_client_request_id is not null then
@@ -767,7 +807,7 @@ end; $$;
 -- The registered recipient confirms for themselves. A PLACEHOLDER recipient can't log in
 -- to confirm anything — so any active member of the trip may confirm on their behalf.
 create function confirm_payment(p_ledger_entry_id uuid, p_client_request_id uuid default null)
-returns uuid language plpgsql security definer as $$
+returns uuid language plpgsql security definer set search_path = public as $$
 declare v_entry ledger_entries; v_to_participant participants; v_id uuid; v_claim record;
 begin
   if p_client_request_id is not null then
@@ -805,7 +845,7 @@ end; $$;
 -- (source_template_id, expense_date) means even a genuine double-run of this scheduled job
 -- can't create two expenses for the same template on the same day.
 create function generate_due_recurring_expenses()
-returns void language plpgsql security definer as $$
+returns void language plpgsql security definer set search_path = public as $$
 declare v_template expense_templates;
 begin
   for v_template in select * from expense_templates where is_active and next_run_date <= current_date loop
@@ -829,7 +869,7 @@ end; $$;
 -- trip-scoped, so a name change gets one log entry in every trip the person is currently
 -- an active member of.
 create function update_display_name(p_new_name text)
-returns void language plpgsql security definer as $$
+returns void language plpgsql security definer set search_path = public as $$
 declare v_old_name text; v_trip record;
 begin
   select display_name into v_old_name from profiles where id = auth.uid();
@@ -844,7 +884,7 @@ end; $$;
 -- Pseudonymizes, doesn't cascade-delete. Every participants row still resolves its display
 -- name through profiles, so nothing here needs to touch participants at all.
 create function delete_account()
-returns void language plpgsql security definer as $$
+returns void language plpgsql security definer set search_path = public as $$
 begin
   update profiles set display_name = 'Deleted user', avatar_url = null, deleted_at = now()
   where id = auth.uid();

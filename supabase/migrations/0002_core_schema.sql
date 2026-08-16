@@ -17,6 +17,27 @@ create table profiles (
   created_at timestamptz not null default now()
 );
 
+-- CRITICAL: without this, a real Supabase sign-up (anonymous, phone, Google — any of
+-- them) creates an auth.users row but nothing else. No profiles row would ever exist for
+-- that user, which silently breaks things far downstream: create_trip's own
+-- "insert into participants ... select ... from profiles where id = auth.uid()" would
+-- match zero rows and insert nothing — the trip's creator would never actually become a
+-- participant in their own trip, with no error to say so. log_activity's
+-- "select display_name from profiles" would read null the same silent way. Local testing
+-- against this migration missed this entirely, because the test setup manually inserted
+-- both auth.users AND profiles rows together — never exercising the real "Supabase Auth
+-- creates auth.users on its own, nothing else does" path this trigger covers.
+create function handle_new_user()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.profiles (id, display_name) values (new.id, null);
+  return new;
+end; $$;
+
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function handle_new_user();
+
 create table trips (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -281,3 +302,35 @@ create index on expense_templates(next_run_date) where is_active;
 create unique index on expenses(source_template_id, expense_date) where source_template_id is not null;
 create index on trip_activity_log(trip_id, created_at);
 create index on processed_requests(created_at);
+
+-- CRITICAL: 0001_powersync_spike.sql created the 'powersync' publication with only
+-- spike_items in it. Every table below needs REPLICA IDENTITY FULL (full row images for
+-- PowerSync to compute before/after state off the WAL, same reasoning as 0001's comment
+-- on spike_items) AND publication membership — without BOTH, PowerSync's replication
+-- stream never sees a single change to any of these tables, regardless of what
+-- supabase/powersync/sync-rules.yaml says. The sync rules define WHAT gets sent to which
+-- user; this is what makes the underlying data visible to PowerSync at all. Missing
+-- entirely from the original version of this migration — real tables would have synced
+-- nothing, silently, no error anywhere.
+--
+-- profiles and processed_requests are deliberately excluded: no current sync-rules.yaml
+-- bucket reads either one (participant display names are already denormalized onto
+-- participants.display_name for sync purposes), and processed_requests specifically
+-- should never reach a client — see 0003_rls_and_rpcs.sql's RLS section for why.
+alter table trips replica identity full;
+alter table trip_invites replica identity full;
+alter table trip_members replica identity full;
+alter table participants replica identity full;
+alter table expense_templates replica identity full;
+alter table expenses replica identity full;
+alter table expense_attachments replica identity full;
+alter table custom_categories replica identity full;
+alter table expense_splits replica identity full;
+alter table expense_comments replica identity full;
+alter table ledger_entries replica identity full;
+alter table trip_activity_log replica identity full;
+
+alter publication powersync add table
+  trips, trip_invites, trip_members, participants, expense_templates, expenses,
+  expense_attachments, custom_categories, expense_splits, expense_comments,
+  ledger_entries, trip_activity_log;
