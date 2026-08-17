@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { db } from '../powersync/db';
+import { callRpc } from '../rpc';
 
 type Expense = {
   id: string;
@@ -11,7 +12,7 @@ type Expense = {
   created_at: string;
 };
 type ActivityEntry = { id: string; event_type: string; description: string; created_at: string };
-type Trip = { id: string; name: string; currency: string };
+type Trip = { id: string; name: string; currency: string; is_archived: number };
 type Participant = { id: string; display_name: string; type: string };
 type Split = { expense_id: string; participant_id: string; share_amount: number };
 
@@ -43,7 +44,7 @@ export default function TripDetailScreen({
   useEffect(() => {
     const abortController = new AbortController();
     db.watch(
-      'SELECT id, name, currency FROM trips WHERE id = ?',
+      'SELECT id, name, currency, is_archived FROM trips WHERE id = ?',
       [tripId],
       { onResult: (result) => setTrip(result.rows?._array?.[0] ?? null) },
       { signal: abortController.signal }
@@ -114,12 +115,61 @@ export default function TripDetailScreen({
       .map((s) => `${nameFor(s.participant_id)} owes ${currency} ${s.share_amount.toFixed(2)}`)
       .join(' · ');
 
+  function openTripOptions() {
+    const archiveLabel = trip?.is_archived ? 'Unarchive Trip' : 'Archive Trip';
+    Alert.alert(trip?.name ?? 'Trip options', undefined, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: archiveLabel,
+        onPress: async () => {
+          // Neither RPC takes p_client_request_id -- idempotent: false tells callRpc not
+          // to send one, since PostgREST would reject an unexpected parameter (see
+          // rpc.ts's header comment). Both toggle a plain boolean, so replaying one after
+          // a dropped connection is harmless even without a formal idempotency key.
+          const rpcName = trip?.is_archived ? 'unarchive_trip' : 'archive_trip';
+          await callRpc(rpcName, { p_trip_id: tripId }, { idempotent: false });
+        },
+      },
+      {
+        text: 'Delete Trip',
+        style: 'destructive',
+        onPress: () => {
+          Alert.alert(
+            'Delete this trip?',
+            'Only works while you\u2019re the only active member. This cannot be undone from here.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    await callRpc('delete_trip', { p_trip_id: tripId }, { idempotent: false });
+                    onBack();
+                  } catch (err) {
+                    Alert.alert('Could not delete trip', String(err));
+                  }
+                },
+              },
+            ]
+          );
+        },
+      },
+    ]);
+  }
+
   return (
     <View style={styles.container}>
       <TouchableOpacity onPress={onBack}>
         <Text style={styles.back}>‹ Trips</Text>
       </TouchableOpacity>
-      <Text style={styles.heading}>{trip?.name ?? '…'}</Text>
+      <View style={styles.headerRow}>
+        <Text style={styles.heading}>{trip?.name ?? '…'}</Text>
+        <TouchableOpacity onPress={openTripOptions} hitSlop={12}>
+          <Text style={styles.optionsButton}>⋯</Text>
+        </TouchableOpacity>
+      </View>
+      {!!trip?.is_archived && <Text style={styles.archivedBadge}>Archived</Text>}
 
       <View style={styles.tabs}>
         <TouchableOpacity style={[styles.tab, tab === 'expenses' && styles.tabActive]} onPress={() => setTab('expenses')}>
@@ -196,7 +246,10 @@ export default function TripDetailScreen({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff', paddingTop: 60, paddingHorizontal: 20 },
   back: { color: '#666', fontSize: 15, marginBottom: 8 },
-  heading: { fontSize: 22, fontWeight: '700', marginBottom: 16 },
+  heading: { fontSize: 22, fontWeight: '700' },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  optionsButton: { fontSize: 22, color: '#666', paddingHorizontal: 8 },
+  archivedBadge: { fontSize: 12, color: '#8a6d00', marginBottom: 12 },
   tabs: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: '#eee', marginBottom: 8 },
   tab: { paddingVertical: 10, marginRight: 24 },
   tabActive: { borderBottomWidth: 2, borderBottomColor: '#111' },

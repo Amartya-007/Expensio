@@ -13,8 +13,18 @@ import { db } from './powersync/db';
 // PowerSync's ordinary replication, same as any other Postgres change -- there's nothing
 // extra to do to make a successful write show up locally.
 //
-// Every RPC here already takes p_client_request_id for idempotency (permissions-matrix
-// doc) -- that's what makes replaying a queued action after reconnecting safe.
+// Not every RPC takes p_client_request_id — 10 of the ~20 do (create_trip, add_expense,
+// edit_expense, delete_expense, generate_invite, join_trip_via_code,
+// add_placeholder_participant, add_custom_category, record_payment, confirm_payment); the
+// other 10 (archive_trip, unarchive_trip, delete_trip, leave_trip, revoke_invite,
+// revoke_recent_join, add_comment, add_attachment, update_display_name, delete_account)
+// don't. Sending it to one that doesn't accept it fails outright — PostgREST can't match
+// an unexpected named parameter to any function signature. callRpc's idempotent option
+// (default true) controls whether it gets added; pass { idempotent: false } for the RPCs
+// that don't declare it. Those are naturally idempotent-enough in effect anyway (setting
+// is_archived = true twice, or deleted_at = now() twice, does nothing worse than one
+// duplicate activity-log entry on a rare replay) — a formal idempotency key just isn't
+// available for them.
 
 function isNetworkError(err: unknown): boolean {
   // Heuristic, not a certainty -- react-native has no built-in reliable way to
@@ -48,18 +58,30 @@ export type RpcResult<T> = { status: 'ok'; data: T } | { status: 'queued' };
 // error for this case. On any OTHER failure (a real validation or permission error from
 // the RPC itself), throws -- that's a real problem the user needs to see now, not silently
 // queue and retry, since retrying an invalid call just fails identically forever.
+//
+// idempotent (default true): whether to add p_client_request_id to the call. Must be
+// false for the ~10 RPCs that don't declare that parameter -- see the file header.
 export async function callRpc<T = unknown>(
   rpcName: string,
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
+  opts: { idempotent?: boolean } = {}
 ): Promise<RpcResult<T>> {
-  const clientRequestId = (params.p_client_request_id as string | undefined) ?? crypto.randomUUID();
-  const paramsWithKey = { ...params, p_client_request_id: clientRequestId };
+  const idempotent = opts.idempotent ?? true;
+  const finalParams = idempotent
+    ? {
+        ...params,
+        p_client_request_id: (params.p_client_request_id as string | undefined) ?? crypto.randomUUID(),
+      }
+    : params;
+  // pending_actions still needs a unique local key even for a non-idempotent RPC, purely
+  // for its own row identity -- separate from whether that value is ALSO sent to Postgres.
+  const localTrackingId = (finalParams.p_client_request_id as string | undefined) ?? crypto.randomUUID();
 
   try {
-    const { data, error } = await supabase.rpc(rpcName, paramsWithKey);
+    const { data, error } = await supabase.rpc(rpcName, finalParams);
     if (error) {
       if (isNetworkError(error)) {
-        await queueForLater(rpcName, paramsWithKey, clientRequestId);
+        await queueForLater(rpcName, finalParams, localTrackingId);
         return { status: 'queued' };
       }
       throw error;
@@ -67,7 +89,7 @@ export async function callRpc<T = unknown>(
     return { status: 'ok', data: data as T };
   } catch (err) {
     if (isNetworkError(err)) {
-      await queueForLater(rpcName, paramsWithKey, clientRequestId);
+      await queueForLater(rpcName, finalParams, localTrackingId);
       return { status: 'queued' };
     }
     throw err;

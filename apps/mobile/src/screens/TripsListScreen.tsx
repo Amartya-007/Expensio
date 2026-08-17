@@ -3,7 +3,7 @@ import { FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } fr
 import { db } from '../powersync/db';
 import { flushPendingActions } from '../rpc';
 
-type Trip = { id: string; name: string; currency: string; created_at: string };
+type Trip = { id: string; name: string; currency: string; created_at: string; is_archived: number };
 
 export default function TripsListScreen({
   onOpenTrip,
@@ -13,19 +13,20 @@ export default function TripsListScreen({
   onCreateTrip: () => void;
 }) {
   const [trips, setTrips] = useState<Trip[]>([]);
+  const [showArchived, setShowArchived] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     const abortController = new AbortController();
     db.watch(
-      'SELECT id, name, currency, created_at FROM trips WHERE is_archived = 0 ORDER BY created_at DESC',
-      [],
+      'SELECT id, name, currency, created_at, is_archived FROM trips WHERE is_archived = ? ORDER BY created_at DESC',
+      [showArchived ? 1 : 0],
       { onResult: (result) => setTrips(result.rows?._array ?? []) },
       { signal: abortController.signal }
     );
     return () => abortController.abort();
-  }, []);
+  }, [showArchived]);
 
   useEffect(() => {
     // pending_actions is a plain local table, same watch mechanism works on it —
@@ -50,10 +51,12 @@ export default function TripsListScreen({
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.heading}>Your trips</Text>
-        <TouchableOpacity style={styles.addButton} onPress={onCreateTrip}>
-          <Text style={styles.addButtonText}>+ New Trip</Text>
-        </TouchableOpacity>
+        <Text style={styles.heading}>{showArchived ? 'Archived trips' : 'Your trips'}</Text>
+        {!showArchived && (
+          <TouchableOpacity style={styles.addButton} onPress={onCreateTrip}>
+            <Text style={styles.addButtonText}>+ New Trip</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {pendingCount > 0 && (
@@ -68,7 +71,11 @@ export default function TripsListScreen({
         data={trips}
         keyExtractor={(item) => item.id}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        ListEmptyComponent={<Text style={styles.empty}>No trips yet — create one to get started.</Text>}
+        ListEmptyComponent={
+          <Text style={styles.empty}>
+            {showArchived ? 'No archived trips.' : 'No trips yet — create one to get started.'}
+          </Text>
+        }
         renderItem={({ item }) => (
           <TouchableOpacity style={styles.tripCard} onPress={() => onOpenTrip(item.id, item.currency)}>
             <Text style={styles.tripName}>{item.name}</Text>
@@ -76,6 +83,10 @@ export default function TripsListScreen({
           </TouchableOpacity>
         )}
       />
+
+      <TouchableOpacity onPress={() => setShowArchived((v) => !v)}>
+        <Text style={styles.archivedToggle}>{showArchived ? '‹ Back to your trips' : 'Show archived trips'}</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -92,4 +103,5 @@ const styles = StyleSheet.create({
   tripCard: { paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#eee' },
   tripName: { fontSize: 16, fontWeight: '600' },
   tripMeta: { fontSize: 12, color: '#999', marginTop: 2 },
+  archivedToggle: { color: '#666', fontSize: 13, textAlign: 'center', paddingVertical: 16 },
 });

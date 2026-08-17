@@ -88,8 +88,13 @@ Format: `[x]` done, `[ ]` not started, `[~]` partial (say what's missing).
 - [ ] Balances / settlement view — needs either `ledger_entries` synced + a client-side
       running total, or the FastAPI settlement algorithm above; deliberately not
       half-built, see `expensio-react-native-setup.md`'s scope note
-- [ ] Archive / unarchive / delete trip UI (`archive_trip`, `unarchive_trip`, `delete_trip`
-      RPCs exist)
+- [x] Archive / unarchive / delete trip UI — options menu on TripDetailScreen (⋯), plus a
+      "show archived trips" toggle on the trips list so archiving isn't a one-way trip.
+      Caught a real bug building this: `rpc.ts`'s `callRpc` unconditionally added
+      `p_client_request_id` to every call, but `archive_trip`/`unarchive_trip`/
+      `delete_trip` (and 7 other RPCs) don't declare that parameter at all — would have
+      failed outright the first time any of them was called. Fixed with an explicit
+      `idempotent` option, default `true`, existing call sites unaffected.
 - [ ] Leave trip UI (`leave_trip` RPC exists)
 - [ ] Custom categories UI (`add_custom_category` RPC exists; category isn't synced/shown
       on expenses yet either)
