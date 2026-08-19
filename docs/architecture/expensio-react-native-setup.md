@@ -43,15 +43,28 @@ matches `expensio-architecture.md` §6.
 
 ## 4. Define what syncs
 
-PowerSync's dashboard shows either **Sync Rules** or **Sync Streams** depending on your
-instance version — same underlying format either way. Paste in
-`supabase/powersync/sync-rules.yaml` from this repo. Unlike the spike table's trivial
-`SELECT * FROM spike_items` (one global bucket, no filtering — fine for a connectivity
-check, wrong for real data), this defines two real per-user buckets: one keyed by
-`trip_id` for trips/participants/expenses/the activity log, and a second keyed by
-`expense_id` for `expense_splits` — that split exists because PowerSync data queries can't
-join, and `expense_splits` doesn't carry `trip_id` directly (see the file's own header
-comment for the full reasoning). Deploy it.
+**Correction, found the hard way:** an earlier version of this doc claimed Sync Rules and
+Sync Streams "share the same underlying format" — that was wrong, and cost real
+troubleshooting time. They're genuinely different YAML schemas. Sync Rules uses
+`bucket_definitions:` with separate `parameters:`/`data:` blocks, where one bucket can sync
+several different tables and joins are only allowed in the parameter query. Sync Streams —
+the current default, what a `sync_streams.yaml` tab in the dashboard means — uses `streams:`
+with a single `query:` per stream, JOINs allowed directly in that query, and each stream
+syncs rows from one table. What was one Sync Rules bucket covering 4 tables became 4
+separate streams.
+
+Paste in `supabase/powersync/sync-streams.yaml` from this repo — 5 streams (`user_trips`,
+`user_trip_participants`, `user_trip_expenses`, `user_trip_activity_log`,
+`user_expense_splits`), each scoped to trips you're an active member of via a JOIN against
+`trip_members`, each with `auto_subscribe: true` so it syncs automatically on connect — the
+client doesn't call any explicit subscription API, so without `auto_subscribe: true` nothing
+would sync at all. Deploy it.
+
+If `auth.user_id()` doesn't resolve (some instance versions may still expect
+`request.user_id()` — check whatever the dashboard's own inline docs/examples show for your
+specific instance before assuming one or the other), swap it in all 5 queries. Either way,
+this still depends on step 3's Supabase Auth / JWKS setup being done — that's what lets the
+function resolve to the signed-in user's id.
 
 ## 5. Install and configure the client
 

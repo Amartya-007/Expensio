@@ -1,0 +1,36 @@
+streams:
+  user_trips:
+    query: |
+      SELECT t.* FROM trips t
+      JOIN trip_members tm ON tm.trip_id = t.id
+      WHERE tm.user_id = auth.user_id() AND tm.status = 'active'
+    auto_subscribe: true
+
+  user_trip_participants:
+    query: |
+      SELECT p.* FROM participants p
+      JOIN trip_members tm ON tm.trip_id = p.trip_id
+      WHERE tm.user_id = auth.user_id() AND tm.status = 'active'
+    auto_subscribe: true
+
+  user_trip_expenses:
+    query: |
+      SELECT e.* FROM expenses e
+      JOIN trip_members tm ON tm.trip_id = e.trip_id
+      WHERE tm.user_id = auth.user_id() AND tm.status = 'active'
+    auto_subscribe: true
+
+  user_trip_activity_log:
+    query: |
+      SELECT l.* FROM trip_activity_log l
+      JOIN trip_members tm ON tm.trip_id = l.trip_id
+      WHERE tm.user_id = auth.user_id() AND tm.status = 'active'
+    auto_subscribe: true
+
+  user_expense_splits:
+    query: |
+      SELECT es.* FROM expense_splits es
+      JOIN expenses e ON e.id = es.expense_id
+      JOIN trip_members tm ON tm.trip_id = e.trip_id
+      WHERE tm.user_id = auth.user_id() AND tm.status = 'active'
+    auto_subscribe: true

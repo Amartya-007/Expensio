@@ -65,8 +65,11 @@ Format: `[x]` done, `[ ]` not started, `[~]` partial (say what's missing).
 ## Mobile client (`apps/mobile/`) — React Native + Expo
 
 - [x] Capacitor → React Native/Expo conversion, PowerSync spike re-validated on the new stack
-- [x] Real per-user PowerSync sync rules (`supabase/powersync/sync-rules.yaml`) — trips,
-      participants, expenses, expense_splits, trip_activity_log
+- [x] Real per-user PowerSync sync — `supabase/powersync/sync-streams.yaml` (Sync Streams
+      format; corrected from an initial version wrongly assuming it was interchangeable
+      with the older Sync Rules `bucket_definitions:` format — different YAML schema
+      entirely, found when the dashboard rejected it) — trips, participants, expenses,
+      expense_splits, trip_activity_log
 - [x] RPC-first write architecture (`src/rpc.ts`) — real writes bypass PowerSync's CRUD
       queue (can't produce split/ledger/activity-log side effects), call RPCs directly
       instead; local-only `pending_actions` table is the offline fallback
