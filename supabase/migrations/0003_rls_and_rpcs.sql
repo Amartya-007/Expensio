@@ -1,38 +1,3 @@
--- ============================================================================
--- Expensio — RLS policies + RPCs
---
--- Transcribed from docs/architecture/expensio-permissions-matrix.md, with
--- three substantive additions beyond a straight transcription:
---
--- 1. compute_expense_splits — referenced by name throughout the doc's RPCs
---    but its body was never written down anywhere, only the rounding RULES
---    in prose (expensio-data-model.md, "compute_expense_splits" section).
---    Implemented here from those rules. See its own comment block below for
---    which parts are a direct transcription of the rule vs. a judgment call
---    the doc left open (equal-split membership, adjustment's remainder
---    weighting, itemized's per-item exact-amount variant).
---
--- 2. The idempotent-replay-returns-null gap flagged during the design
---    review: every RPC that returns an id/code returned NULL on a replayed
---    call, even though several callers (create_trip, generate_invite,
---    join_trip_via_code, add_placeholder_participant, add_custom_category,
---    add_expense, record_payment, confirm_payment) need the original result
---    back, not just confirmation it happened. claim_idempotency_key and
---    claim_idempotency_key_with_result below store and replay the actual
---    result via processed_requests.result (0002's schema addition) instead.
---
--- 3. join_trip_via_code's ON CONFLICT clause needs participants.linked_user_id
---    to be a real unique constraint target, and (trip_id, linked_user_id) is
---    only a PARTIAL unique index (0002_core_schema.sql, "where linked_user_id
---    is not null") — Postgres allows ON CONFLICT against a partial unique
---    index directly, so no schema change was needed, but it's worth noting
---    explicitly since it's easy to assume otherwise.
--- ============================================================================
-
--- ----------------------------------------------------------------------------
--- §1: shared infrastructure
--- ----------------------------------------------------------------------------
-
 create function is_active_member(p_trip_id uuid)
 returns boolean language sql stable security definer set search_path = public as $$
   select exists (
@@ -41,17 +6,11 @@ returns boolean language sql stable security definer set search_path = public as
   );
 $$;
 
--- "Not anonymous" — Google sign-in or phone verification both clear this, checked via
--- Supabase's own is_anonymous JWT claim. Gates only generate_invite and join_trip_via_code
--- (architecture doc §3) — every other action stays available to guests.
 create function is_verified_user()
 returns boolean language sql stable as $$
   select coalesce((auth.jwt() ->> 'is_anonymous')::boolean, false) = false;
 $$;
 
--- Every RPC that changes something calls this once. Prepends the actor's CURRENT display
--- name to the detail text and freezes the result — this is what makes log entries survive
--- a later name change unchanged (data model doc, trip_activity_log comment).
 create function log_activity(
   p_trip_id uuid, p_event_type text, p_detail text,
   p_subject_participant_id uuid default null, p_metadata jsonb default '{}'
@@ -64,11 +23,6 @@ begin
           v_actor_name || ' ' || p_detail, p_metadata);
 end; $$;
 
--- Idempotency check for offline-replayed calls. Returns true the first time a given key is
--- seen (and records it), false on any repeat. Kept for RPCs with nothing to return
--- (leave_trip, edit_expense, delete_expense, revoke_invite, revoke_recent_join,
--- archive_trip, unarchive_trip) — see claim_idempotency_key_with_result below for the ones
--- that DO need their original result back on replay.
 create function claim_idempotency_key(p_key uuid)
 returns boolean language plpgsql security definer set search_path = public as $$
 begin
@@ -78,10 +32,6 @@ exception when unique_violation then
   return false;
 end; $$;
 
--- Fix for the "returns null on replay" gap: p_found_result is set (via OUT-style inout
--- param) to the ORIGINAL call's stored result when this is a replay, so the caller can
--- return that instead of null. On first call, records nothing yet — the caller stores its
--- own result once it has one, via store_idempotent_result below.
 create function claim_idempotency_key_with_result(p_key uuid, out is_new boolean, out found_result jsonb)
 returns record language plpgsql security definer set search_path = public as $$
 begin
@@ -98,17 +48,6 @@ returns void language sql security definer set search_path = public as $$
   update processed_requests set result = p_result where client_request_id = p_key;
 $$;
 
--- ----------------------------------------------------------------------------
--- compute_expense_splits — never given an actual body anywhere in the docs,
--- only the rounding rules in prose. Implemented from those rules; judgment
--- calls the doc left open are called out inline.
--- ----------------------------------------------------------------------------
-
--- Shared rounding core used by every split type below: proportional allocation
--- in integer minor units, remainder given one unit at a time to participants
--- in ascending participant_id order — deterministic, not arbitrary, per the
--- doc's stated rule. p_weights is {participant_id: weight}; weights don't need
--- to sum to anything in particular, only be positive.
 create function distribute_proportionally(p_total_minor bigint, p_weights jsonb)
 returns jsonb language plpgsql immutable as $$
 declare
@@ -147,13 +86,6 @@ begin
   return v_result;
 end; $$;
 
--- Judgment call #1 (doc leaves this open): who counts for a plain 'equal'
--- split with no explicit participant list? Read as "every participant
--- currently attached to the trip" — every placeholder (they never leave) plus
--- every registered participant whose trip_members.status is still 'active'.
--- A left member's own historical splits are untouched (expense_splits rows
--- aren't retroactively edited), this only affects what NEW equal-split
--- expenses divide across.
 create function trip_active_participant_weights(p_trip_id uuid)
 returns jsonb language sql stable as $$
   select coalesce(jsonb_object_agg(p.id::text, 1), '{}'::jsonb)
@@ -186,9 +118,6 @@ declare
   v_remainder_weights jsonb;
 begin
   select * into v_expense from expenses where id = p_expense_id;
-  -- All currencies this project supports use 2 decimal minor units (paise/cents)
-  -- — see expensio-trip-creation-flow.md's currency list. If a zero-decimal
-  -- currency is ever added, this multiplier needs to become currency-aware.
   v_total_minor := round(v_expense.amount * 100)::bigint;
 
   delete from expense_splits where expense_id = p_expense_id;
@@ -214,12 +143,6 @@ begin
     v_shares := distribute_proportionally(v_total_minor, v_expense.split_config -> 'units');
 
   elsif v_expense.split_type = 'adjustment' then
-    -- Judgment call #2: "rest splits the remainder equally (or by units, per
-    -- split_config)" — the doc doesn't specify the exact key for a units
-    -- variant here, so only the equal-remainder path is implemented. A
-    -- units-weighted remainder would reuse distribute_proportionally the same
-    -- way 'shares' does above; add a split_config['remainder_units'] branch
-    -- if/when that variant is actually needed.
     v_adjustments := coalesce(v_expense.split_config -> 'adjustments', '{}'::jsonb);
     select coalesce(sum(value::bigint), 0) into v_adj_total from jsonb_each_text(v_adjustments);
     v_remainder_minor := v_total_minor - v_adj_total;
@@ -242,10 +165,6 @@ begin
     end if;
 
   elsif v_expense.split_type = 'itemized' then
-    -- Judgment call #3: the doc's split_config shape for itemized shows only
-    -- equal shared_by splitting per item ("shared_by": ["pid1","pid2"]) — an
-    -- item with its OWN exact per-person breakdown isn't shown in the shape
-    -- table, so it isn't handled here. Add it if a real item needs it.
     v_tax_minor := round(coalesce((v_expense.split_config ->> 'tax')::numeric, 0) * 100)::bigint;
     v_tip_minor := round(coalesce((v_expense.split_config ->> 'tip')::numeric, 0) * 100)::bigint;
 
@@ -263,9 +182,6 @@ begin
     end loop;
 
     v_shares := v_running;
-    -- Tax/tip allocated proportionally to each participant's running item
-    -- subtotal, not split equally — someone who ordered more pays a
-    -- proportionally bigger share of tax/tip too, per the doc's rule.
     if v_tax_minor > 0 or v_tip_minor > 0 then
       v_extra := distribute_proportionally(v_tax_minor + v_tip_minor, v_running);
       for v_pid, v_val in select key, value::bigint from jsonb_each_text(v_extra) loop
@@ -283,10 +199,6 @@ begin
   end loop;
 end; $$;
 
--- ----------------------------------------------------------------------------
--- §2: RLS
--- ----------------------------------------------------------------------------
-
 alter table trips enable row level security;
 alter table trip_members enable row level security;
 alter table participants enable row level security;
@@ -298,37 +210,13 @@ alter table expense_attachments enable row level security;
 alter table custom_categories enable row level security;
 alter table trip_activity_log enable row level security;
 
--- Four tables missing from the original version of this migration's RLS coverage —
--- real gaps, not stylistic:
---   profiles: with RLS off, ANY authenticated user could read or WRITE any other user's
---   profile row directly via the REST API, bypassing update_display_name entirely
---   (e.g. renaming someone else's account with a raw PATCH request).
---   expense_templates, expense_comments: same shape of gap — direct read/write access to
---   any trip's recurring-expense templates or expense comments, bypassing membership
---   checks and the RPCs that are supposed to be the only way in.
---   processed_requests: the most serious of the four — its `result` column holds
---   generate_invite's actual invite codes, trip ids, expense ids from EVERY user's RPC
---   calls. With RLS off, any authenticated user could run `select * from
---   processed_requests` and read other people's invite codes directly.
 alter table profiles enable row level security;
 alter table expense_templates enable row level security;
 alter table expense_comments enable row level security;
 alter table processed_requests enable row level security;
--- No policies on processed_requests at all, deliberately — it should never be readable
--- by a normal client. Every RPC that touches it is SECURITY DEFINER (owned by a role that
--- bypasses RLS on Supabase), so this doesn't break anything RPCs do; it just closes off
--- direct client access, which nothing legitimate needs.
 
 create policy trips_select on trips for select
   using (is_active_member(id) and deleted_at is null);
--- No INSERT/UPDATE policy on trips, deliberately (removed from the original version of
--- this migration, which had both). create_trip/archive_trip/unarchive_trip/delete_trip
--- are all SECURITY DEFINER RPCs that bypass RLS for their own writes regardless — the
--- policies weren't needed for those to work. What they actually did was let a client
--- write directly to trips via the REST API (rename a trip, or insert an orphaned one
--- missing its trip_members/participants rows) completely bypassing activity-log entries,
--- contradicting the "every write goes through one RPC, gets logged" design stated
--- throughout this project. Removing them closes that gap; nothing legitimate used it.
 
 create policy trip_members_select on trip_members for select
   using (is_active_member(trip_id));
@@ -352,32 +240,11 @@ create policy expense_templates_select on expense_templates for select
 create policy expense_comments_select on expense_comments for select
   using (is_active_member((select trip_id from expenses where id = expense_id)));
 
--- profiles: readable by anyone (display names need to resolve across every trip a user
--- shares with someone, and there's no single-table way to scope that to "shared trips
--- only" without a much more expensive policy) but writable only by the row's own owner —
--- update_display_name is SECURITY DEFINER so it doesn't strictly need this, but unlike
--- trips there's real value in still letting a client patch their OWN row directly
--- (avatar_url, say) without needing a dedicated RPC for every single profile field.
 create policy profiles_select on profiles for select using (true);
 create policy profiles_update on profiles for update using (id = auth.uid());
 
--- The cross-trip isolation invariant, stated as an actual policy, not left to the client:
--- a user can only ever see activity_log rows for a trip they're currently an active member
--- of — no event from Trip A can appear when viewing Trip B, and no one who's left a trip
--- (or never joined it) can see its log, regardless of which other trips they share with
--- people who ARE in it.
 create policy trip_activity_log_select on trip_activity_log for select
   using (is_active_member(trip_id));
-
--- ----------------------------------------------------------------------------
--- §3: RPCs
---
--- Every state-changing one takes an optional p_client_request_id for
--- idempotent offline replay. Ones that RETURN something use
--- claim_idempotency_key_with_result + store_idempotent_result (so a replay
--- gets the original id/code back, not null); ones that return nothing
--- (void) use the simpler claim_idempotency_key.
--- ----------------------------------------------------------------------------
 
 create function create_trip(
   p_name text, p_currency text, p_settings jsonb default '{}', p_client_request_id uuid default null
@@ -463,9 +330,6 @@ begin
   return v_id;
 end; $$;
 
--- Not idempotency-wrapped — the actual file upload to Supabase Storage is what a retry
--- would repeat, and that's a separate step the client controls; recording the same
--- storage_path twice is a harmless duplicate row, not a duplicated side effect.
 create function add_attachment(p_expense_id uuid, p_storage_path text)
 returns uuid language plpgsql security definer set search_path = public as $$
 declare v_trip_id uuid; v_id uuid;
@@ -536,10 +400,6 @@ begin
   perform log_activity(v_trip_id, 'invite_revoked', 'revoked an invite code');
 end; $$;
 
--- Validates code, expiry, revocation, and member cap. The claim mechanism uses the
--- CALLER'S OWN VERIFIED phone from their JWT, never a client-supplied parameter — a
--- client-passed phone would let anyone claim someone else's placeholder just by knowing
--- (or guessing) their number.
 create function join_trip_via_code(p_code text, p_client_request_id uuid default null)
 returns uuid language plpgsql security definer set search_path = public as $$
 declare v_invite trip_invites; v_member_count int; v_claimed_id uuid;
@@ -607,8 +467,6 @@ begin
   return v_invite.trip_id;
 end; $$;
 
--- No remove_member function exists, deliberately. Person who generated a specific invite
--- can undo THAT invite's join, only within an hour. Not power over the group.
 create function revoke_recent_join(p_trip_id uuid, p_user_id uuid)
 returns void language plpgsql security definer set search_path = public as $$
 declare v_member trip_members; v_invite trip_invites; v_undone_name text;
@@ -656,10 +514,6 @@ begin
   perform log_activity(p_trip_id, 'trip_unarchived', 'unarchived this trip');
 end; $$;
 
--- SOFT-HIDE, not a real DELETE. A true hard delete would cascade-destroy
--- trip_activity_log along with everything else, directly contradicting "immutable" the
--- moment someone hit this button. Only allowed when the caller is the sole remaining
--- active member.
 create function delete_trip(p_trip_id uuid)
 returns void language plpgsql security definer set search_path = public as $$
 declare v_active_count int;
@@ -673,8 +527,6 @@ begin
   update trips set deleted_at = now() where id = p_trip_id;
 end; $$;
 
--- p_paid_by is a participant_id, not auth.uid() — lets any active member log an expense
--- as paid by themselves OR by a placeholder they're managing.
 create function add_expense(
   p_trip_id uuid, p_paid_by uuid, p_description text, p_amount numeric, p_currency text,
   p_split_type text, p_split_config jsonb, p_category text default null, p_client_request_id uuid default null
@@ -712,10 +564,6 @@ begin
   return v_expense_id;
 end; $$;
 
--- Any active member may edit/delete ANY expense — the flat model, unconditionally.
--- Deliberately does NOT block editing an expense a payment has already been recorded
--- against — balances are derived by summing ledger_entries, so an edit's offsetting entry
--- keeps the math correct regardless of payment history.
 create function edit_expense(
   p_expense_id uuid, p_description text, p_amount numeric, p_split_type text, p_split_config jsonb,
   p_client_request_id uuid default null
@@ -771,8 +619,6 @@ begin
   return v_id;
 end; $$;
 
--- Resolves the caller's OWN participant row in this trip as the payer — a real user
--- always pays as themselves, never on behalf of someone else.
 create function record_payment(
   p_trip_id uuid, p_to_participant uuid, p_amount numeric, p_currency text, p_client_request_id uuid default null
 ) returns uuid language plpgsql security definer set search_path = public as $$
@@ -804,8 +650,6 @@ begin
   return v_id;
 end; $$;
 
--- The registered recipient confirms for themselves. A PLACEHOLDER recipient can't log in
--- to confirm anything — so any active member of the trip may confirm on their behalf.
 create function confirm_payment(p_ledger_entry_id uuid, p_client_request_id uuid default null)
 returns uuid language plpgsql security definer set search_path = public as $$
 declare v_entry ledger_entries; v_to_participant participants; v_id uuid; v_claim record;
@@ -840,10 +684,6 @@ begin
   return v_id;
 end; $$;
 
--- Idempotent by construction, not just by the shared key mechanism: next_run_date only
--- advances AFTER a template successfully generates its expense, and the unique index on
--- (source_template_id, expense_date) means even a genuine double-run of this scheduled job
--- can't create two expenses for the same template on the same day.
 create function generate_due_recurring_expenses()
 returns void language plpgsql security definer set search_path = public as $$
 declare v_template expense_templates;
@@ -865,9 +705,6 @@ begin
   end loop;
 end; $$;
 
--- Cross-trip fan-out: a display name is a global profiles field, but the log is
--- trip-scoped, so a name change gets one log entry in every trip the person is currently
--- an active member of.
 create function update_display_name(p_new_name text)
 returns void language plpgsql security definer set search_path = public as $$
 declare v_old_name text; v_trip record;
@@ -881,8 +718,6 @@ begin
   end loop;
 end; $$;
 
--- Pseudonymizes, doesn't cascade-delete. Every participants row still resolves its display
--- name through profiles, so nothing here needs to touch participants at all.
 create function delete_account()
 returns void language plpgsql security definer set search_path = public as $$
 begin
