@@ -1,36 +1,38 @@
 streams:
   user_trips:
     query: |
-      SELECT t.* FROM trips t
-      JOIN trip_members tm ON tm.trip_id = t.id
+      SELECT trips.* FROM trips
+      JOIN trip_members tm ON tm.trip_id = trips.id
       WHERE tm.user_id = auth.user_id() AND tm.status = 'active'
     auto_subscribe: true
 
   user_trip_participants:
     query: |
-      SELECT p.* FROM participants p
-      JOIN trip_members tm ON tm.trip_id = p.trip_id
+      SELECT participants.* FROM participants
+      JOIN trip_members tm ON tm.trip_id = participants.trip_id
       WHERE tm.user_id = auth.user_id() AND tm.status = 'active'
     auto_subscribe: true
 
   user_trip_expenses:
     query: |
-      SELECT e.* FROM expenses e
-      JOIN trip_members tm ON tm.trip_id = e.trip_id
+      SELECT expenses.* FROM expenses
+      JOIN trip_members tm ON tm.trip_id = expenses.trip_id
       WHERE tm.user_id = auth.user_id() AND tm.status = 'active'
     auto_subscribe: true
 
   user_trip_activity_log:
     query: |
-      SELECT l.* FROM trip_activity_log l
-      JOIN trip_members tm ON tm.trip_id = l.trip_id
+      SELECT trip_activity_log.* FROM trip_activity_log
+      JOIN trip_members tm ON tm.trip_id = trip_activity_log.trip_id
       WHERE tm.user_id = auth.user_id() AND tm.status = 'active'
     auto_subscribe: true
 
   user_expense_splits:
     query: |
-      SELECT es.* FROM expense_splits es
-      JOIN expenses e ON e.id = es.expense_id
+      SELECT expense_splits.* FROM expense_splits
+      JOIN expenses e ON e.id = expense_splits.expense_id
       JOIN trip_members tm ON tm.trip_id = e.trip_id
       WHERE tm.user_id = auth.user_id() AND tm.status = 'active'
     auto_subscribe: true
+
+config: {edition: 3}
