@@ -20,6 +20,9 @@ Format: `[x]` done, `[ ]` not started, `[~]` partial (say what's missing).
 - [ ] Environments & deployment doc — dev/staging/prod Supabase projects, migration
       tooling, where FastAPI runs, CI/CD.
 - [ ] Testing strategy doc — pgTAP for the RPCs at minimum.
+- [~] UI port plan (`expensio-ui-port-plan.md`) — porting TripSpend's exact UI onto this
+      client; stack/tokens/navigation decisions written up, screen-by-screen mapping still
+      has most rows unstarted (see the doc itself)
 
 ## Backend — schema, RLS, RPCs (`supabase/migrations/`)
 
@@ -78,6 +81,10 @@ Format: `[x]` done, `[ ]` not started, `[~]` partial (say what's missing).
 - [x] Add expense (equal split only), view expense list
 - [x] Activity log tab — the original feature request, working end to end
 - [x] Placeholder participants — Members tab, add person, real `paid_by` picker
+- [~] TripSpend UI port — NativeWind + navigation + gradient/font foundation in place,
+      `AddParticipantScreen` restyled as the first ported screen; see
+      `expensio-ui-port-plan.md` for the stack decisions, what's still open, and the
+      budget-schema gap blocking `Dashboard`/`TripDetails`
 - [x] Edit / delete expense (soft-delete, splits recompute on edit)
 - [ ] **Real invites** (`generate_invite` / `join_trip_via_code`) — blocked on
       `is_verified_user()`, which needs phone or Google sign-in. This client only does

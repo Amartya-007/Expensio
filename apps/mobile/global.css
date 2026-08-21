@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Ported from tripspend/src/index.css. Every class name below is kept identical to the
+ * original so screens read the same way, but several had to be adapted for RN — see
+ * docs/architecture/expensio-ui-port-plan.md ("Design tokens" section) for the full
+ * reasoning. Short version of what changed and why:
+ *
+ * - hover:*  — dropped everywhere. Meaningless on a touchscreen; there's no hover state.
+ * - transition-*, duration-*  — dropped everywhere. These animate a CSS property change
+ *   over time; RN has no such mechanism from a className alone. Real motion goes through
+ *   Moti/Reanimated at the component level (see the GradientButton/ScalePress usage in
+ *   ported screens), not through a class.
+ * - active:scale-95  — dropped from .btn-primary. Handled by wrapping the button in a
+ *   Moti-animated Pressable that scales on press, same visual result, different mechanism.
+ * - focus:* (ring/border/outline)  — dropped from .input-field. RN has no CSS :focus
+ *   pseudo-class; focus styling is done with the input's onFocus/onBlur toggling a
+ *   className, not baked into the class itself.
+ * - linear-gradient(...) background on .btn-primary  — a raw CSS `background` property
+ *   has no defined RN translation, gradient or otherwise. The gradient itself is rendered
+ *   by wrapping content in expo-linear-gradient's <LinearGradient>; .btn-primary here only
+ *   supplies the padding/radius/shadow/text that sit on top of it.
+ * - bg-gradient-to-r ... bg-clip-text text-transparent on .page-title  — RN Text can't
+ *   clip a gradient to its glyphs. Dropped in favour of a solid text-blue-700, with a true
+ *   gradient version available as the <GradientText> component (masked-view + linear-
+ *   gradient) for screens that want the exact original look.
+ */
+
+@layer components {
+  .btn-primary {
+    @apply px-6 py-3 text-white font-semibold rounded-2xl shadow-lg;
+  }
+
+  .btn-secondary {
+    @apply px-6 py-3 bg-white text-slate-600 font-semibold rounded-2xl border border-slate-200 shadow-sm;
+  }
+
+  .btn-danger {
+    @apply px-6 py-3 bg-red-50 text-red-600 font-semibold rounded-2xl border border-red-200 shadow-sm;
+  }
+
+  .card-elevated {
+    @apply bg-white rounded-3xl border border-slate-100 shadow-sm;
+  }
+
+  .card-premium {
+    @apply bg-white rounded-3xl border border-slate-200 shadow-md;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-3 rounded-2xl border border-slate-200 bg-white text-slate-900;
+  }
+
+  .input-field-focused {
+    @apply border-blue-500;
+  }
+
+  .badge-primary {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700;
+  }
+
+  .badge-success {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700;
+  }
+
+  .badge-warning {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700;
+  }
+
+  .page-shell {
+    @apply pt-7 px-4 pb-24 max-w-md mx-auto;
+  }
+
+  .page-header {
+    @apply mb-6;
+  }
+
+  .page-title {
+    @apply text-3xl font-black text-blue-700 tracking-tight;
+  }
+
+  .page-subtitle {
+    @apply text-sm text-slate-500 mt-1;
+  }
+}
