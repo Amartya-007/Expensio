@@ -26,16 +26,22 @@ export default function TripDetailScreen({
   onBack,
   onAddExpense,
   onAddParticipant,
+  onOpenInvite,
+  onOpenSettlement,
+  onOpenRecurring,
   onOpenExpense,
 }: {
   tripId: string;
   onBack: () => void;
   onAddExpense: () => void;
   onAddParticipant: () => void;
+  onOpenInvite: () => void;
+  onOpenSettlement: () => void;
+  onOpenRecurring: () => void;
   onOpenExpense: (expenseId: string) => void;
 }) {
   const [trip, setTrip] = useState<Trip | null>(null);
-  const [tab, setTab] = useState<'expenses' | 'log' | 'members'>('expenses');
+  const [tab, setTab] = useState<'expenses' | 'log' | 'members' | 'settlement'>('expenses');
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [log, setLog] = useState<ActivityEntry[]>([]);
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -119,6 +125,7 @@ export default function TripDetailScreen({
     const archiveLabel = trip?.is_archived ? 'Unarchive Trip' : 'Archive Trip';
     Alert.alert(trip?.name ?? 'Trip options', undefined, [
       { text: 'Cancel', style: 'cancel' },
+      { text: 'Recurring expenses', onPress: onOpenRecurring },
       {
         text: archiveLabel,
         onPress: async () => {
@@ -155,6 +162,27 @@ export default function TripDetailScreen({
           );
         },
       },
+      {
+        text: 'Leave Trip',
+        style: 'destructive',
+        onPress: () => {
+          Alert.alert('Leave this trip?', 'Your historical expenses stay in the trip, but you will lose access.', [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Leave',
+              style: 'destructive',
+              onPress: async () => {
+                try {
+                  await callRpc('leave_trip', { p_trip_id: tripId }, { idempotent: false });
+                  onBack();
+                } catch (err) {
+                  Alert.alert('Could not leave trip', String(err));
+                }
+              },
+            },
+          ]);
+        },
+      },
     ]);
   }
 
@@ -180,6 +208,9 @@ export default function TripDetailScreen({
         </TouchableOpacity>
         <TouchableOpacity style={[styles.tab, tab === 'members' && styles.tabActive]} onPress={() => setTab('members')}>
           <Text style={[styles.tabText, tab === 'members' && styles.tabTextActive]}>Members</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.tab, tab === 'settlement' && styles.tabActive]} onPress={onOpenSettlement}>
+          <Text style={[styles.tabText, tab === 'settlement' && styles.tabTextActive]}>Settle</Text>
         </TouchableOpacity>
       </View>
 
@@ -235,9 +266,14 @@ export default function TripDetailScreen({
         </TouchableOpacity>
       )}
       {tab === 'members' && (
-        <TouchableOpacity style={styles.fab} onPress={onAddParticipant}>
-          <Text style={styles.fabText}>+ Add Person</Text>
-        </TouchableOpacity>
+        <View style={styles.memberActions}>
+          <TouchableOpacity style={[styles.fab, styles.memberAction]} onPress={onAddParticipant}>
+            <Text style={styles.fabText}>+ Add Person</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.fab, styles.memberAction]} onPress={onOpenInvite}>
+            <Text style={styles.fabText}>Invite / Join</Text>
+          </TouchableOpacity>
+        </View>
       )}
     </View>
   );
@@ -263,4 +299,6 @@ const styles = StyleSheet.create({
   rowMeta: { fontSize: 11, color: '#999', marginTop: 2 },
   fab: { backgroundColor: '#111', borderRadius: 24, paddingVertical: 14, alignItems: 'center', marginTop: 12, marginBottom: 20 },
   fabText: { color: '#fff', fontWeight: '600' },
+  memberActions: { flexDirection: 'row', gap: 10 },
+  memberAction: { flex: 1 },
 });

@@ -28,9 +28,8 @@ import { db } from './powersync/db';
 
 function isNetworkError(err: unknown): boolean {
   // Heuristic, not a certainty -- react-native has no built-in reliable way to
-  // distinguish "no internet" from "server returned an unusual error" without adding a
-  // connectivity-check dependency (e.g. NetInfo), which this project doesn't have
-  // installed. A Postgres-side error (validation failure, permission denied) always comes
+  // distinguish "no internet" from "server returned an unusual error". A Postgres-side
+  // error (validation failure, permission denied) always comes
   // back with a real error message from the database; a network failure's message is
   // almost always one of a handful of fetch-layer strings. Good enough to route correctly
   // in practice; add NetInfo if this ever misroutes a real error into the retry queue.
@@ -96,10 +95,8 @@ export async function callRpc<T = unknown>(
   }
 }
 
-// Replays every queued action, oldest first, via a direct RPC call. Call this after
-// (re)connecting -- App.tsx does this once at startup and offers a manual pull-to-refresh,
-// since this project doesn't have a network-state listener (NetInfo) installed to trigger
-// it automatically on reconnect.
+// Replays every queued action, oldest first, via a direct RPC call. App.tsx calls this at
+// startup, on reconnect, and from the manual pull-to-refresh action.
 export async function flushPendingActions(): Promise<void> {
   const pending = await db.getAll<{ id: string; rpc_name: string; params_json: string }>(
     'SELECT id, rpc_name, params_json FROM pending_actions ORDER BY created_at ASC'

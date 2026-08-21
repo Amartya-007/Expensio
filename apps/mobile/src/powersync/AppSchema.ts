@@ -28,6 +28,41 @@ export const AppSchema = new Schema({
     created_at: column.text,
   }),
 
+  custom_categories: new Table({
+    trip_id: column.text,
+    name: column.text,
+    icon: column.text,
+    created_by: column.text,
+    created_at: column.text,
+  }),
+
+  trip_invites: new Table({
+    trip_id: column.text,
+    code: column.text,
+    created_by: column.text,
+    max_uses: column.integer,
+    use_count: column.integer,
+    expires_at: column.text,
+    revoked_at: column.text,
+    created_at: column.text,
+  }),
+
+  expense_templates: new Table({
+    trip_id: column.text,
+    description: column.text,
+    amount: column.real,
+    currency: column.text,
+    paid_by: column.text,
+    category: column.text,
+    split_type: column.text,
+    split_config: column.text,
+    recurrence_rule: column.text,
+    next_run_date: column.text,
+    is_active: column.integer,
+    created_by: column.text,
+    created_at: column.text,
+  }),
+
   expenses: new Table({
     trip_id: column.text,
     description: column.text,
@@ -50,6 +85,14 @@ export const AppSchema = new Schema({
     expense_id: column.text,
     participant_id: column.text,
     share_amount: column.real,
+  }),
+
+  expense_comments: new Table({
+    expense_id: column.text,
+    user_id: column.text,
+    comment_type: column.text,
+    body: column.text,
+    created_at: column.text,
   }),
 
   trip_activity_log: new Table({

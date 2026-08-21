@@ -5,6 +5,10 @@ import TripDetailScreen from '../screens/TripDetailScreen';
 import AddExpenseScreen from '../screens/AddExpenseScreen';
 import AddParticipantScreen from '../screens/AddParticipantScreen';
 import ExpenseDetailScreen from '../screens/ExpenseDetailScreen';
+import PhoneVerificationScreen from '../screens/PhoneVerificationScreen';
+import InviteScreen from '../screens/InviteScreen';
+import SettlementScreen from '../screens/SettlementScreen';
+import RecurringScreen from '../screens/RecurringScreen';
 
 // Replaces App.tsx's old hand-rolled `Screen` state union (see git history) with real
 // React Navigation -- the comment that used to sit on that type said to swap it in
@@ -26,6 +30,10 @@ export type RootStackParamList = {
   AddExpense: { tripId: string; currency: string };
   AddParticipant: { tripId: string; currency: string };
   ExpenseDetail: { expenseId: string; tripId: string; currency: string };
+  VerifyPhone: undefined;
+  Invite: { tripId: string };
+  Settlement: { tripId: string };
+  Recurring: { tripId: string; currency: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -58,6 +66,9 @@ function TripDetailRoute({ navigation, route }: NativeStackScreenProps<RootStack
       onBack={() => navigation.navigate('Trips')}
       onAddExpense={() => navigation.navigate('AddExpense', { tripId, currency })}
       onAddParticipant={() => navigation.navigate('AddParticipant', { tripId, currency })}
+      onOpenInvite={() => navigation.navigate('Invite', { tripId })}
+      onOpenSettlement={() => navigation.navigate('Settlement', { tripId })}
+      onOpenRecurring={() => navigation.navigate('Recurring', { tripId, currency })}
       onOpenExpense={(expenseId) => navigation.navigate('ExpenseDetail', { expenseId, tripId, currency })}
     />
   );
@@ -77,6 +88,29 @@ function ExpenseDetailRoute({ navigation, route }: NativeStackScreenProps<RootSt
   return <ExpenseDetailScreen expenseId={route.params.expenseId} onBack={() => navigation.goBack()} />;
 }
 
+function VerifyPhoneRoute({ navigation }: NativeStackScreenProps<RootStackParamList, 'VerifyPhone'>) {
+  return <PhoneVerificationScreen onDone={() => navigation.goBack()} onCancel={() => navigation.goBack()} />;
+}
+
+function InviteRoute({ navigation, route }: NativeStackScreenProps<RootStackParamList, 'Invite'>) {
+  return (
+    <InviteScreen
+      tripId={route.params.tripId}
+      onRequireVerification={() => navigation.navigate('VerifyPhone')}
+      onJoined={() => navigation.navigate('Trips')}
+      onDone={() => navigation.goBack()}
+    />
+  );
+}
+
+function SettlementRoute({ navigation, route }: NativeStackScreenProps<RootStackParamList, 'Settlement'>) {
+  return <SettlementScreen tripId={route.params.tripId} onBack={() => navigation.goBack()} />;
+}
+
+function RecurringRoute({ navigation, route }: NativeStackScreenProps<RootStackParamList, 'Recurring'>) {
+  return <RecurringScreen tripId={route.params.tripId} currency={route.params.currency} onBack={() => navigation.goBack()} />;
+}
+
 export default function RootNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Trips">
@@ -86,6 +120,10 @@ export default function RootNavigator() {
       <Stack.Screen name="AddExpense" component={AddExpenseRoute} />
       <Stack.Screen name="AddParticipant" component={AddParticipantRoute} />
       <Stack.Screen name="ExpenseDetail" component={ExpenseDetailRoute} />
+      <Stack.Screen name="VerifyPhone" component={VerifyPhoneRoute} />
+      <Stack.Screen name="Invite" component={InviteRoute} />
+      <Stack.Screen name="Settlement" component={SettlementRoute} />
+      <Stack.Screen name="Recurring" component={RecurringRoute} />
     </Stack.Navigator>
   );
 }

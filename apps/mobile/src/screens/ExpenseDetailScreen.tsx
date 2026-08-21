@@ -21,11 +21,19 @@ type Expense = {
 };
 type Participant = { id: string; display_name: string };
 type Split = { participant_id: string; share_amount: number };
+type Comment = { id: string; body: string; comment_type: string; created_at: string };
+
+function formatTimestamp(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
 
 export default function ExpenseDetailScreen({ expenseId, onBack }: { expenseId: string; onBack: () => void }) {
   const [expense, setExpense] = useState<Expense | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [splits, setSplits] = useState<Split[]>([]);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [comment, setComment] = useState('');
+  const [commentBusy, setCommentBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
@@ -54,6 +62,17 @@ export default function ExpenseDetailScreen({ expenseId, onBack }: { expenseId: 
     );
     return () => abortController.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expenseId]);
+
+  useEffect(() => {
+    const abortController = new AbortController();
+    db.watch(
+      'SELECT id, body, comment_type, created_at FROM expense_comments WHERE expense_id = ? ORDER BY created_at ASC',
+      [expenseId],
+      { onResult: (result) => setComments(result.rows?._array ?? []) },
+      { signal: abortController.signal }
+    );
+    return () => abortController.abort();
   }, [expenseId]);
 
   useEffect(() => {
@@ -126,6 +145,21 @@ export default function ExpenseDetailScreen({ expenseId, onBack }: { expenseId: 
     ]);
   }
 
+  async function addComment() {
+    const body = comment.trim();
+    if (!body) return;
+    setCommentBusy(true);
+    setError(null);
+    try {
+      await callRpc('add_comment', { p_expense_id: expenseId, p_body: body }, { idempotent: false });
+      setComment('');
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setCommentBusy(false);
+    }
+  }
+
   if (!expense) {
     return (
       <View style={styles.container}>
@@ -175,6 +209,20 @@ export default function ExpenseDetailScreen({ expenseId, onBack }: { expenseId: 
             </Text>
           ))}
 
+          <Text style={styles.sectionLabel}>Comments</Text>
+          {comments.map((entry) => (
+            <View key={entry.id} style={styles.commentRow}>
+              <Text style={styles.commentBody}>{entry.body}</Text>
+              <Text style={styles.commentMeta}>{entry.comment_type === 'system' ? 'System' : 'Member'} · {formatTimestamp(entry.created_at)}</Text>
+            </View>
+          ))}
+          <View style={styles.commentComposer}>
+            <TextInput style={styles.commentInput} value={comment} onChangeText={setComment} placeholder="Add a comment" multiline />
+            <TouchableOpacity style={styles.commentButton} onPress={addComment} disabled={commentBusy || !comment.trim()}>
+              <Text style={styles.commentButtonText}>Send</Text>
+            </TouchableOpacity>
+          </View>
+
           {error && <Text style={styles.error}>{error}</Text>}
 
           <View style={styles.actions}>
@@ -210,4 +258,11 @@ const styles = StyleSheet.create({
   submitText: { color: '#fff', fontWeight: '600' },
   deleteButton: { flex: 1, backgroundColor: '#b00020', borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
   deleteText: { color: '#fff', fontWeight: '600' },
+  commentRow: { borderBottomWidth: 1, borderBottomColor: '#f2f2f2', paddingVertical: 8 },
+  commentBody: { color: '#111', fontSize: 14 },
+  commentMeta: { color: '#999', fontSize: 11, marginTop: 4 },
+  commentComposer: { flexDirection: 'row', gap: 8, alignItems: 'flex-end', marginTop: 8 },
+  commentInput: { flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, minHeight: 40, maxHeight: 96 },
+  commentButton: { backgroundColor: '#111', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 11 },
+  commentButtonText: { color: '#fff', fontWeight: '600' },
 });
