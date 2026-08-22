@@ -82,7 +82,7 @@ Format: `[x]` done, `[ ]` not started, `[~]` partial (say what's missing).
 - [x] Activity log tab — the original feature request, working end to end
 - [x] Placeholder participants — Members tab, add person, real `paid_by` picker
 - [~] TripSpend UI port — NativeWind + navigation + gradient/font foundation in place,
-      `AddParticipantScreen` restyled as the first ported screen; see
+      `AddParticipantScreen` and `ExpenseDetailScreen` restyled so far; see
       `expensio-ui-port-plan.md` for the stack decisions, what's still open, and the
       budget-schema gap blocking `Dashboard`/`TripDetails`
 - [x] Edit / delete expense (soft-delete, splits recompute on edit)

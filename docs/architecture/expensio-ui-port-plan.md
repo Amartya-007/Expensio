@@ -122,7 +122,7 @@ Flagging it here so it isn't rediscovered mid-port later.
 | `screens/TripDetails.tsx` | *(no current equivalent)* | Not started | Same budget-schema blocker; the Members/Categories nav rows at the bottom are unblocked and portable independently |
 | `screens/GroupMemberManager.tsx` | `AddParticipantScreen.tsx` | **Partial** | "Add" slice ported this pass, TripSpend-styled (see below). Inline rename, remove-with-settlement-check, restore-inactive-members not built — bigger scope, `trip_balances` view already exists to support the settlement-check part whenever this is picked up |
 | `screens/ExpenseList.tsx` | `TripDetailScreen.tsx`'s activity tab | Not ported | Existing Expensio screen is functional but unstyled |
-| `screens/ExpenseDetail.tsx` | `ExpenseDetailScreen.tsx` | Not ported | Existing Expensio screen is functional but unstyled |
+| `screens/ExpenseDetail.tsx` | `ExpenseDetailScreen.tsx` | **Ported** | Dropped the `isLocked` banner (same budget-schema gap) and note/tags/receipts sections (no matching columns). Added `category`/`expense_date` to the query — both already existed in the schema and in `add_expense`'s RPC signature, just weren't being read before. Split display shows each participant's real `share_amount` rather than TripSpend's single equal-split figure. Delete confirmation is now a real `Modal`, replacing the native `Alert.alert()` |
 | `screens/AddExpense.tsx` | `AddExpenseScreen.tsx` | Not ported | Existing Expensio screen only supports equal split so far (per `TASKS.md`) — non-equal split UI and this port are related work, worth doing together |
 | `screens/Settlement.tsx` | *(no current equivalent — this is the open "balances/settlement view" TASKS.md item)* | Not started | Biggest TripSpend file (60KB); backed by the real `trip_balances` view, so no schema blocker here — just size |
 | `screens/SettlementLog.tsx` | *(none)* | Not started | |
@@ -153,6 +153,9 @@ Flagging it here so it isn't rediscovered mid-port later.
 - `AddParticipantScreen.tsx` restyled with TripSpend's exact visual language (page-shell/
   page-header/card-elevated/input-field, GradientText title, PrimaryButton submit) — same
   props, same `add_placeholder_participant` RPC call as before, just re-skinned.
+- `ExpenseDetailScreen.tsx` fully ported — see its table row above for the specific
+  omissions/additions. Added `date-fns` (pure JS, RN-safe) for the date formatting
+  TripSpend's version relies on.
 - `npx tsc --noEmit` passes clean across the whole project after all of the above.
 
 **Not verified:** actual rendered output. This sandbox has no device/simulator, so nothing
@@ -166,9 +169,9 @@ catch).
 
 1. Resolve the navigation-shape decision above — it affects how every other screen gets
    wired in, so worth settling before porting more of them.
-2. `ExpenseList.tsx` / `ExpenseDetail.tsx` / `AddExpense.tsx` — no schema blockers, existing
-   Expensio screens are already functional, "just" need the visual pass. `AddExpense.tsx`
-   pairs naturally with the still-open non-equal-split UI work.
+2. `ExpenseList.tsx` / `AddExpense.tsx` — no schema blockers, existing Expensio screens
+   are already functional, "just" need the visual pass (`ExpenseDetail.tsx` is done — see
+   above). `AddExpense.tsx` pairs naturally with the still-open non-equal-split UI work.
 3. `Settlement.tsx` (the open balances/settlement TASKS.md item) — no schema blocker, but
    the largest single file; budget time for it accordingly.
 4. The budget-schema product decision, unblocking `Dashboard.tsx` / `TripDetails.tsx` /

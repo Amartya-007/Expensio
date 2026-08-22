@@ -1,15 +1,10 @@
 import { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ArrowLeft, Calendar, Pencil, Trash2, User, Users, X, AlertCircle } from 'lucide-react-native';
+import { format, parseISO } from 'date-fns';
 import { db } from '../powersync/db';
 import { callRpc } from '../rpc';
+import PrimaryButton from '../components/PrimaryButton';
 
 type Expense = {
   id: string;
@@ -17,11 +12,38 @@ type Expense = {
   amount: number;
   currency: string;
   paid_by: string;
+  category: string | null;
+  expense_date: string | null;
   created_at: string;
 };
 type Participant = { id: string; display_name: string };
 type Split = { participant_id: string; share_amount: number };
 
+// Ported from tripspend/src/screens/ExpenseDetail.tsx -- see
+// docs/architecture/expensio-ui-port-plan.md for the general porting rules. What changed
+// from the original beyond the RN adaptations documented there:
+//
+// - Dropped the `isLocked` / "locked for editing" amber banner entirely. It's driven by
+//   `setup.lockPreviousDays`, which -- like the rest of TripSpend's budget concept -- has
+//   no field anywhere in Expensio's `trips` table. Same schema gap the plan doc already
+//   flags for Dashboard.tsx/TripDetails.tsx, just a smaller corner of it here.
+// - Dropped the note/tags/receipts sections. `expenses` has no columns for any of the
+//   three -- not a stylistic choice, there's nothing to display.
+// - Added `category` and `expense_date` to the query and to the visual layout below.
+//   The *original* Expensio screen didn't select either, even though both columns already
+//   exist on `expenses` and `add_expense`'s RPC already accepts `p_category` -- this was
+//   already-real data nothing was reading, not new scope invented for the port.
+// - The split section shows each participant's actual `share_amount` from `expense_splits`
+//   rather than TripSpend's single computed "per person share" figure. TripSpend's version
+//   assumes an equal split (dividing amount by participant count); Expensio's data already
+//   supports unequal splits once that UI lands (TASKS.md), so showing the real per-person
+//   amount is strictly more correct here rather than baking in the equal-split assumption.
+// - The delete confirmation is a real Modal (matching TripSpend's custom rose-ring card)
+//   instead of the native Alert.alert() the previous version used.
+// - Edit stays inline-in-this-screen (toggling `editing`), matching how this screen
+//   already worked, rather than TripSpend's separate /edit/:id route -- restructuring to a
+//   separate route wasn't needed to get the same visual result and would have meant
+//   touching RootNavigator's routes for no visible difference.
 export default function ExpenseDetailScreen({ expenseId, onBack }: { expenseId: string; onBack: () => void }) {
   const [expense, setExpense] = useState<Expense | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -31,19 +53,17 @@ export default function ExpenseDetailScreen({ expenseId, onBack }: { expenseId: 
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     const abortController = new AbortController();
     db.watch(
-      'SELECT id, description, amount, currency, paid_by, created_at FROM expenses WHERE id = ? AND deleted_at IS NULL',
+      'SELECT id, description, amount, currency, paid_by, category, expense_date, created_at FROM expenses WHERE id = ? AND deleted_at IS NULL',
       [expenseId],
       {
         onResult: (result) => {
           const row = result.rows?._array?.[0] ?? null;
           setExpense(row);
-          // Only seed the edit fields the first time this loads, not on every live
-          // update -- otherwise typing in the edit form would get overwritten by the
-          // still-live watch query firing again mid-edit.
           if (row && description === '' && amount === '') {
             setDescription(row.description);
             setAmount(String(row.amount));
@@ -88,9 +108,6 @@ export default function ExpenseDetailScreen({ expenseId, onBack }: { expenseId: 
     setBusy(true);
     setError(null);
     try {
-      // split_type/split_config stay 'equal'/{} — this app only offers equal splits so
-      // far (AddExpenseScreen), so an edit just re-runs the same equal split against the
-      // new amount. edit_expense calls compute_expense_splits itself, same as add_expense.
       await callRpc('edit_expense', {
         p_expense_id: expenseId,
         p_description: description.trim(),
@@ -106,108 +123,215 @@ export default function ExpenseDetailScreen({ expenseId, onBack }: { expenseId: 
     }
   }
 
-  function confirmDelete() {
-    Alert.alert('Delete this expense?', 'This removes it from the trip. It stays in the activity log either way.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          setBusy(true);
-          try {
-            await callRpc('delete_expense', { p_expense_id: expenseId });
-            onBack();
-          } catch (err) {
-            setError(String(err));
-            setBusy(false);
-          }
-        },
-      },
-    ]);
+  async function confirmDelete() {
+    setBusy(true);
+    try {
+      await callRpc('delete_expense', { p_expense_id: expenseId });
+      onBack();
+    } catch (err) {
+      setError(String(err));
+      setBusy(false);
+      setShowDeleteConfirm(false);
+    }
   }
 
   if (!expense) {
     return (
-      <View style={styles.container}>
-        <TouchableOpacity onPress={onBack}>
-          <Text style={styles.back}>‹ Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.empty}>Loading…</Text>
+      <View className="page-shell">
+        <Pressable onPress={onBack} className="flex-row items-center gap-2 mb-4">
+          <ArrowLeft size={16} color="#475569" />
+          <Text className="text-sm font-semibold text-slate-600">Back</Text>
+        </Pressable>
+        <Text className="text-slate-400 text-center mt-10">Loading…</Text>
       </View>
     );
   }
 
+  const expenseDate = expense.expense_date ? parseISO(expense.expense_date) : null;
+  const createdAtLabel = expense.created_at ? format(new Date(expense.created_at), 'hh:mm a') : null;
+
   return (
-    <View style={styles.container}>
-      <TouchableOpacity onPress={onBack}>
-        <Text style={styles.back}>‹ Back</Text>
-      </TouchableOpacity>
+    <ScrollView className="flex-1 bg-white" contentContainerClassName="page-shell space-y-6">
+      <Pressable onPress={onBack} className="flex-row items-center gap-2">
+        <ArrowLeft size={16} color="#475569" />
+        <Text className="text-sm font-semibold text-slate-600">Back</Text>
+      </Pressable>
+
+      {error && !editing && (
+        <View className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex-row items-center gap-3">
+          <AlertCircle size={20} color="#e11d48" />
+          <Text className="text-sm text-rose-700 font-medium flex-1">{error}</Text>
+        </View>
+      )}
 
       {editing ? (
-        <>
-          <Text style={styles.heading}>Edit expense</Text>
-          <Text style={styles.label}>What was it for?</Text>
-          <TextInput style={styles.input} value={description} onChangeText={setDescription} />
-          <Text style={styles.label}>Amount ({expense.currency})</Text>
-          <TextInput style={styles.input} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />
-          {error && <Text style={styles.error}>{error}</Text>}
-          <View style={styles.actions}>
-            <TouchableOpacity style={styles.cancelButton} onPress={() => setEditing(false)} disabled={busy}>
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.submitButton} onPress={saveEdit} disabled={busy}>
-              {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Save</Text>}
-            </TouchableOpacity>
+        <View className="card-elevated p-6 space-y-4">
+          <Text className="text-lg font-black text-slate-900">Edit expense</Text>
+
+          <View>
+            <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">What was it for?</Text>
+            <TextInput className="input-field text-base text-slate-900" value={description} onChangeText={setDescription} />
           </View>
-        </>
+
+          <View>
+            <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+              Amount ({expense.currency})
+            </Text>
+            <TextInput
+              className="input-field text-base text-slate-900"
+              value={amount}
+              onChangeText={setAmount}
+              keyboardType="decimal-pad"
+            />
+          </View>
+
+          {error && (
+            <View className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3">
+              <Text className="text-sm text-red-700 font-medium">{error}</Text>
+            </View>
+          )}
+
+          <View className="flex-row gap-3 pt-2">
+            <Pressable
+              onPress={() => setEditing(false)}
+              disabled={busy}
+              className="flex-1 py-3.5 rounded-2xl items-center justify-center active:bg-slate-100"
+            >
+              <Text className="text-slate-600 font-semibold text-sm">Cancel</Text>
+            </Pressable>
+            <View className="flex-1">
+              <PrimaryButton onPress={saveEdit} disabled={!description.trim() || !amount} loading={busy} className="w-full">
+                Save
+              </PrimaryButton>
+            </View>
+          </View>
+        </View>
       ) : (
         <>
-          <Text style={styles.heading}>{expense.description}</Text>
-          <Text style={styles.amount}>
-            {expense.currency} {expense.amount.toFixed(2)}
-          </Text>
-          <Text style={styles.paidBy}>Paid by {nameFor(expense.paid_by)}</Text>
+          <View className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-4">
+            <View className="flex-row items-start justify-between gap-3">
+              <View>
+                <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider">Amount</Text>
+                <Text className="text-3xl font-black text-slate-900">
+                  {expense.currency} {expense.amount.toFixed(2)}
+                </Text>
+              </View>
+              {expense.category && (
+                <View className="badge-primary">
+                  <Text className="text-xs font-bold text-blue-700">{expense.category}</Text>
+                </View>
+              )}
+            </View>
 
-          <Text style={styles.sectionLabel}>Split</Text>
-          {splits.map((s) => (
-            <Text key={s.participant_id} style={styles.splitLine}>
-              {nameFor(s.participant_id)} owes {expense.currency} {s.share_amount.toFixed(2)}
-            </Text>
-          ))}
+            {expenseDate && (
+              <View className="flex-row items-center gap-2">
+                <Calendar size={16} color="#64748b" />
+                <Text className="text-sm text-slate-500">{format(expenseDate, 'EEEE, MMM dd, yyyy')}</Text>
+                {createdAtLabel && <Text className="ml-auto text-xs text-slate-400">added {createdAtLabel}</Text>}
+              </View>
+            )}
 
-          {error && <Text style={styles.error}>{error}</Text>}
+            <View>
+              <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Paid by</Text>
+              <View className="flex-row items-center gap-2">
+                <View className="w-7 h-7 bg-emerald-50 rounded-lg items-center justify-center border border-emerald-100">
+                  <User size={14} color="#059669" />
+                </View>
+                <Text className="text-sm font-semibold text-slate-700">{nameFor(expense.paid_by)}</Text>
+              </View>
+            </View>
 
-          <View style={styles.actions}>
-            <TouchableOpacity style={styles.cancelButton} onPress={() => setEditing(true)} disabled={busy}>
-              <Text style={styles.cancelText}>Edit</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.deleteButton} onPress={confirmDelete} disabled={busy}>
-              <Text style={styles.deleteText}>Delete</Text>
-            </TouchableOpacity>
+            {splits.length > 0 && (
+              <View>
+                <View className="flex-row items-center gap-1 mb-2">
+                  <Users size={12} color="#94a3b8" />
+                  <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    Split between · {splits.length} people
+                  </Text>
+                </View>
+                <View className="flex-row flex-wrap gap-2">
+                  {splits.map((s) => {
+                    const isPayer = s.participant_id === expense.paid_by;
+                    return (
+                      <View
+                        key={s.participant_id}
+                        className={`flex-row items-center gap-1.5 px-3 py-1.5 rounded-xl border ${
+                          isPayer ? 'bg-emerald-50 border-emerald-100' : 'bg-slate-50 border-slate-100'
+                        }`}
+                      >
+                        <View className="w-4 h-4 rounded-full bg-white border border-current items-center justify-center">
+                          <Text className={`text-[9px] font-black ${isPayer ? 'text-emerald-700' : 'text-slate-600'}`}>
+                            {nameFor(s.participant_id)[0]?.toUpperCase()}
+                          </Text>
+                        </View>
+                        <Text className={`text-xs font-semibold ${isPayer ? 'text-emerald-700' : 'text-slate-600'}`}>
+                          {nameFor(s.participant_id)} · {expense.currency} {s.share_amount.toFixed(2)}
+                        </Text>
+                        {isPayer && <Text className="text-[9px] font-bold text-emerald-500">paid</Text>}
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+          </View>
+
+          <View className="flex-row gap-3">
+            <Pressable onPress={() => setEditing(true)} className="btn-secondary flex-1 flex-row items-center justify-center gap-2">
+              <Pencil size={16} color="#475569" />
+              <Text className="text-slate-600 font-bold text-sm">Edit</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setShowDeleteConfirm(true)}
+              className="btn-danger flex-1 flex-row items-center justify-center gap-2"
+            >
+              <Trash2 size={16} color="#e11d48" />
+              <Text className="text-rose-600 font-bold text-sm">Delete</Text>
+            </Pressable>
           </View>
         </>
       )}
-    </View>
+
+      <Modal visible={showDeleteConfirm} transparent animationType="fade" onRequestClose={() => setShowDeleteConfirm(false)}>
+        <Pressable
+          className="flex-1 bg-slate-900/40 items-center justify-center p-4"
+          onPress={() => !busy && setShowDeleteConfirm(false)}
+        >
+          <Pressable className="w-full max-w-sm bg-white rounded-[2rem] border-2 border-rose-200 shadow-2xl p-6" onPress={(e) => e.stopPropagation()}>
+            <View className="flex-row items-start justify-between gap-3">
+              <View className="w-10 h-10 rounded-2xl bg-rose-50 border border-rose-100 items-center justify-center">
+                <Trash2 size={20} color="#e11d48" />
+              </View>
+              <Pressable onPress={() => setShowDeleteConfirm(false)} disabled={busy}>
+                <X size={20} color="#94a3b8" />
+              </Pressable>
+            </View>
+
+            <Text className="mt-4 text-lg font-black text-slate-900">Delete this expense?</Text>
+            <Text className="mt-1 text-sm text-slate-500">
+              {expense.currency} {expense.amount.toFixed(2)}
+              {expense.category ? ` · ${expense.category}` : ''} will be permanently removed. This can't be undone.
+            </Text>
+
+            <View className="mt-6 flex-row gap-3">
+              <Pressable
+                onPress={() => setShowDeleteConfirm(false)}
+                disabled={busy}
+                className="flex-1 py-3 rounded-2xl bg-slate-100 items-center justify-center"
+              >
+                <Text className="text-slate-700 font-bold text-sm">Cancel</Text>
+              </Pressable>
+              <Pressable
+                onPress={confirmDelete}
+                disabled={busy}
+                className="flex-1 py-3 rounded-2xl bg-rose-600 items-center justify-center flex-row gap-2"
+              >
+                {busy ? <ActivityIndicator color="#fff" /> : <Text className="text-white font-bold text-sm">Delete</Text>}
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', paddingTop: 60, paddingHorizontal: 20 },
-  back: { color: '#666', fontSize: 15, marginBottom: 16 },
-  heading: { fontSize: 22, fontWeight: '700' },
-  amount: { fontSize: 18, color: '#111', marginTop: 8 },
-  paidBy: { fontSize: 13, color: '#666', marginTop: 4 },
-  sectionLabel: { fontSize: 13, color: '#666', marginTop: 24, marginBottom: 8, fontWeight: '600' },
-  splitLine: { fontSize: 14, color: '#111', paddingVertical: 4 },
-  label: { fontSize: 13, color: '#666', marginBottom: 6, marginTop: 16 },
-  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 16 },
-  error: { color: '#b00020', fontSize: 13, marginTop: 16 },
-  empty: { color: '#999', marginTop: 40, textAlign: 'center' },
-  actions: { flexDirection: 'row', gap: 12, marginTop: 32 },
-  cancelButton: { flex: 1, paddingVertical: 12, alignItems: 'center' },
-  cancelText: { color: '#666' },
-  submitButton: { flex: 1, backgroundColor: '#111', borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
-  submitText: { color: '#fff', fontWeight: '600' },
-  deleteButton: { flex: 1, backgroundColor: '#b00020', borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
-  deleteText: { color: '#fff', fontWeight: '600' },
-});
