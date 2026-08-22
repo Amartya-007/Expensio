@@ -5,6 +5,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
+import NetInfo from '@react-native-community/netinfo';
 import {
   useFonts,
   Inter_400Regular,
@@ -58,6 +59,17 @@ export default function App() {
       db.disconnect();
     };
   }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    let wasOffline = false;
+    const unsubscribe = NetInfo.addEventListener((state) => {
+      const online = state.isConnected === true && state.isInternetReachable !== false;
+      if (online && wasOffline) void flushPendingActions();
+      wasOffline = !online;
+    });
+    return unsubscribe;
+  }, [ready]);
 
   if (!ready || !fontsLoaded) {
     return (

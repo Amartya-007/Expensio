@@ -4,6 +4,7 @@
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const powersyncUrl = process.env.EXPO_PUBLIC_POWERSYNC_URL;
+const apiUrl = process.env.EXPO_PUBLIC_API_URL;
 
 if (!supabaseUrl || !supabaseAnonKey || !powersyncUrl) {
   throw new Error(
@@ -12,4 +13,4 @@ if (!supabaseUrl || !supabaseAnonKey || !powersyncUrl) {
   );
 }
 
-export const env = { supabaseUrl, supabaseAnonKey, powersyncUrl };
+export const env = { supabaseUrl, supabaseAnonKey, powersyncUrl, apiUrl };

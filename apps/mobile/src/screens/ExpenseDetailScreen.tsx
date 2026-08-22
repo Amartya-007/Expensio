@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { ArrowLeft, Calendar, Pencil, Trash2, User, Users, X, AlertCircle } from 'lucide-react-native';
+import { ArrowLeft, Calendar, MessageSquare, Pencil, Trash2, User, Users, X, AlertCircle } from 'lucide-react-native';
 import { format, parseISO } from 'date-fns';
 import { db } from '../powersync/db';
 import { callRpc } from '../rpc';
@@ -18,6 +18,11 @@ type Expense = {
 };
 type Participant = { id: string; display_name: string };
 type Split = { participant_id: string; share_amount: number };
+type Comment = { id: string; body: string; comment_type: string; created_at: string };
+
+function formatTimestamp(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
 
 // Ported from tripspend/src/screens/ExpenseDetail.tsx -- see
 // docs/architecture/expensio-ui-port-plan.md for the general porting rules. What changed
@@ -48,6 +53,9 @@ export default function ExpenseDetailScreen({ expenseId, onBack }: { expenseId: 
   const [expense, setExpense] = useState<Expense | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [splits, setSplits] = useState<Split[]>([]);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [comment, setComment] = useState('');
+  const [commentBusy, setCommentBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
@@ -74,6 +82,17 @@ export default function ExpenseDetailScreen({ expenseId, onBack }: { expenseId: 
     );
     return () => abortController.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expenseId]);
+
+  useEffect(() => {
+    const abortController = new AbortController();
+    db.watch(
+      'SELECT id, body, comment_type, created_at FROM expense_comments WHERE expense_id = ? ORDER BY created_at ASC',
+      [expenseId],
+      { onResult: (result) => setComments(result.rows?._array ?? []) },
+      { signal: abortController.signal }
+    );
+    return () => abortController.abort();
   }, [expenseId]);
 
   useEffect(() => {
@@ -132,6 +151,21 @@ export default function ExpenseDetailScreen({ expenseId, onBack }: { expenseId: 
       setError(String(err));
       setBusy(false);
       setShowDeleteConfirm(false);
+    }
+  }
+
+  async function addComment() {
+    const body = comment.trim();
+    if (!body) return;
+    setCommentBusy(true);
+    setError(null);
+    try {
+      await callRpc('add_comment', { p_expense_id: expenseId, p_body: body }, { idempotent: false });
+      setComment('');
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setCommentBusy(false);
     }
   }
 
@@ -274,6 +308,44 @@ export default function ExpenseDetailScreen({ expenseId, onBack }: { expenseId: 
                 </View>
               </View>
             )}
+          </View>
+
+          {/* Comments -- merged back in from a parallel change on the same file
+              (add_comment RPC + expense_comments watch query); not part of TripSpend's
+              own ExpenseDetail.tsx, kept as its own card in the ported design language
+              rather than dropped. */}
+          <View className="card-elevated p-6 space-y-3">
+            <View className="flex-row items-center gap-1">
+              <MessageSquare size={12} color="#94a3b8" />
+              <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider">Comments</Text>
+            </View>
+            {comments.map((entry) => (
+              <View key={entry.id} className="border-b border-slate-100 pb-2">
+                <Text className="text-sm text-slate-700">{entry.body}</Text>
+                <Text className="text-xs text-slate-400 mt-1">
+                  {entry.comment_type === 'system' ? 'System' : 'Member'} · {formatTimestamp(entry.created_at)}
+                </Text>
+              </View>
+            ))}
+            <View className="flex-row gap-2 items-end">
+              <TextInput
+                className="input-field flex-1 text-sm text-slate-900"
+                value={comment}
+                onChangeText={setComment}
+                placeholder="Add a comment"
+                placeholderTextColor="#94a3b8"
+                multiline
+              />
+              <Pressable
+                onPress={addComment}
+                disabled={commentBusy || !comment.trim()}
+                className={`px-4 py-3 rounded-2xl ${commentBusy || !comment.trim() ? 'bg-slate-100' : 'bg-blue-600'}`}
+              >
+                <Text className={`text-sm font-semibold ${commentBusy || !comment.trim() ? 'text-slate-400' : 'text-white'}`}>
+                  Send
+                </Text>
+              </Pressable>
+            </View>
           </View>
 
           <View className="flex-row gap-3">
