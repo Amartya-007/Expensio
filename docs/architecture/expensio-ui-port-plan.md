@@ -5,6 +5,16 @@ tracks. Covers porting [tripspend](https://github.com/Amartya-007/tripspend)'s e
 onto Expensio's React Native client. The backend is entirely new (Supabase/PowerSync
 instead of Firebase); only the look and interaction design is being carried over.
 
+*A large, independent batch of work ("New screen and FastAPI") landed directly on GitHub
+partway through this port, adding `InviteScreen.tsx`, `PhoneVerificationScreen.tsx`,
+`SettlementScreen.tsx`, `RecurringScreen.tsx`, a FastAPI service, and two new migrations —
+see `TASKS.md`'s own note on this. It was merged in (not overwritten) once discovered; the
+one real conflict was `ExpenseDetailScreen.tsx`, which both this port and that batch had
+independently rewritten — resolved by keeping this port's restyle and re-adding the other
+side's comments feature as its own card. None of the four new screens above are styled
+with this port's design system yet — they're plain `StyleSheet.create`, same as every
+other not-yet-ported screen.*
+
 ## Why this isn't a copy-paste job
 
 TripSpend is a **web** React app (Vite + React DOM), wrapped in Capacitor for native
@@ -99,6 +109,13 @@ screen's own prop contract changed, only how it's reached. This stack is what th
 tab shell sits on top of, once the above is decided and the tabs it needs
 (Expenses/Settle) exist.
 
+Since this was written, the parallel work stream noted at the top added four more flat
+stack routes to the same navigator (`VerifyPhone`, `Invite`, `Settlement`, `Recurring`),
+reached from `TripDetailScreen`'s options menu — all still flat pushes, not tabs. That's
+more reason to settle the decision above soon: `Settlement` in particular is exactly the
+kind of screen that'd move under a persistent "Settle" tab if that's the direction chosen,
+and it'd be better to place it there once than to move it after the fact.
+
 ## The "budget" concept — a schema gap, not a UI gap
 
 `Dashboard.tsx` (the per-trip budget snapshot — remaining balance, burn rate, "safe to
@@ -122,9 +139,9 @@ Flagging it here so it isn't rediscovered mid-port later.
 | `screens/TripDetails.tsx` | *(no current equivalent)* | Not started | Same budget-schema blocker; the Members/Categories nav rows at the bottom are unblocked and portable independently |
 | `screens/GroupMemberManager.tsx` | `AddParticipantScreen.tsx` | **Partial** | "Add" slice ported this pass, TripSpend-styled (see below). Inline rename, remove-with-settlement-check, restore-inactive-members not built — bigger scope, `trip_balances` view already exists to support the settlement-check part whenever this is picked up |
 | `screens/ExpenseList.tsx` | `TripDetailScreen.tsx`'s activity tab | Not ported | Existing Expensio screen is functional but unstyled |
-| `screens/ExpenseDetail.tsx` | `ExpenseDetailScreen.tsx` | **Ported** | Dropped the `isLocked` banner (same budget-schema gap) and note/tags/receipts sections (no matching columns). Added `category`/`expense_date` to the query — both already existed in the schema and in `add_expense`'s RPC signature, just weren't being read before. Split display shows each participant's real `share_amount` rather than TripSpend's single equal-split figure. Delete confirmation is now a real `Modal`, replacing the native `Alert.alert()` |
-| `screens/AddExpense.tsx` | `AddExpenseScreen.tsx` | Not ported | Existing Expensio screen only supports equal split so far (per `TASKS.md`) — non-equal split UI and this port are related work, worth doing together |
-| `screens/Settlement.tsx` | *(no current equivalent — this is the open "balances/settlement view" TASKS.md item)* | Not started | Biggest TripSpend file (60KB); backed by the real `trip_balances` view, so no schema blocker here — just size |
+| `screens/ExpenseDetail.tsx` | `ExpenseDetailScreen.tsx` | **Ported** | Dropped the `isLocked` banner (same budget-schema gap) and note/tags/receipts sections (no matching columns). Added `category`/`expense_date` to the query — both already existed in the schema and in `add_expense`'s RPC signature, just weren't being read before. Split display shows each participant's real `share_amount` rather than TripSpend's single equal-split figure. Delete confirmation is now a real `Modal`, replacing the native `Alert.alert()`. Also gained a Comments card (`add_comment` RPC) merged in from the parallel work stream noted at the top — not part of TripSpend's original screen, kept as its own card in the ported design language rather than dropped |
+| `screens/AddExpense.tsx` | `AddExpenseScreen.tsx` | Not ported | Screen now supports all 7 split types (parallel work stream) — was equal-only when this row was first written. Still plain `StyleSheet`, not restyled |
+| `screens/Settlement.tsx` | `SettlementScreen.tsx` (new, from the parallel work stream) | Not ported | Exists and displays balances now (real screen, not a gap) — but reads only, no `record_payment`/`confirm_payment` call yet (both RPCs exist). Still plain `StyleSheet`. No schema blocker for the visual pass; the payment-recording gap is a separate, non-UI follow-up |
 | `screens/SettlementLog.tsx` | *(none)* | Not started | |
 | `screens/Analytics.tsx` | *(none)* | Not started | Partly depends on the budget concept (burn rate, health score) — split what needs budget data from what doesn't |
 | `screens/CategoryManager.tsx` | *(none — `custom_categories` table exists, unused by mobile so far)* | Not started | |
@@ -136,6 +153,7 @@ Flagging it here so it isn't rediscovered mid-port later.
 | `components/AccountSwitchDialog.tsx` | *(none)* | Not started | |
 | `components/CustomSelect.tsx`, `DatePicker.tsx` | *(none yet — shared form components)* | Not started | Needed once `TripDetails`/`SetupScreen` are tackled |
 | `components/NotificationCard.tsx`, `PeoplePickerSheet.tsx`, `PreSetupTripChoice.tsx` | *(none)* | Not started | |
+| *(no TripSpend equivalent — Expensio-specific)* | `InviteScreen.tsx`, `PhoneVerificationScreen.tsx`, `RecurringScreen.tsx` (all new, from the parallel work stream) | Not ported | Real invites, phone verification, and recurring-expense templates now work functionally — none are styled with this port's design system yet. Not in TripSpend's own screen list at all (it has no recurring-expense feature, and its invite flow lives elsewhere in that codebase, not as a dedicated screen), so these don't get a "port from X" — they're new backlog for whenever their turn comes |
 
 ## What's actually done this pass
 
@@ -156,7 +174,8 @@ Flagging it here so it isn't rediscovered mid-port later.
 - `ExpenseDetailScreen.tsx` fully ported — see its table row above for the specific
   omissions/additions. Added `date-fns` (pure JS, RN-safe) for the date formatting
   TripSpend's version relies on.
-- `npx tsc --noEmit` passes clean across the whole project after all of the above.
+- `npx tsc --noEmit` passes clean across the whole project after all of the above,
+  including after merging in the parallel work stream noted at the top of this doc.
 
 **Not verified:** actual rendered output. This sandbox has no device/simulator, so nothing
 above has been visually confirmed — only that real packages installed without conflict and
@@ -168,14 +187,22 @@ catch).
 ## Suggested order from here
 
 1. Resolve the navigation-shape decision above — it affects how every other screen gets
-   wired in, so worth settling before porting more of them.
+   wired in, so worth settling before porting more of them. More pressing now than when
+   this was first written, since `Settlement`/`Invite`/`Recurring` all exist as flat
+   routes today and would need moving if the tab-shell direction is chosen later.
 2. `ExpenseList.tsx` / `AddExpense.tsx` — no schema blockers, existing Expensio screens
    are already functional, "just" need the visual pass (`ExpenseDetail.tsx` is done — see
-   above). `AddExpense.tsx` pairs naturally with the still-open non-equal-split UI work.
-3. `Settlement.tsx` (the open balances/settlement TASKS.md item) — no schema blocker, but
-   the largest single file; budget time for it accordingly.
+   above). `AddExpense.tsx` already has its non-equal-split UI built (parallel work
+   stream) — the restyle is the only thing left there now.
+3. `Settlement.tsx`/`SettlementScreen.tsx` (the balances/settlement item) — screen exists
+   and shows real data now, no schema blocker; still needs both the visual pass and
+   wiring `record_payment`/`confirm_payment` in (currently read-only).
 4. The budget-schema product decision, unblocking `Dashboard.tsx` / `TripDetails.tsx` /
    the budget half of `Analytics.tsx`.
-5. Everything else (`Settings`, `CategoryManager`, `Onboarding`, `SetupScreen`,
+5. `InviteScreen.tsx` / `PhoneVerificationScreen.tsx` / `RecurringScreen.tsx` — functional,
+   unstyled, no TripSpend screen to port from; visual treatment can follow this port's
+   established patterns (page-shell/card-elevated/input-field/PrimaryButton) without a
+   reference screen to match against.
+6. Everything else (`Settings`, `CategoryManager`, `Onboarding`, `SetupScreen`,
    `TripSwitcher`/`BottomNav`) roughly in whatever order matches which features Expensio
    actually needs next per `TASKS.md`, rather than TripSpend's own file sizes.
