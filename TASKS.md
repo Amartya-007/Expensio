@@ -6,11 +6,16 @@ Format: `[x]` done, `[ ]` not started, `[~]` partial (say what's missing).
 
 *A large batch of independent work ("New screen and FastAPI", 3 commits) landed directly
 on GitHub between two sessions in this chat, without this file being updated alongside it.
-The entries below marked done/partial from that batch were confirmed by reading the actual
-diffs and grepping the resulting code in this session — not just inferred from commit
-messages or file names — but weren't exercised against a running app (no
-device/simulator in this environment). Worth an actual run-through before trusting them
-fully.*
+The user made these commits directly, not another chat session. A follow-up review pass
+went further than reading diffs: installed Postgres and the FastAPI service for real,
+ran the actual migrations and test suites, and found three real bugs in the process —
+`0005_backend_correctness.sql` didn't apply at all (missing `perform` keywords),
+`record_payment` had its debt math backwards, and `0004`'s notification dedup could
+silently drop a real notification. All three fixed and re-verified; see their entries
+below for details. What's still NOT been exercised: the actual mobile app on a
+device/simulator (still no device/simulator in this environment) — RPC-level and
+SQL-level correctness is now solid, but nothing above confirms the UI actually renders
+or behaves right on a real phone.*
 
 ## Design docs (`docs/architecture/`)
 
@@ -56,30 +61,54 @@ fully.*
       that bypassed the RPC-only design, and `search_path` hardening missing on every
       `SECURITY DEFINER` function. Full regression suite re-run clean afterward.
 - [x] `0004_notifications.sql` — `notification_events` table, `profiles.notification_preferences`
-      column. Confirmed the DDL exists; actual event-to-template mapping / send logic not
-      re-verified this session.
+      column. Fixed a real bug this session: the upsert on a repeated `event_key` merged
+      the payload but never reset `status`/`attempts`/`next_attempt_at`, so a second
+      occurrence of the same event (e.g. editing the same expense twice) would silently
+      vanish if the first one had already been sent — nothing would re-queue it. Event-to-
+      template mapping / actual send logic still not built (no worker exists yet).
 - [x] `0005_backend_correctness.sql` (757 lines) — `compute_expense_splits` rewritten with
-      proper decimal→minor-unit money handling (`money_to_minor`), and now genuinely covers
-      all 7 split types including `adjustment`/`itemized` (confirmed by reading the
-      function body, not just the migration's existence). Also adds participant-aware
-      ledger entries (`insert_expense_ledger_entries`/`reverse_expense_ledger_entries`,
-      with a backfill for pre-existing expenses) and payment-recording RPCs
-      (`record_payment`, `confirm_payment`) — the backend half of settlement.
+      proper decimal→minor-unit money handling (`money_to_minor`), covering all 7 split
+      types including `adjustment`/`itemized`. Also adds participant-aware ledger entries
+      (`insert_expense_ledger_entries`/`reverse_expense_ledger_entries`, with a backfill
+      for pre-existing expenses) and payment-recording RPCs (`record_payment`,
+      `confirm_payment`) — the backend half of settlement.
+      **Fixed two real bugs this session, both confirmed against a real local Postgres 16
+      instance, not just by reading the SQL:**
+      1. The migration didn't apply at all. `compute_expense_splits` calls
+         `validate_split_participant_map`/`validate_weight_map` nine times, every one of
+         them missing the `perform` keyword PL/pgSQL requires for a bare void-function-call
+         statement — confirmed with an isolated repro, then fixed all nine. Since that
+         function failed to even get created, everything after it in the file (the ledger
+         functions, `add_expense`/`edit_expense`/`delete_expense`, both payment RPCs) would
+         never have been created either.
+      2. `record_payment` had the debt math backwards. Traced through with real numbers:
+         Bob owes Alice ₹50; Bob calls `record_payment` to pay Alice ₹50; balances went to
+         -100/+100 instead of 0/0 — recording a payment made the imbalance *worse*. Root
+         cause: `trip_balances` treats `from_participant` as "this balance goes down",
+         which is right for an expense (from=debtor) but wrong for a payment (the payer's
+         balance should go *up*). Fixed by negating the stored amount rather than swapping
+         which participant occupies which column, so `confirm_payment`'s "only the
+         recipient can confirm" check didn't need to change — re-verified that check still
+         rejects the payer and accepts the actual recipient after the fix.
+      Full add_expense → record_payment → confirm_payment flow re-run clean after both
+      fixes (balances settle to exactly 0.00, `exact`-split type also spot-checked).
 - [ ] Apply against the actual Supabase project and re-run the equivalent checks — local
       Postgres is a stand-in, not identical to Supabase's real `auth.users`/JWKS. Also now
-      needs to cover 0004/0005, not just 0002/0003.
+      needs to cover 0004/0005, not just 0002/0003 — **and per the above, 0005 as
+      originally committed would have failed outright**, so this is more than a formality.
 - [x] `compute_expense_splits` — all 7 split types (equal, exact, percentage, shares,
       reimbursement, adjustment, itemized) implemented as of `0005_backend_correctness.sql`
-- [ ] Settlement-plan debt-simplification algorithm — `record_payment`/`confirm_payment`
-      exist (manual payment recording), but the actual debt-simplification/suggestion
-      algorithm (architecture doc §6) is still scoped for FastAPI, not found in this batch
+- [x] Settlement-plan debt-simplification algorithm — `services/api/app/settlement.py`,
+      a greedy largest-debtor-to-largest-creditor matcher (not minimum-transaction-count
+      optimal, which is NP-hard in general, but a standard reasonable approach). Covered by
+      real passing tests (`test_settlement.py`), not just present
 
 ## FastAPI service (`services/api/`)
 
-- [~] Scaffolded — `main.py`, `auth.py`, `models.py`, `repository.py`, `settlement.py`,
-      `pyproject.toml`, plus a pytest suite (`tests/test_api.py`, `test_auth.py`,
-      `test_settlement.py`). Structure and test files confirmed to exist; haven't run the
-      suite or reviewed `settlement.py`'s actual algorithm in depth this session.
+- [x] Scaffolded, and the scaffolding is genuinely solid — installed it in a real venv
+      and ran the actual pytest suite this session (not just confirmed the files exist):
+      all 10 tests pass. `settlement.py`'s debt-simplification algorithm reviewed in
+      depth (see the note under `0005`'s entry above) — real, working code, not a stub.
 
 ## Mobile client (`apps/mobile/`) — React Native + Expo
 
@@ -111,16 +140,29 @@ fully.*
       `revoke_invite` all wired
 - [x] Phone verification (`PhoneVerificationScreen.tsx`) — Supabase Auth `verifyOtp`
       (`type: 'phone_change'`) linking a phone number to the anonymous session, satisfying
-      `is_verified_user()` for real invites above
-- [~] Balances / settlement view (`SettlementScreen.tsx`) — displays balances; no
-      `record_payment`/`confirm_payment` call found in the screen, so recording an actual
-      payment isn't wired into the UI yet even though both RPCs exist
-      (`0005_backend_correctness.sql`)
+      `is_verified_user()` for real invites above. Fixed a real bug this session: the
+      optional post-verification `update_display_name` call shared the same try/catch as
+      `verifyOtp` itself, so a failure there (e.g. a network hiccup) left the user staring
+      at an error on the OTP screen for a phone number that had, in fact, already been
+      successfully verified. Now best-effort and non-blocking — `onDone()` always fires
+      once `verifyOtp` succeeds.
+- [~] Balances / settlement view (`SettlementScreen.tsx`) — displays balances via the
+      FastAPI settlement-plan endpoint (correctly read-only by design, not a gap); no
+      `record_payment`/`confirm_payment` call wired into the UI yet even though both RPCs
+      exist and are now confirmed correct (`0005_backend_correctness.sql`'s entry above)
 - [~] Recurring expenses UI (`RecurringScreen.tsx`) — create/delete template wired
-      (`create_expense_template`, `delete_expense_template`); the scheduled-trigger side
+      (`create_expense_template`, `delete_expense_template`, params confirmed to match
+      both RPC signatures exactly); the scheduled-trigger side
       (`generate_due_recurring_expenses` actually firing on a schedule, not just existing
       as an RPC) not confirmed this session
-- [x] Leave trip UI (`TripDetailScreen.tsx`'s options menu, `leave_trip` RPC)
+- [x] Leave trip UI (`TripDetailScreen.tsx`'s options menu, `leave_trip` RPC). Minor,
+      non-blocking cosmetic note found while reviewing this screen: the "Settle" tab is
+      styled identically to the three real in-place tabs (Expenses/Log/Members) but
+      actually navigates to a separate screen rather than switching content locally, and
+      the `'settlement'` value in the tab-state type is consequently never set by
+      anything — dead code, not a functional bug, but worth a look if this screen gets
+      touched again; whether "Settle" should be a real fourth tab or stay a separate
+      screen is a product call, not something to silently change
 - [~] TripSpend UI port — NativeWind + navigation + gradient/font foundation in place;
       `AddParticipantScreen` and `ExpenseDetailScreen` restyled. See
       `expensio-ui-port-plan.md` for stack decisions, the full screen-by-screen mapping,
@@ -147,7 +189,8 @@ fully.*
 - [x] pgTAP suite (`supabase/tests/`) — `0000_test_helpers.sql` through
       `0004_notifications.sql`, covering core invariants, split math, RPC permissions,
       notifications
-- [~] FastAPI pytest suite (`services/api/tests/`) — exists, not run this session
+- [x] FastAPI pytest suite (`services/api/tests/`) — actually run this session (real venv,
+      real `pip install -e .[test]`), all 10 pass
 
 ## Launch-blockers, not code-blockers
 

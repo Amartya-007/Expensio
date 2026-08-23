@@ -32,3 +32,14 @@ google-services.json
 
 # Android Profiling
 *.hprof
+
+# Python (services/api) — nothing in this repo ignored these before, so __pycache__/
+# and expensio_api.egg-info/ ended up actually committed; see git history around when
+# services/api was added
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+*.egg

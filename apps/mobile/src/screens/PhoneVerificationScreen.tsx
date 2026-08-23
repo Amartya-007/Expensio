@@ -82,12 +82,19 @@ export default function PhoneVerificationScreen({
       });
       if (verifyError) throw verifyError;
 
+      // Phone is now verified and linked -- that already happened, irreversibly, on the
+      // line above. A failure in this optional follow-up shouldn't make it look like
+      // verification itself failed (previously this whole block shared the outer
+      // try/catch, so a network hiccup here would leave the user staring at an error on
+      // the OTP screen for a phone that was, in fact, already successfully verified --
+      // and a "resend code"/retry from there doesn't make sense for an already-linked
+      // number). Best-effort here; onDone() always fires once verifyOtp succeeds.
       if (displayName.trim()) {
-        await callRpc(
-          'update_display_name',
-          { p_new_name: displayName.trim() },
-          { idempotent: false }
-        );
+        try {
+          await callRpc('update_display_name', { p_new_name: displayName.trim() }, { idempotent: false });
+        } catch {
+          // Name can be set later from Settings -- not worth blocking on.
+        }
       }
       onDone();
     } catch (err) {

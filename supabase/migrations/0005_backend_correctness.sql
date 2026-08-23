@@ -140,7 +140,7 @@ begin
 
   elsif v_expense.split_type = 'exact' then
     v_normalized := coalesce(v_expense.split_config -> 'shares', '{}'::jsonb);
-    validate_split_participant_map(v_expense.trip_id, v_normalized);
+    perform validate_split_participant_map(v_expense.trip_id, v_normalized);
     for v_key, v_value in select key, value from jsonb_each(v_normalized) loop
       v_val := money_to_minor(v_value);
       v_normalized := jsonb_set(v_normalized, array[v_key], to_jsonb(v_val), true);
@@ -153,7 +153,7 @@ begin
 
   elsif v_expense.split_type = 'percentage' then
     v_units := coalesce(v_expense.split_config -> 'shares', '{}'::jsonb);
-    validate_weight_map(v_expense.trip_id, v_units);
+    perform validate_weight_map(v_expense.trip_id, v_units);
     select sum(value::numeric) into v_pct_sum from jsonb_each_text(v_units);
     if v_pct_sum is distinct from 100 then
       raise exception 'percentages (%) do not sum to 100', v_pct_sum;
@@ -162,12 +162,12 @@ begin
 
   elsif v_expense.split_type = 'shares' then
     v_units := coalesce(v_expense.split_config -> 'units', '{}'::jsonb);
-    validate_weight_map(v_expense.trip_id, v_units);
+    perform validate_weight_map(v_expense.trip_id, v_units);
     v_shares := distribute_proportionally(v_total_minor, v_units);
 
   elsif v_expense.split_type = 'adjustment' then
     v_normalized := coalesce(v_expense.split_config -> 'adjustments', '{}'::jsonb);
-    validate_split_participant_map(v_expense.trip_id, v_normalized, true);
+    perform validate_split_participant_map(v_expense.trip_id, v_normalized, true);
     for v_key, v_value in select key, value from jsonb_each(v_normalized) loop
       v_val := money_to_minor(v_value);
       v_normalized := jsonb_set(v_normalized, array[v_key], to_jsonb(v_val), true);
@@ -191,7 +191,7 @@ begin
       v_remainder_mode := coalesce(v_expense.split_config ->> 'remainder', 'equal');
       if v_remainder_mode = 'shares' then
         v_units := coalesce(v_expense.split_config -> 'units', '{}'::jsonb);
-        validate_weight_map(v_expense.trip_id, v_units);
+        perform validate_weight_map(v_expense.trip_id, v_units);
         select coalesce(jsonb_object_agg(key, value), '{}'::jsonb) into v_units
         from jsonb_each(v_units)
         where v_remainder_weights ? key;
@@ -212,7 +212,7 @@ begin
       raise exception 'reimbursement target must match paid_by';
     end if;
     v_normalized := coalesce(v_expense.split_config -> 'shares', '{}'::jsonb);
-    validate_split_participant_map(v_expense.trip_id, v_normalized);
+    perform validate_split_participant_map(v_expense.trip_id, v_normalized);
     for v_key, v_value in select key, value from jsonb_each(v_normalized) loop
       v_val := money_to_minor(v_value);
       v_normalized := jsonb_set(v_normalized, array[v_key], to_jsonb(v_val), true);
@@ -232,7 +232,7 @@ begin
     for v_item in select value from jsonb_array_elements(v_expense.split_config -> 'items') loop
       if jsonb_typeof(v_item -> 'amounts') = 'object' then
         v_item_amount_minor := money_to_minor(v_item -> 'amount');
-        validate_split_participant_map(v_expense.trip_id, v_item -> 'amounts');
+        perform validate_split_participant_map(v_expense.trip_id, v_item -> 'amounts');
         v_item_shares := '{}'::jsonb;
         for v_key, v_value in select key, value from jsonb_each(v_item -> 'amounts') loop
           v_val := money_to_minor(v_value);
@@ -255,7 +255,7 @@ begin
         end if;
         select coalesce(jsonb_object_agg(elem, 1), '{}'::jsonb) into v_item_weights
         from jsonb_array_elements_text(v_shared_by) as elem;
-        validate_weight_map(v_expense.trip_id, v_item_weights);
+        perform validate_weight_map(v_expense.trip_id, v_item_weights);
         v_item_shares := distribute_proportionally(v_item_amount_minor, v_item_weights);
       end if;
 
@@ -295,7 +295,7 @@ begin
     raise exception 'compute_expense_splits: unknown split_type %', v_expense.split_type;
   end if;
 
-  validate_split_participant_map(v_expense.trip_id, v_shares);
+  perform validate_split_participant_map(v_expense.trip_id, v_shares);
   for v_key, v_val in select key, value::bigint from jsonb_each_text(v_shares) loop
     if v_val < 0 then
       raise exception 'computed share for participant % cannot be negative', v_key;
@@ -595,8 +595,23 @@ begin
   insert into ledger_entries (
     trip_id, entry_type, from_participant, to_participant, amount, currency, created_by, metadata
   ) values (
+    -- Sign is intentionally negative here: the view (create or replace view trip_balances,
+    -- above) always applies -amount to from_participant's balance and +amount to
+    -- to_participant's. That's correct for an expense (from_participant = the participant
+    -- who now owes more), but a payment is the opposite -- the payer's (from_participant's)
+    -- balance should move UP (less owed), and the recipient's (to_participant's) should
+    -- move DOWN (less owed to them). Negating the amount here, while keeping
+    -- from_participant=payer/to_participant=recipient as the natural real-world reading
+    -- (which is what confirm_payment's "only the recipient can confirm" check below
+    -- assumes), flips the view's arithmetic the right way without having to touch that
+    -- check or swap which participant goes in which column. Same convention
+    -- reverse_expense_ledger_entries already uses for its own reversal entries.
+    -- Caught and fixed by walking through a concrete example: as originally written
+    -- (positive amount, unchanged from/to), a payment made both balances *more* extreme
+    -- instead of settling them -- Bob paying off a 50 he owed Alice left the balances at
+    -- -100/+100 instead of 0/0.
     p_trip_id, 'payment_recorded', v_from_participant, p_to_participant,
-    p_amount, p_currency, auth.uid(), jsonb_build_object('financial_effect', true)
+    -p_amount, p_currency, auth.uid(), jsonb_build_object('financial_effect', true)
   ) returning id into v_id;
 
   perform log_activity(

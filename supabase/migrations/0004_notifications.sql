@@ -48,7 +48,25 @@ begin
     p_subject_participant_id, p_payload
   )
   on conflict (event_key) do update
-    set payload = notification_events.payload || excluded.payload
+    set payload = notification_events.payload || excluded.payload,
+        -- Without this, a second occurrence of the same event_key (e.g. editing the same
+        -- expense twice) that lands after the first one was already delivered just merges
+        -- silently into the 'sent' row and is never delivered itself -- there's no worker
+        -- yet to notice, since nothing re-queues it. Re-arm delivery whenever the existing
+        -- row is past 'pending'/'processing'; leave it alone otherwise so an
+        -- already-in-flight send isn't restarted or double counted.
+        status = case
+          when notification_events.status in ('sent', 'failed') then 'pending'
+          else notification_events.status
+        end,
+        attempts = case
+          when notification_events.status in ('sent', 'failed') then 0
+          else notification_events.attempts
+        end,
+        next_attempt_at = case
+          when notification_events.status in ('sent', 'failed') then now()
+          else notification_events.next_attempt_at
+        end
   returning id into v_id;
 
   return v_id;
