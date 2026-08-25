@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
-import { ArrowLeft, CheckCircle2, HandCoins } from 'lucide-react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { CheckCircle2, HandCoins } from 'lucide-react-native';
 import { supabase } from '../supabaseClient';
 import { db } from '../powersync/db';
 import { callRpc } from '../rpc';
 import { env } from '../env';
-import GradientText from '../components/GradientText';
 
 type Suggestion = {
   from_participant: string;
@@ -14,30 +13,26 @@ type Suggestion = {
   currency: string;
 };
 
-// Restyled visually to match this port's design language -- TripSpend's own
-// Settlement.tsx isn't a usable reference here at all (it's 60KB, built entirely around
-// the personal daily-budget concept documented as a schema gap in
-// docs/architecture/expensio-ui-port-plan.md), so this follows the established
-// page-shell/card-elevated/badge patterns from the other ported screens instead of
-// porting any specific TripSpend screen.
+// Content-only piece of the settlement UI -- no header, no page-shell padding, so it can
+// sit inside a page that already has its own (TripDetailScreen's Settle tab) as well as
+// stand alone (SettlementScreen.tsx). Extracted rather than duplicated once it needed a
+// second home; see TripDetailScreen.tsx's header comment for why Settle became a real
+// local tab instead of navigating away.
 //
-// Also newly wired in this pass, closing the "currently read-only" gap noted in the plan
-// doc: a "Record payment" action per suggestion, calling record_payment (now fixed --
-// see TASKS.md) -- but only for suggestions where the current user IS the payer
-// (from_participant), since record_payment infers the payer from the caller's own
-// session, not a parameter. After a successful record, the whole settlement plan is
-// re-fetched rather than just marking that one row done client-side: paying off one debt
-// can change what the debt-simplification algorithm suggests for everyone else, not just
-// remove a single row.
+// Wires in record_payment (payer side): a "Record payment" action per suggestion, only
+// for suggestions where the current user IS the payer (from_participant), since the RPC
+// infers the payer from the caller's own session, not a parameter. After a successful
+// record, the whole settlement plan is re-fetched rather than just marking that one row
+// done client-side -- paying off one debt can change what the debt-simplification
+// algorithm suggests for everyone else, not just remove a single row.
 //
-// Deliberately NOT built this pass: the recipient's side (confirming a payment via
-// confirm_payment). That needs a list of not-yet-confirmed payments where the current
-// user is the recipient, which requires reading ledger_entries directly -- it has no
-// PowerSync sync stream (see sync-streams.yaml; the table's in the Postgres publication
-// but nothing requests it, so it never reaches the client's local database), so this
-// would need a direct Supabase query, not db.watch. Left as an explicitly separate
-// follow-up rather than half-building it here.
-export default function SettlementScreen({ tripId, onBack }: { tripId: string; onBack: () => void }) {
+// Deliberately NOT built: the recipient's side (confirm_payment). That needs a list of
+// not-yet-confirmed payments where the current user is the recipient, which requires
+// reading ledger_entries directly -- it has no PowerSync sync stream (see
+// sync-streams.yaml: the table's in the Postgres publication but nothing requests it, so
+// it never reaches the client's local database), so this needs a direct Supabase query,
+// not db.watch. Scoped as its own explicit follow-up.
+export default function SettlementView({ tripId }: { tripId: string }) {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [names, setNames] = useState<Record<string, string>>({});
   const [myParticipantId, setMyParticipantId] = useState<string | null>(null);
@@ -99,17 +94,7 @@ export default function SettlementScreen({ tripId, onBack }: { tripId: string; o
   }
 
   return (
-    <ScrollView className="flex-1 bg-white" contentContainerClassName="page-shell space-y-4">
-      <View className="flex-row items-center gap-3 page-header">
-        <Pressable onPress={onBack} className="p-2 -ml-1 rounded-xl active:bg-slate-100">
-          <ArrowLeft size={20} color="#64748b" />
-        </Pressable>
-        <View>
-          <GradientText className="page-title">Settle up</GradientText>
-          <Text className="page-subtitle">Suggestions based on the trip ledger</Text>
-        </View>
-      </View>
-
+    <View className="space-y-4">
       {loading && <ActivityIndicator className="mt-10" color="#2563eb" />}
 
       {!!error && (
@@ -161,6 +146,6 @@ export default function SettlementScreen({ tripId, onBack }: { tripId: string; o
             </View>
           );
         })}
-    </ScrollView>
+    </View>
   );
 }

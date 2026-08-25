@@ -11,9 +11,10 @@ partway through this port, adding `InviteScreen.tsx`, `PhoneVerificationScreen.t
 see `TASKS.md`'s own note on this. It was merged in (not overwritten) once discovered; the
 one real conflict was `ExpenseDetailScreen.tsx`, which both this port and that batch had
 independently rewritten — resolved by keeping this port's restyle and re-adding the other
-side's comments feature as its own card. None of the four new screens above are styled
-with this port's design system yet — they're plain `StyleSheet.create`, same as every
-other not-yet-ported screen.*
+side's comments feature as its own card. All four of those screens are ported now too, in
+later passes — see their entries in the mapping table below (`SettlementScreen.tsx`
+specifically no longer exists as a standalone file; its content moved into
+`SettlementView.tsx`, see "Navigation shape" below for why).*
 
 ## Why this isn't a copy-paste job
 
@@ -95,26 +96,28 @@ via `TripSwitcher.tsx`, with every tab relative to that trip. Expensio is multi-
 drill-in navigation (Trips List → a specific trip → its expenses/participants) — there's no
 single "current trip" concept in the data model.
 
-**Not yet resolved — needs a decision before the tab shell gets built:** does opening a trip
-from the Trips List switch into TripSpend's persistent-tab-bar mode for that trip (closest
-to "exact UI"), or does Expensio keep a lighter drill-in header with a trip-switcher control
-instead of full-time bottom tabs? Either is buildable; picking one now avoids building the
-tab shell twice.
+**Partly resolved.** The concrete inconsistency this section originally flagged — Settle
+looked like a fourth tab alongside Expenses/Log/Members but actually navigated to a
+separate route, and the `'settlement'` tab-state value was never set by anything as a
+result — is fixed. Settle is a real local tab now, rendering `SettlementView` (the content
+that used to be `SettlementScreen.tsx`'s whole body, extracted once it needed a second
+home) inline, exactly like its three siblings. `TripDetailScreen`'s options menu still
+reaches `Invite`/`Recurring`/`VerifyPhone` as separate pushed routes — those don't have
+the same "looks like a tab but isn't" problem Settle had, so they weren't touched.
 
-What's in place now instead: `src/navigation/RootNavigator.tsx`, a real
-`@react-navigation/native-stack` replacing `App.tsx`'s old hand-rolled `Screen` state
-union (its own comment said to swap it out "whenever screen count or transition needs...
-outgrow it" — this is that moment). Every route maps 1:1 onto the old screen union; no
-screen's own prop contract changed, only how it's reached. This stack is what the eventual
-tab shell sits on top of, once the above is decided and the tabs it needs
-(Expenses/Settle) exist.
+**Still not resolved — the bigger question this section was really about:** does opening a
+trip from the Trips List switch into TripSpend's persistent-tab-bar mode for that trip
+(closest to "exact UI"), replacing today's drill-in header entirely? That's a materially
+bigger change than the Settle fix above, and it runs straight into the budget-schema gap
+below: TripSpend's bar's first tab is the Dashboard, and there's nothing to send that tab
+to on this side yet. Worth deciding once, rather than building a global tab shell now and
+discovering it needs Home to point somewhere.
 
-Since this was written, the parallel work stream noted at the top added four more flat
-stack routes to the same navigator (`VerifyPhone`, `Invite`, `Settlement`, `Recurring`),
-reached from `TripDetailScreen`'s options menu — all still flat pushes, not tabs. That's
-more reason to settle the decision above soon: `Settlement` in particular is exactly the
-kind of screen that'd move under a persistent "Settle" tab if that's the direction chosen,
-and it'd be better to place it there once than to move it after the fact.
+What's in place: `src/navigation/RootNavigator.tsx`, a real `@react-navigation/native-stack`
+replacing `App.tsx`'s old hand-rolled `Screen` state union (its own comment said to swap it
+out "whenever screen count or transition needs... outgrow it" — this was that moment).
+Every route still maps 1:1 onto the old screen union; no screen's own prop contract changed
+beyond Settle losing its `onOpenSettlement` prop (it doesn't navigate anywhere now).
 
 ## The "budget" concept — a schema gap, not a UI gap
 
@@ -141,14 +144,14 @@ Flagging it here so it isn't rediscovered mid-port later.
 | `screens/ExpenseList.tsx` | `TripDetailScreen.tsx`'s Expenses tab | **Ported** | Row card uses a colored-initial badge instead of TripSpend's fixed-category icon map (`Food`/`Travel`/`Stay`/`Misc` doesn't fit Expensio's free-text custom categories) — same device already used for participant avatars. Added `category` to the query, same as `ExpenseDetailScreen.tsx` before it — existed on the table, wasn't being read. TripSpend's filter bottom-sheet (category/person/date filters) not ported — no filter UI exists on the Expensio side yet at all, not just unstyled |
 | `screens/ExpenseDetail.tsx` | `ExpenseDetailScreen.tsx` | **Ported** | Dropped the `isLocked` banner (same budget-schema gap) and note/tags/receipts sections (no matching columns). Added `category`/`expense_date` to the query — both already existed in the schema and in `add_expense`'s RPC signature, just weren't being read before. Split display shows each participant's real `share_amount` rather than TripSpend's single equal-split figure. Delete confirmation is now a real `Modal`, replacing the native `Alert.alert()`. Also gained a Comments card (`add_comment` RPC) merged in from the parallel work stream noted at the top — not part of TripSpend's original screen, kept as its own card in the ported design language rather than dropped |
 | `screens/AddExpense.tsx` | `AddExpenseScreen.tsx` | **Ported** | Not a structural port — TripSpend's version is built around receipts/tags/an AI category suggester/budget presets, none of which have a backing RPC or schema column here. Kept every one of Expensio's actual fields (7 formal split types, custom categories) and all client-side validation exactly as they were; only the JSX changed |
-| `screens/Settlement.tsx` | `SettlementScreen.tsx` (new, from the parallel work stream) | **Ported** | TripSpend's own version isn't a usable visual reference at all (60KB, built around the budget concept), so this follows the established page-shell/card-elevated/badge patterns instead. Also newly wired: a "Record payment" action per suggestion, calling the now-fixed `record_payment` — only for suggestions where the current user is the payer, since the RPC infers payer from the session. Re-fetches the whole plan after a successful record rather than just removing that row client-side, since paying one debt can reshape the whole simplified plan. The recipient's confirm-side (`confirm_payment`) still isn't wired — needs a direct Supabase query against `ledger_entries` (no PowerSync sync stream for it; see sync-streams.yaml), scoped as an explicit follow-up rather than half-built here |
+| `screens/Settlement.tsx` | `SettlementView.tsx` (used inline by `TripDetailScreen`'s Settle tab) | **Ported** | TripSpend's own version isn't a usable visual reference at all (60KB, built around the budget concept), so this follows the established page-shell/card-elevated/badge patterns instead. Also newly wired: a "Record payment" action per suggestion, calling the now-fixed `record_payment` — only for suggestions where the current user is the payer, since the RPC infers payer from the session. Re-fetches the whole plan after a successful record rather than just removing that row client-side, since paying one debt can reshape the whole simplified plan. The recipient's confirm-side (`confirm_payment`) still isn't wired — needs a direct Supabase query against `ledger_entries` (no PowerSync sync stream for it; see sync-streams.yaml), scoped as an explicit follow-up rather than half-built here. Originally a standalone `SettlementScreen.tsx` route; extracted into this content-only component and inlined as a real tab once the "Navigation shape" section's Settle inconsistency was fixed — the standalone route is gone, nothing pushes to it anymore |
 | `screens/SettlementLog.tsx` | *(none)* | Not started | |
 | `screens/Analytics.tsx` | *(none)* | Not started | Partly depends on the budget concept (burn rate, health score) — split what needs budget data from what doesn't |
 | `screens/CategoryManager.tsx` | *(none — `custom_categories` table exists, unused by mobile so far)* | Not started | |
 | `screens/Onboarding.tsx` | *(none — App.tsx signs in anonymously with no onboarding UI)* | Not started | |
 | `screens/Settings.tsx` | *(none)* | Not started | |
 | `screens/SetupScreen.tsx` | `CreateTripScreen.tsx` | Not ported | TripSpend's version (38KB) covers more than trip creation alone — check what before porting 1:1 |
-| `components/BottomNav.tsx` | *(the tab shell — see "Navigation shape" above)* | Blocked on decision | |
+| `components/BottomNav.tsx` | *(the global tab shell — see "Navigation shape" above; still blocked on the Home/Dashboard decision)* | Blocked on decision | |
 | `components/TripSwitcher.tsx` | *(none — `TripsListScreen.tsx` is the closest thing)* | Not started | Relevant to the same navigation-shape decision |
 | `components/AccountSwitchDialog.tsx` | *(none)* | Not started | |
 | `components/CustomSelect.tsx`, `DatePicker.tsx` | *(none yet — shared form components)* | Not started | Needed once `TripDetails`/`SetupScreen` are tackled |
@@ -179,11 +182,10 @@ Flagging it here so it isn't rediscovered mid-port later.
   through `children`, which doesn't work since RN won't allow a non-Text element inside
   `<Text>` (that's how `PrimaryButton` renders its children) — caught before it ever hit
   `tsc` (a type-valid but runtime-broken pattern) rather than after.
-- `TripDetailScreen.tsx` fully ported — Expenses/Activity Log/Members tabs all restyled;
-  Settle still navigates away rather than switching in place (see "Navigation shape"
-  above — unchanged, still an open decision, not resolved by this pass). Options menu
-  (archive/delete/leave/recurring) is untouched — it's a native `Alert.alert`, which
-  can't be restyled at all, RN or otherwise.
+- `TripDetailScreen.tsx` fully ported — Expenses/Activity Log/Members tabs all restyled.
+  Options menu (archive/delete/leave/recurring) is untouched — it's a native
+  `Alert.alert`, which can't be restyled at all, RN or otherwise. (Settle's tab behavior
+  was fixed in a later pass — see "Navigation shape" above.)
 - `npx tsc --noEmit` passes clean across the whole project after all of the above,
   including after merging in the parallel work stream noted at the top of this doc.
 - `SettlementScreen.tsx` fully ported — see its table row above, including the newly
@@ -195,6 +197,13 @@ Flagging it here so it isn't rediscovered mid-port later.
   **This closes out every screen that currently exists in the app** — everything left in
   the mapping table above is either blocked on a decision or doesn't exist as an Expensio
   screen yet at all (see "Suggested order from here" below).
+- Settle's tab inconsistency (flagged when `TripDetailScreen.tsx` was first ported —
+  looked like a fourth tab, actually navigated away) fixed: `SettlementScreen.tsx`'s
+  content extracted into `src/components/SettlementView.tsx` (header-less, so it can sit
+  inside a page that already has its own), the standalone screen and its `Settlement`
+  route deleted, and Settle now renders `SettlementView` inline exactly like
+  Expenses/Log/Members. See "Navigation shape" above for what's still open versus what
+  this resolved.
 
 **Not verified:** actual rendered output. This sandbox has no device/simulator, so nothing
 above has been visually confirmed — only that real packages installed without conflict and

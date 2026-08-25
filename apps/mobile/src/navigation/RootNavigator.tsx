@@ -7,7 +7,6 @@ import AddParticipantScreen from '../screens/AddParticipantScreen';
 import ExpenseDetailScreen from '../screens/ExpenseDetailScreen';
 import PhoneVerificationScreen from '../screens/PhoneVerificationScreen';
 import InviteScreen from '../screens/InviteScreen';
-import SettlementScreen from '../screens/SettlementScreen';
 import RecurringScreen from '../screens/RecurringScreen';
 
 // Replaces App.tsx's old hand-rolled `Screen` state union (see git history) with real
@@ -18,11 +17,16 @@ import RecurringScreen from '../screens/RecurringScreen';
 // props, just invoked via navigation.navigate()/goBack() instead of setScreen(). No
 // screen's own prop contract changed, only how it's reached.
 //
-// The bottom-tab shell (Home/Expenses/Settle/Settings + center FAB, mirroring TripSpend's
-// BottomNav.tsx) isn't wired in yet -- see docs/architecture/expensio-ui-port-plan.md's
-// "Navigation shape" section for why: three of those four tabs point at screens
-// (ExpenseList/Settlement equivalents) that don't exist on the Expensio side yet. This
-// stack is the foundation that shell will sit on top of once they do.
+// The persistent bottom-tab shell mirroring TripSpend's BottomNav.tsx still isn't wired
+// in globally -- see docs/architecture/expensio-ui-port-plan.md's "Navigation shape"
+// section for why: its first tab is TripSpend's budget Dashboard, and Expensio doesn't
+// have anywhere to send that tab yet (deliberately -- see the budget-schema note in that
+// same doc). What IS resolved: Settle used to be the one tab in TripDetailScreen that
+// looked like its siblings but actually navigated away to a separate route (this file
+// used to have a Settlement route here) -- it's a real local tab now, same as
+// Expenses/Log/Members, rendering SettlementView inline. This stack is still what a
+// future global tab shell would sit on top of, once the Home/Dashboard question is
+// settled.
 export type RootStackParamList = {
   Trips: undefined;
   CreateTrip: undefined;
@@ -32,7 +36,6 @@ export type RootStackParamList = {
   ExpenseDetail: { expenseId: string; tripId: string; currency: string };
   VerifyPhone: undefined;
   Invite: { tripId: string };
-  Settlement: { tripId: string };
   Recurring: { tripId: string; currency: string };
 };
 
@@ -67,7 +70,6 @@ function TripDetailRoute({ navigation, route }: NativeStackScreenProps<RootStack
       onAddExpense={() => navigation.navigate('AddExpense', { tripId, currency })}
       onAddParticipant={() => navigation.navigate('AddParticipant', { tripId, currency })}
       onOpenInvite={() => navigation.navigate('Invite', { tripId })}
-      onOpenSettlement={() => navigation.navigate('Settlement', { tripId })}
       onOpenRecurring={() => navigation.navigate('Recurring', { tripId, currency })}
       onOpenExpense={(expenseId) => navigation.navigate('ExpenseDetail', { expenseId, tripId, currency })}
     />
@@ -103,10 +105,6 @@ function InviteRoute({ navigation, route }: NativeStackScreenProps<RootStackPara
   );
 }
 
-function SettlementRoute({ navigation, route }: NativeStackScreenProps<RootStackParamList, 'Settlement'>) {
-  return <SettlementScreen tripId={route.params.tripId} onBack={() => navigation.goBack()} />;
-}
-
 function RecurringRoute({ navigation, route }: NativeStackScreenProps<RootStackParamList, 'Recurring'>) {
   return <RecurringScreen tripId={route.params.tripId} currency={route.params.currency} onBack={() => navigation.goBack()} />;
 }
@@ -122,7 +120,6 @@ export default function RootNavigator() {
       <Stack.Screen name="ExpenseDetail" component={ExpenseDetailRoute} />
       <Stack.Screen name="VerifyPhone" component={VerifyPhoneRoute} />
       <Stack.Screen name="Invite" component={InviteRoute} />
-      <Stack.Screen name="Settlement" component={SettlementRoute} />
       <Stack.Screen name="Recurring" component={RecurringRoute} />
     </Stack.Navigator>
   );

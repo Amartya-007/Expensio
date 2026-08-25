@@ -146,32 +146,33 @@ or behaves right on a real phone.*
       at an error on the OTP screen for a phone number that had, in fact, already been
       successfully verified. Now best-effort and non-blocking — `onDone()` always fires
       once `verifyOtp` succeeds.
-- [~] Balances / settlement view (`SettlementScreen.tsx`) — restyled, and now wires in
-      `record_payment` (payer side: a "Record payment" button per suggestion, only shown
-      when the current user is the one who owes) — re-fetches the whole settlement plan
-      afterward rather than just removing that row, since paying one debt can reshape the
-      simplified plan for everyone else. `confirm_payment` (recipient side) still not
-      wired — needs a direct Supabase query against `ledger_entries` (no PowerSync sync
-      stream requests it — see `sync-streams.yaml` — so `db.watch` can't reach it),
-      scoped as its own follow-up rather than half-built alongside this
+- [~] Balances / settlement view (`SettlementView.tsx`, rendered inline as
+      `TripDetailScreen`'s Settle tab — no longer a standalone screen, see the mobile
+      client section below) — restyled, and now wires in `record_payment` (payer side: a
+      "Record payment" button per suggestion, only shown when the current user is the one
+      who owes) — re-fetches the whole settlement plan afterward rather than just
+      removing that row, since paying one debt can reshape the simplified plan for
+      everyone else. `confirm_payment` (recipient side) still not wired — needs a direct
+      Supabase query against `ledger_entries` (no PowerSync sync stream requests it — see
+      `sync-streams.yaml` — so `db.watch` can't reach it), scoped as its own follow-up
+      rather than half-built alongside this
 - [~] Recurring expenses UI (`RecurringScreen.tsx`) — create/delete template wired
       (`create_expense_template`, `delete_expense_template`, params confirmed to match
       both RPC signatures exactly); the scheduled-trigger side
       (`generate_due_recurring_expenses` actually firing on a schedule, not just existing
       as an RPC) not confirmed this session
-- [x] Leave trip UI (`TripDetailScreen.tsx`'s options menu, `leave_trip` RPC). Minor,
-      non-blocking cosmetic note found while reviewing this screen: the "Settle" tab is
-      styled identically to the three real in-place tabs (Expenses/Log/Members) but
-      actually navigates to a separate screen rather than switching content locally, and
-      the `'settlement'` value in the tab-state type is consequently never set by
-      anything — dead code, not a functional bug, but worth a look if this screen gets
-      touched again; whether "Settle" should be a real fourth tab or stay a separate
-      screen is a product call, not something to silently change
+- [x] Leave trip UI (`TripDetailScreen.tsx`'s options menu, `leave_trip` RPC). The
+      "Settle" tab cosmetic inconsistency noted when this screen was first ported (styled
+      like the three real in-place tabs but actually navigated away) is fixed in a later
+      pass: it's a real local tab now, rendering `SettlementView.tsx` inline
+      (`SettlementScreen.tsx` deleted — see that entry above). The bigger navigation-shape
+      question (persistent global tab bar vs. current drill-in nav, see
+      `expensio-ui-port-plan.md`) is still an open product call, unaffected by this fix
 - [~] TripSpend UI port — every screen that currently exists in the app is now restyled
       with the NativeWind design system (`AddParticipantScreen`, `ExpenseDetailScreen`,
-      `AddExpenseScreen`, `TripDetailScreen`, `SettlementScreen`, `InviteScreen`,
+      `AddExpenseScreen`, `TripDetailScreen`, `SettlementView`, `InviteScreen`,
       `PhoneVerificationScreen`, `RecurringScreen`). Still `[~]` not `[x]` because two
-      things remain, both decisions rather than code: the navigation-shape call
+      things remain, both decisions rather than code: the global navigation-shape call
       (persistent tab bar vs. current drill-in nav) and the budget-schema product
       decision blocking `Dashboard`/`TripDetails` from having anything to port to. See
       `expensio-ui-port-plan.md` for both, plus the full screen-by-screen mapping

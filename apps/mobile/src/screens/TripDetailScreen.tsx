@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Alert, FlatList, Pressable, Text, View } from 'react-native';
+import { Alert, FlatList, Pressable, ScrollView, Text, View } from 'react-native';
 import { ArrowLeft, Clock, MoreHorizontal, Plus, UserPlus, Users } from 'lucide-react-native';
 import { db } from '../powersync/db';
 import { callRpc } from '../rpc';
 import PrimaryButton from '../components/PrimaryButton';
 import GradientText from '../components/GradientText';
+import SettlementView from '../components/SettlementView';
 
 type Expense = {
   id: string;
@@ -50,13 +51,19 @@ function formatTimestamp(iso: string): string {
 // structure itself are unchanged from before this pass -- only the JSX and, per the
 // pattern already established in ExpenseDetailScreen.tsx, added `category` to the
 // expenses query (it already existed on the table, just wasn't being read here either).
+//
+// Settle used to look like a fourth tab alongside Expenses/Log/Members but actually
+// navigated to a separate route -- the 'settlement' value in the tab-state type was
+// never set by anything, dead code (flagged in TASKS.md when this was first ported). It's
+// a real local tab now, same as its siblings, rendering SettlementView inline -- that
+// component used to be SettlementScreen.tsx's whole body; extracted once it needed a
+// second home instead of duplicated.
 export default function TripDetailScreen({
   tripId,
   onBack,
   onAddExpense,
   onAddParticipant,
   onOpenInvite,
-  onOpenSettlement,
   onOpenRecurring,
   onOpenExpense,
 }: {
@@ -65,7 +72,6 @@ export default function TripDetailScreen({
   onAddExpense: () => void;
   onAddParticipant: () => void;
   onOpenInvite: () => void;
-  onOpenSettlement: () => void;
   onOpenRecurring: () => void;
   onOpenExpense: (expenseId: string) => void;
 }) {
@@ -219,7 +225,7 @@ export default function TripDetailScreen({
     { key: 'expenses', label: 'Expenses', onPress: () => setTab('expenses') },
     { key: 'log', label: 'Activity Log', onPress: () => setTab('log') },
     { key: 'members', label: 'Members', onPress: () => setTab('members') },
-    { key: 'settlement', label: 'Settle', onPress: onOpenSettlement },
+    { key: 'settlement', label: 'Settle', onPress: () => setTab('settlement') },
   ];
 
   return (
@@ -255,6 +261,12 @@ export default function TripDetailScreen({
           ))}
         </View>
       </View>
+
+      {tab === 'settlement' && (
+        <ScrollView contentContainerClassName="px-4 pb-28 pt-3">
+          <SettlementView tripId={tripId} />
+        </ScrollView>
+      )}
 
       {tab === 'expenses' && (
         <FlatList
