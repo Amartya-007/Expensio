@@ -1,13 +1,22 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ArrowLeft, Repeat, X } from 'lucide-react-native';
 import { db } from '../powersync/db';
 import { callRpc } from '../rpc';
+import PrimaryButton from '../components/PrimaryButton';
+import GradientText from '../components/GradientText';
+import Chip from '../components/Chip';
 
 type Participant = { id: string; display_name: string };
 type Template = { id: string; description: string; amount: number; currency: string; recurrence_rule: string; next_run_date: string };
 
 const RULES = ['weekly', 'monthly', 'yearly'] as const;
 
+// Restyled with this port's design language -- no TripSpend screen to port from (that
+// codebase doesn't have recurring expenses at all). All logic (both RPC calls, the
+// participant/template watch queries) unchanged from before this pass -- only the JSX
+// changed, plus the paid-by/repeats selectors now use the same shared Chip component
+// AddExpenseScreen.tsx uses, extracted there once it was needed in a second place.
 export default function RecurringScreen({ tripId, currency, onBack }: { tripId: string; currency: string; onBack: () => void }) {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -73,68 +82,81 @@ export default function RecurringScreen({ tripId, currency, onBack }: { tripId: 
   }
 
   return (
-    <View style={styles.container}>
-      <TouchableOpacity onPress={onBack} disabled={busy}><Text style={styles.back}>‹ Trip</Text></TouchableOpacity>
-      <Text style={styles.heading}>Recurring expenses</Text>
-      <Text style={styles.description}>Templates create normal expenses through the same split and ledger rules.</Text>
-
-      <Text style={styles.label}>Description</Text>
-      <TextInput style={styles.input} value={description} onChangeText={setDescription} placeholder="Rent" />
-      <Text style={styles.label}>Amount ({currency})</Text>
-      <TextInput style={styles.input} value={amount} onChangeText={setAmount} placeholder="0.00" keyboardType="decimal-pad" />
-      <Text style={styles.label}>Paid by</Text>
-      <View style={styles.rowWrap}>
-        {participants.map((participant) => (
-          <TouchableOpacity key={participant.id} style={[styles.chip, paidBy === participant.id && styles.chipSelected]} onPress={() => setPaidBy(participant.id)}>
-            <Text style={[styles.chipText, paidBy === participant.id && styles.chipTextSelected]}>{participant.display_name}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      <Text style={styles.label}>Repeats</Text>
-      <View style={styles.row}>
-        {RULES.map((option) => (
-          <TouchableOpacity key={option} style={[styles.chip, rule === option && styles.chipSelected]} onPress={() => setRule(option)}>
-            <Text style={[styles.chipText, rule === option && styles.chipTextSelected]}>{option}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      <Text style={styles.label}>Next run date (YYYY-MM-DD)</Text>
-      <TextInput style={styles.input} value={nextRunDate} onChangeText={setNextRunDate} placeholder="2026-09-01" />
-      <TouchableOpacity style={styles.primaryButton} onPress={createTemplate} disabled={busy || !description.trim() || !amount || !paidBy}>
-        {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Add recurring expense</Text>}
-      </TouchableOpacity>
-
-      <Text style={styles.sectionHeading}>Active templates</Text>
-      {templates.map((template) => (
-        <View style={styles.templateRow} key={template.id}>
-          <View><Text style={styles.templateTitle}>{template.description}</Text><Text style={styles.templateMeta}>{template.currency} {template.amount.toFixed(2)} · {template.recurrence_rule} · next {template.next_run_date}</Text></View>
-          <TouchableOpacity onPress={() => deleteTemplate(template.id)}><Text style={styles.deleteText}>Stop</Text></TouchableOpacity>
+    <ScrollView className="flex-1 bg-white" contentContainerClassName="page-shell space-y-6">
+      <View className="flex-row items-center gap-3 page-header">
+        <Pressable onPress={onBack} disabled={busy} className="p-2 -ml-1 rounded-xl active:bg-slate-100">
+          <ArrowLeft size={20} color="#64748b" />
+        </Pressable>
+        <View>
+          <GradientText className="page-title">Recurring expenses</GradientText>
+          <Text className="page-subtitle">Templates use the same split and ledger rules as any expense</Text>
         </View>
-      ))}
-      {!!error && <Text style={styles.error}>{error}</Text>}
-    </View>
+      </View>
+
+      <View className="card-elevated p-4 space-y-4">
+        <View>
+          <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Description</Text>
+          <TextInput className="input-field text-base text-slate-900" value={description} onChangeText={setDescription} placeholder="Rent" placeholderTextColor="#94a3b8" />
+        </View>
+        <View>
+          <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Amount ({currency})</Text>
+          <TextInput className="input-field text-base text-slate-900" value={amount} onChangeText={setAmount} placeholder="0.00" placeholderTextColor="#94a3b8" keyboardType="decimal-pad" />
+        </View>
+        <View>
+          <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Paid by</Text>
+          <View className="flex-row flex-wrap gap-2">
+            {participants.map((participant) => (
+              <Chip key={participant.id} selected={paidBy === participant.id} label={participant.display_name} onPress={() => setPaidBy(participant.id)} />
+            ))}
+          </View>
+        </View>
+        <View>
+          <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Repeats</Text>
+          <View className="flex-row gap-2">
+            {RULES.map((option) => (
+              <Chip key={option} selected={rule === option} label={option} onPress={() => setRule(option)} />
+            ))}
+          </View>
+        </View>
+        <View>
+          <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Next run date (YYYY-MM-DD)</Text>
+          <TextInput className="input-field text-base text-slate-900" value={nextRunDate} onChangeText={setNextRunDate} placeholder="2026-09-01" placeholderTextColor="#94a3b8" />
+        </View>
+        <PrimaryButton
+          onPress={createTemplate}
+          disabled={busy || !description.trim() || !amount || !paidBy}
+          loading={busy}
+          icon={<Repeat size={16} color="#fff" />}
+          className="w-full"
+        >
+          Add recurring expense
+        </PrimaryButton>
+      </View>
+
+      <View>
+        <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Active templates</Text>
+        {templates.length === 0 && <Text className="text-slate-400 text-sm">No recurring expenses set up yet.</Text>}
+        {templates.map((template) => (
+          <View className="flex-row items-center justify-between gap-3 bg-slate-50 rounded-2xl px-4 py-3 mb-2" key={template.id}>
+            <View className="flex-1">
+              <Text className="text-sm font-bold text-slate-900">{template.description}</Text>
+              <Text className="text-xs text-slate-500 mt-0.5">
+                {template.currency} {template.amount.toFixed(2)} · {template.recurrence_rule} · next {template.next_run_date}
+              </Text>
+            </View>
+            <Pressable onPress={() => deleteTemplate(template.id)} className="flex-row items-center gap-1">
+              <X size={12} color="#e11d48" />
+              <Text className="text-xs font-bold text-rose-600">Stop</Text>
+            </Pressable>
+          </View>
+        ))}
+      </View>
+
+      {!!error && (
+        <View className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3">
+          <Text className="text-sm text-red-700 font-medium">{error}</Text>
+        </View>
+      )}
+    </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', paddingTop: 60, paddingHorizontal: 20 },
-  back: { color: '#666', fontSize: 15, marginBottom: 20 },
-  heading: { fontSize: 24, fontWeight: '700' },
-  description: { color: '#666', lineHeight: 20, marginTop: 8 },
-  label: { color: '#666', fontSize: 13, marginBottom: 6, marginTop: 14 },
-  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 16 },
-  row: { flexDirection: 'row', gap: 8 },
-  rowWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { borderWidth: 1, borderColor: '#ddd', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
-  chipSelected: { backgroundColor: '#111', borderColor: '#111' },
-  chipText: { color: '#111' },
-  chipTextSelected: { color: '#fff' },
-  primaryButton: { backgroundColor: '#111', borderRadius: 8, paddingVertical: 13, alignItems: 'center', marginTop: 18 },
-  primaryText: { color: '#fff', fontWeight: '600' },
-  sectionHeading: { fontSize: 16, fontWeight: '600', marginTop: 28, marginBottom: 8 },
-  templateRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#eee', paddingVertical: 12 },
-  templateTitle: { color: '#111', fontWeight: '600' },
-  templateMeta: { color: '#666', fontSize: 12, marginTop: 3 },
-  deleteText: { color: '#b00020', fontWeight: '600' },
-  error: { color: '#b00020', fontSize: 13, marginTop: 16 },
-});

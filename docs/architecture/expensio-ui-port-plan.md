@@ -153,7 +153,7 @@ Flagging it here so it isn't rediscovered mid-port later.
 | `components/AccountSwitchDialog.tsx` | *(none)* | Not started | |
 | `components/CustomSelect.tsx`, `DatePicker.tsx` | *(none yet — shared form components)* | Not started | Needed once `TripDetails`/`SetupScreen` are tackled |
 | `components/NotificationCard.tsx`, `PeoplePickerSheet.tsx`, `PreSetupTripChoice.tsx` | *(none)* | Not started | |
-| *(no TripSpend equivalent — Expensio-specific)* | `InviteScreen.tsx`, `PhoneVerificationScreen.tsx`, `RecurringScreen.tsx` (all new, from the parallel work stream) | Not ported | Real invites, phone verification, and recurring-expense templates now work functionally — none are styled with this port's design system yet. Not in TripSpend's own screen list at all (it has no recurring-expense feature, and its invite flow lives elsewhere in that codebase, not as a dedicated screen), so these don't get a "port from X" — they're new backlog for whenever their turn comes |
+| *(no TripSpend equivalent — Expensio-specific)* | `InviteScreen.tsx`, `PhoneVerificationScreen.tsx`, `RecurringScreen.tsx` (all new, from the parallel work stream) | **Ported** | Not in TripSpend's own screen list at all (it has no recurring-expense feature, and its invite flow lives elsewhere in that codebase, not as a dedicated screen), so these had no "port from X" — restyled following this port's own established patterns instead. `RecurringScreen.tsx`'s paid-by/repeats selectors use the same shared `Chip` component `AddExpenseScreen.tsx` uses — extracted into `src/components/Chip.tsx` once it was needed in a second place, rather than left duplicated |
 
 ## What's actually done this pass
 
@@ -189,6 +189,12 @@ Flagging it here so it isn't rediscovered mid-port later.
 - `SettlementScreen.tsx` fully ported — see its table row above, including the newly
   wired "Record payment" action (payer side only; recipient confirm-side is a scoped
   follow-up, not built this pass).
+- `InviteScreen.tsx`, `PhoneVerificationScreen.tsx`, `RecurringScreen.tsx` fully ported —
+  the last three functional-but-unstyled screens. `src/components/Chip.tsx` extracted as
+  a shared component (was duplicated between `AddExpenseScreen.tsx` and this batch).
+  **This closes out every screen that currently exists in the app** — everything left in
+  the mapping table above is either blocked on a decision or doesn't exist as an Expensio
+  screen yet at all (see "Suggested order from here" below).
 
 **Not verified:** actual rendered output. This sandbox has no device/simulator, so nothing
 above has been visually confirmed — only that real packages installed without conflict and
@@ -199,16 +205,25 @@ catch).
 
 ## Suggested order from here
 
-1. Resolve the navigation-shape decision above — it affects how every other screen gets
-   wired in, so worth settling before porting more of them. More pressing now than when
-   this was first written, since `Settlement`/`Invite`/`Recurring` all exist as flat
-   routes today and would need moving if the tab-shell direction is chosen later.
-2. The budget-schema product decision, unblocking `Dashboard.tsx` / `TripDetails.tsx` /
-   the budget half of `Analytics.tsx`.
-3. `InviteScreen.tsx` / `PhoneVerificationScreen.tsx` / `RecurringScreen.tsx` — functional,
-   unstyled, no TripSpend screen to port from; visual treatment can follow this port's
-   established patterns (page-shell/card-elevated/input-field/PrimaryButton) without a
-   reference screen to match against.
-5. Everything else (`Settings`, `CategoryManager`, `Onboarding`, `SetupScreen`,
-   `TripSwitcher`/`BottomNav`) roughly in whatever order matches which features Expensio
-   actually needs next per `TASKS.md`, rather than TripSpend's own file sizes.
+Every screen that currently exists and works in Expensio's mobile client is now ported —
+that closes out the original scope of this doc (port TripSpend's *existing* UI onto this
+app). What's left splits into two different kinds of work, not really an ordered list
+anymore:
+
+**Decisions, not code:**
+1. The navigation-shape decision above — `Settlement`/`Invite`/`Recurring` all exist as
+   flat stack routes today and would need moving if the persistent-tab-bar direction is
+   chosen.
+2. The budget-schema product decision — unblocks `Dashboard.tsx` / `TripDetails.tsx` /
+   the budget half of `Analytics.tsx`, none of which can be *ported* until Expensio
+   decides whether it wants that feature at all.
+
+**New screens Expensio doesn't have yet** (`Settings`, `CategoryManager`'s management UI,
+`Onboarding`, `SetupScreen`'s fuller flow, `TripSwitcher`/`BottomNav`,
+`AccountSwitchDialog`, `CustomSelect`/`DatePicker`, `NotificationCard`/
+`PeoplePickerSheet`/`PreSetupTripChoice`) — these aren't restyle jobs like everything
+above was. They're new features, and TripSpend's screens for them are a reasonable
+design reference once Expensio actually needs the feature, but building them now would
+be scope invented by this doc rather than scope this doc was tracking. Worth picking up
+in whatever order matches what Expensio's roadmap actually calls for next, not TripSpend's
+file sizes.

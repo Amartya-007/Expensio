@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Share, Text, TextInput, View } from 'react-native';
+import { ArrowLeft, Share2, ShieldAlert, Ticket, UserPlus, X } from 'lucide-react-native';
 import { callRpc } from '../rpc';
 import { db } from '../powersync/db';
+import PrimaryButton from '../components/PrimaryButton';
+import GradientText from '../components/GradientText';
 
 type ActiveInvite = { id: string; code: string; expires_at: string; use_count: number; max_uses: number | null };
 
@@ -9,6 +12,11 @@ function isVerificationError(error: unknown): boolean {
   return String(error).toLowerCase().includes('verify your account');
 }
 
+// Restyled with this port's design language -- TripSpend's own invite flow isn't a
+// standalone screen to port from at all (it lives inline elsewhere in that codebase), so
+// this follows the established page-shell/card-elevated/badge patterns instead. All
+// logic (every RPC call, the verification-error detection, code formatting) is
+// unchanged from before this pass -- only the JSX changed.
 export default function InviteScreen({
   tripId,
   onRequireVerification,
@@ -108,82 +116,77 @@ export default function InviteScreen({
   }
 
   return (
-    <View style={styles.container}>
-      <TouchableOpacity onPress={onDone} disabled={busy !== null}>
-        <Text style={styles.back}>‹ Back</Text>
-      </TouchableOpacity>
-      <Text style={styles.heading}>Invite or join</Text>
-      <Text style={styles.description}>Share a one-time code with a verified Expensio account.</Text>
-
-      <Text style={styles.sectionHeading}>Invite someone to this trip</Text>
-      {inviteCode ? (
-        <View style={styles.codeCard}>
-          <Text style={styles.codeLabel}>Invite code</Text>
-          <Text style={styles.code}>{inviteCode}</Text>
-          <TouchableOpacity style={styles.secondaryButton} onPress={shareInvite}>
-            <Text style={styles.secondaryText}>Share code</Text>
-          </TouchableOpacity>
+    <ScrollView className="flex-1 bg-white" contentContainerClassName="page-shell space-y-6">
+      <View className="flex-row items-center gap-3 page-header">
+        <Pressable onPress={onDone} disabled={busy !== null} className="p-2 -ml-1 rounded-xl active:bg-slate-100">
+          <ArrowLeft size={20} color="#64748b" />
+        </Pressable>
+        <View>
+          <GradientText className="page-title">Invite or join</GradientText>
+          <Text className="page-subtitle">Share a one-time code with a verified account</Text>
         </View>
-      ) : (
-        <TouchableOpacity style={styles.primaryButton} onPress={generateInvite} disabled={busy !== null}>
-          {busy === 'generate' ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Generate invite code</Text>}
-        </TouchableOpacity>
-      )}
+      </View>
 
-      {activeInvites.map((invite) => (
-        <View style={styles.activeInvite} key={invite.id}>
-          <Text style={styles.activeInviteText}>Active code {invite.code}</Text>
-          <TouchableOpacity onPress={() => revokeInvite(invite.id)} disabled={busy !== null}>
-            <Text style={styles.revokeText}>Revoke</Text>
-          </TouchableOpacity>
-        </View>
-      ))}
+      <View>
+        <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Invite someone to this trip</Text>
+        {inviteCode ? (
+          <View className="card-elevated p-6 items-center">
+            <View className="w-10 h-10 rounded-2xl bg-blue-50 border border-blue-100 items-center justify-center mb-3">
+              <Ticket size={18} color="#2563eb" />
+            </View>
+            <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider">Invite code</Text>
+            <Text className="text-4xl font-black text-slate-900 tracking-[0.2em] my-2">{inviteCode}</Text>
+            <Pressable onPress={shareInvite} className="btn-secondary flex-row items-center gap-2 mt-2">
+              <Share2 size={15} color="#475569" />
+              <Text className="text-slate-600 font-bold text-sm">Share code</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <PrimaryButton onPress={generateInvite} disabled={busy !== null} loading={busy === 'generate'} icon={<Ticket size={16} color="#fff" />} className="w-full">
+            Generate invite code
+          </PrimaryButton>
+        )}
 
-      <Text style={styles.sectionHeading}>Join another trip</Text>
-      <TextInput
-        style={styles.input}
-        value={joinCode}
-        onChangeText={(value) => setJoinCode(value.replace(/\D/g, '').slice(0, 6))}
-        placeholder="123456"
-        keyboardType="number-pad"
-        maxLength={6}
-      />
-      <TouchableOpacity style={styles.primaryButton} onPress={joinTrip} disabled={busy !== null}>
-        {busy === 'join' ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryText}>Join trip</Text>}
-      </TouchableOpacity>
+        {activeInvites.map((invite) => (
+          <View className="flex-row items-center justify-between gap-3 bg-slate-50 rounded-2xl px-4 py-3 mt-3" key={invite.id}>
+            <Text className="text-sm font-semibold text-slate-700">Active code {invite.code}</Text>
+            <Pressable onPress={() => revokeInvite(invite.id)} disabled={busy !== null} className="flex-row items-center gap-1">
+              <X size={12} color="#e11d48" />
+              <Text className="text-xs font-bold text-rose-600">Revoke</Text>
+            </Pressable>
+          </View>
+        ))}
+      </View>
+
+      <View>
+        <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Join another trip</Text>
+        <TextInput
+          className="input-field text-lg font-black text-slate-900 tracking-[0.3em] text-center mb-3"
+          value={joinCode}
+          onChangeText={(value) => setJoinCode(value.replace(/\D/g, '').slice(0, 6))}
+          placeholder="123456"
+          placeholderTextColor="#cbd5e1"
+          keyboardType="number-pad"
+          maxLength={6}
+        />
+        <PrimaryButton onPress={joinTrip} disabled={busy !== null} loading={busy === 'join'} icon={<UserPlus size={16} color="#fff" />} className="w-full">
+          Join trip
+        </PrimaryButton>
+      </View>
 
       {!!error && (
-        <View style={styles.errorCard}>
-          <Text style={styles.error}>{error}</Text>
+        <View className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3">
+          <View className="flex-row items-start gap-2">
+            <ShieldAlert size={16} color="#dc2626" />
+            <Text className="text-sm text-red-700 font-medium flex-1">{error}</Text>
+          </View>
           {isVerificationError(error) && (
-            <TouchableOpacity onPress={onRequireVerification}>
-              <Text style={styles.verifyLink}>Verify with phone</Text>
-            </TouchableOpacity>
+            <Pressable onPress={onRequireVerification} className="mt-2">
+              <Text className="text-sm font-bold text-slate-900">Verify with phone →</Text>
+            </Pressable>
           )}
         </View>
       )}
-    </View>
+    </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff', paddingTop: 60, paddingHorizontal: 20 },
-  back: { color: '#666', fontSize: 15, marginBottom: 20 },
-  heading: { fontSize: 24, fontWeight: '700' },
-  description: { color: '#666', marginTop: 8, lineHeight: 20 },
-  sectionHeading: { fontSize: 16, fontWeight: '600', marginTop: 28, marginBottom: 10 },
-  codeCard: { borderWidth: 1, borderColor: '#ddd', borderRadius: 12, padding: 16, alignItems: 'center' },
-  codeLabel: { color: '#666', fontSize: 12 },
-  code: { fontSize: 32, fontWeight: '700', letterSpacing: 4, marginVertical: 8 },
-  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 12, fontSize: 18, letterSpacing: 2 },
-  primaryButton: { backgroundColor: '#111', borderRadius: 8, paddingVertical: 13, alignItems: 'center', marginTop: 12 },
-  primaryText: { color: '#fff', fontWeight: '600' },
-  secondaryButton: { borderWidth: 1, borderColor: '#111', borderRadius: 8, paddingVertical: 10, paddingHorizontal: 20, marginTop: 8 },
-  secondaryText: { color: '#111', fontWeight: '600' },
-  errorCard: { backgroundColor: '#fff5f5', borderRadius: 8, padding: 12, marginTop: 16 },
-  error: { color: '#b00020', fontSize: 13 },
-  verifyLink: { color: '#111', fontWeight: '700', marginTop: 8 },
-  activeInvite: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, padding: 10, backgroundColor: '#f7f7f7', borderRadius: 8 },
-  activeInviteText: { color: '#111', fontSize: 13 },
-  revokeText: { color: '#b00020', fontWeight: '600' },
-});

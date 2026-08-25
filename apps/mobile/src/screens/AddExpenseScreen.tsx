@@ -6,6 +6,7 @@ import { db } from '../powersync/db';
 import { callRpc } from '../rpc';
 import PrimaryButton from '../components/PrimaryButton';
 import GradientText from '../components/GradientText';
+import Chip from '../components/Chip';
 
 type Participant = { id: string; display_name: string };
 type Category = { id: string; name: string; icon: string };
@@ -27,17 +28,6 @@ function toMinor(value: string): number | null {
   if (!/^\d+(\.\d{1,2})?$/.test(normalized)) return null;
   const [whole, fraction = ''] = normalized.split('.');
   return Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
-}
-
-function Chip({ selected, label, onPress }: { selected: boolean; label: string; onPress: () => void }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      className={`px-4 py-2 rounded-full border ${selected ? 'bg-blue-600 border-blue-600' : 'bg-white border-slate-200'}`}
-    >
-      <Text className={`text-sm font-semibold ${selected ? 'text-white' : 'text-slate-600'}`}>{label}</Text>
-    </Pressable>
-  );
 }
 
 function fillValues(rows: Participant[], current: Record<string, string>, fallback: string) {
