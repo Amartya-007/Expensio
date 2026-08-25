@@ -1,4 +1,4 @@
-import { Pressable, Text, ActivityIndicator, PressableProps } from 'react-native';
+import { Pressable, Text, View, ActivityIndicator, PressableProps } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
@@ -15,11 +15,12 @@ const AnimatedGradient = Animated.createAnimatedComponent(LinearGradient);
 // className either (see global.css's header comment) — LinearGradient renders it directly.
 export default function PrimaryButton({
   children,
+  icon,
   onPress,
   disabled,
   loading,
   ...rest
-}: PressableProps & { children: React.ReactNode; loading?: boolean }) {
+}: PressableProps & { children: React.ReactNode; icon?: React.ReactNode; loading?: boolean }) {
   const scale = useSharedValue(1);
   const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
@@ -58,14 +59,19 @@ export default function PrimaryButton({
         {loading ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          // fontFamily set explicitly (not just the font-semibold class) -- see
-          // tailwind.config.js's fontFamily comment on why Android needs this.
-          <Text
-            className={`text-sm ${disabled ? 'text-slate-400' : 'text-white'}`}
-            style={{ fontFamily: 'Inter_600SemiBold' }}
-          >
-            {children}
-          </Text>
+          // icon is rendered as a sibling of Text, inside a row View -- RN doesn't allow
+          // a non-Text element (like an icon's SVG) as a child of <Text>, which is what
+          // this used to be when a call site tried passing an icon through `children`
+          // alongside a string.
+          <View className="flex-row items-center gap-2">
+            {icon}
+            <Text
+              className={`text-sm ${disabled ? 'text-slate-400' : 'text-white'}`}
+              style={{ fontFamily: 'Inter_600SemiBold' }}
+            >
+              {children}
+            </Text>
+          </View>
         )}
       </AnimatedGradient>
     </Pressable>

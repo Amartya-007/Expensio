@@ -164,9 +164,12 @@ or behaves right on a real phone.*
       touched again; whether "Settle" should be a real fourth tab or stay a separate
       screen is a product call, not something to silently change
 - [~] TripSpend UI port — NativeWind + navigation + gradient/font foundation in place;
-      `AddParticipantScreen` and `ExpenseDetailScreen` restyled. See
-      `expensio-ui-port-plan.md` for stack decisions, the full screen-by-screen mapping,
-      and the budget-schema gap blocking `Dashboard`/`TripDetails`
+      `AddParticipantScreen`, `ExpenseDetailScreen`, `AddExpenseScreen`, and
+      `TripDetailScreen` (all three tabs) restyled. See `expensio-ui-port-plan.md` for
+      stack decisions, the full screen-by-screen mapping, and the budget-schema gap
+      blocking `Dashboard`/`TripDetails`. Still open: `SettlementScreen`,
+      `InviteScreen`, `PhoneVerificationScreen`, `RecurringScreen`, and the
+      navigation-shape decision (persistent tab bar vs. current drill-in nav)
 - [x] Archive / unarchive / delete trip UI — options menu on TripDetailScreen (⋯), plus a
       "show archived trips" toggle on the trips list so archiving isn't a one-way trip.
       Caught a real bug building this: `rpc.ts`'s `callRpc` unconditionally added

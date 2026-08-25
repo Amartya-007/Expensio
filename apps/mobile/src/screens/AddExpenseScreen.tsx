@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ArrowLeft, Plus, Receipt, X } from 'lucide-react-native';
 import { supabase } from '../supabaseClient';
 import { db } from '../powersync/db';
 import { callRpc } from '../rpc';
+import PrimaryButton from '../components/PrimaryButton';
+import GradientText from '../components/GradientText';
 
 type Participant = { id: string; display_name: string };
 type Category = { id: string; name: string; icon: string };
@@ -26,6 +29,17 @@ function toMinor(value: string): number | null {
   return Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
 }
 
+function Chip({ selected, label, onPress }: { selected: boolean; label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      className={`px-4 py-2 rounded-full border ${selected ? 'bg-blue-600 border-blue-600' : 'bg-white border-slate-200'}`}
+    >
+      <Text className={`text-sm font-semibold ${selected ? 'text-white' : 'text-slate-600'}`}>{label}</Text>
+    </Pressable>
+  );
+}
+
 function fillValues(rows: Participant[], current: Record<string, string>, fallback: string) {
   return rows.reduce<Record<string, string>>((result, participant) => {
     result[participant.id] = current[participant.id] ?? fallback;
@@ -45,6 +59,15 @@ function equalPercentages(rows: Participant[]): Record<string, string> {
   }, {});
 }
 
+// Ported visually from tripspend/src/screens/AddExpense.tsx's chip/card language
+// (page-shell/card-elevated/badge-style chips, PrimaryButton, GradientText) --
+// see docs/architecture/expensio-ui-port-plan.md. Not a structural port: TripSpend's
+// AddExpense screen is built around a different feature set entirely (receipts, tags,
+// an AI category suggester, budget presets/favorites, duplicate-expense detection) that
+// has no backing RPC or schema column on this side -- porting those fields would mean
+// inventing functionality, not styling. What's kept identical to before this pass is
+// every field, all client-side validation, and the add_expense RPC call itself -- only
+// the JSX changed, not the logic.
 export default function AddExpenseScreen({
   tripId,
   currency,
@@ -164,20 +187,23 @@ export default function AddExpenseScreen({
     keyboardType: 'decimal-pad' | 'number-pad' = 'decimal-pad'
   ) {
     return (
-      <View>
-        <Text style={styles.subLabel}>{label}</Text>
-        {participants.map((participant) => (
-          <View style={styles.valueRow} key={participant.id}>
-            <Text style={styles.valueName}>{participant.display_name}</Text>
-            <TextInput
-              style={styles.valueInput}
-              value={values[participant.id] ?? ''}
-              onChangeText={(value) => updateMap(setter, participant.id, value)}
-              placeholder={placeholder}
-              keyboardType={keyboardType}
-            />
-          </View>
-        ))}
+      <View className="card-elevated p-4">
+        <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">{label}</Text>
+        <View className="space-y-2">
+          {participants.map((participant) => (
+            <View className="flex-row items-center gap-3" key={participant.id}>
+              <Text className="flex-1 text-sm font-semibold text-slate-700">{participant.display_name}</Text>
+              <TextInput
+                className="input-field w-28 text-right text-sm text-slate-900"
+                value={values[participant.id] ?? ''}
+                onChangeText={(value) => updateMap(setter, participant.id, value)}
+                placeholder={placeholder}
+                placeholderTextColor="#94a3b8"
+                keyboardType={keyboardType}
+              />
+            </View>
+          ))}
+        </View>
       </View>
     );
   }
@@ -288,62 +314,94 @@ export default function AddExpenseScreen({
   }
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-      <Text style={styles.heading}>Add expense</Text>
-
-      <Text style={styles.label}>What was it for?</Text>
-      <TextInput style={styles.input} value={description} onChangeText={setDescription} placeholder="Taxi" autoFocus />
-
-      <Text style={styles.label}>Amount ({currency})</Text>
-      <TextInput style={styles.input} value={amount} onChangeText={setAmount} placeholder="0.00" keyboardType="decimal-pad" />
-
-      <Text style={styles.label}>Paid by</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={styles.row}>
-          {participants.map((participant) => (
-            <TouchableOpacity key={participant.id} style={[styles.chip, paidBy === participant.id && styles.chipSelected]} onPress={() => setPaidBy(participant.id)}>
-              <Text style={[styles.chipText, paidBy === participant.id && styles.chipTextSelected]}>{participant.display_name}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </ScrollView>
-
-      <Text style={styles.label}>Category</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={styles.row}>
-          <TouchableOpacity style={[styles.chip, category === '' && styles.chipSelected]} onPress={() => setCategory('')}>
-            <Text style={[styles.chipText, category === '' && styles.chipTextSelected]}>None</Text>
-          </TouchableOpacity>
-          {categories.map((entry) => (
-            <TouchableOpacity key={entry.id} style={[styles.chip, category === entry.name && styles.chipSelected]} onPress={() => setCategory(entry.name)}>
-              <Text style={[styles.chipText, category === entry.name && styles.chipTextSelected]}>{entry.name}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </ScrollView>
-      <View style={styles.categoryRow}>
-        <TextInput style={styles.categoryInput} value={newCategory} onChangeText={setNewCategory} placeholder="New category" />
-        <TouchableOpacity style={styles.categoryButton} onPress={addCategory} disabled={!newCategory.trim()}>
-          <Text style={styles.categoryButtonText}>Add</Text>
-        </TouchableOpacity>
+    <ScrollView className="flex-1 bg-white" contentContainerClassName="page-shell space-y-5" keyboardShouldPersistTaps="handled">
+      <View className="flex-row items-center gap-3 page-header">
+        <Pressable onPress={onCancel} disabled={busy} className="p-2 -ml-1 rounded-xl active:bg-slate-100">
+          <ArrowLeft size={20} color="#64748b" />
+        </Pressable>
+        <GradientText className="page-title">Add expense</GradientText>
       </View>
 
-      <Text style={styles.label}>Split type</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={styles.row}>
-          {SPLIT_TYPES.map((option) => (
-            <TouchableOpacity key={option.value} style={[styles.chip, splitType === option.value && styles.chipSelected]} onPress={() => setSplitType(option.value)}>
-              <Text style={[styles.chipText, splitType === option.value && styles.chipTextSelected]}>{option.label}</Text>
-            </TouchableOpacity>
+      <View className="space-y-4">
+        <View>
+          <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">What was it for?</Text>
+          <TextInput
+            className="input-field text-base text-slate-900"
+            value={description}
+            onChangeText={setDescription}
+            placeholder="Taxi"
+            placeholderTextColor="#94a3b8"
+            autoFocus
+          />
+        </View>
+
+        <View>
+          <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Amount ({currency})</Text>
+          <TextInput
+            className="input-field text-2xl font-black text-slate-900"
+            value={amount}
+            onChangeText={setAmount}
+            placeholder="0.00"
+            placeholderTextColor="#cbd5e1"
+            keyboardType="decimal-pad"
+          />
+        </View>
+      </View>
+
+      <View>
+        <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Paid by</Text>
+        <View className="flex-row flex-wrap gap-2">
+          {participants.map((participant) => (
+            <Chip key={participant.id} selected={paidBy === participant.id} label={participant.display_name} onPress={() => setPaidBy(participant.id)} />
           ))}
         </View>
-      </ScrollView>
+      </View>
 
-      {splitType === 'equal' && <Text style={styles.hint}>Split equally among everyone currently in the trip.</Text>}
+      <View>
+        <View className="flex-row items-center gap-1 mb-2">
+          <Receipt size={12} color="#94a3b8" />
+          <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider">Category</Text>
+        </View>
+        <View className="flex-row flex-wrap gap-2 mb-2">
+          <Chip selected={category === ''} label="None" onPress={() => setCategory('')} />
+          {categories.map((entry) => (
+            <Chip key={entry.id} selected={category === entry.name} label={entry.name} onPress={() => setCategory(entry.name)} />
+          ))}
+        </View>
+        <View className="flex-row gap-2">
+          <TextInput
+            className="input-field flex-1 text-sm text-slate-900"
+            value={newCategory}
+            onChangeText={setNewCategory}
+            placeholder="New category"
+            placeholderTextColor="#94a3b8"
+          />
+          <Pressable onPress={addCategory} disabled={!newCategory.trim()} className="px-4 rounded-2xl bg-slate-900 items-center justify-center">
+            <Plus size={18} color="#fff" />
+          </Pressable>
+        </View>
+      </View>
+
+      <View>
+        <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Split type</Text>
+        <View className="flex-row flex-wrap gap-2">
+          {SPLIT_TYPES.map((option) => (
+            <Chip key={option.value} selected={splitType === option.value} label={option.label} onPress={() => setSplitType(option.value)} />
+          ))}
+        </View>
+      </View>
+
+      {splitType === 'equal' && (
+        <View className="card-elevated p-4">
+          <Text className="text-sm text-slate-500">Split equally among everyone currently in the trip.</Text>
+        </View>
+      )}
       {splitType === 'exact' && renderParticipantValues(exactShares, setExactShares, 'Amount owed by each person', '0.00')}
       {splitType === 'reimbursement' && (
         <>
-          <Text style={styles.hint}>Each amount is owed back to the selected payer.</Text>
+          <View className="card-elevated p-4">
+            <Text className="text-sm text-slate-500">Each amount is owed back to the selected payer.</Text>
+          </View>
           {renderParticipantValues(exactShares, setExactShares, 'Amount to reimburse', '0.00')}
         </>
       )}
@@ -352,94 +410,98 @@ export default function AddExpenseScreen({
       {splitType === 'adjustment' && (
         <>
           {renderParticipantValues(adjustments, setAdjustments, 'Fixed adjustment (+ amount)', '0.00')}
-          <Text style={styles.subLabel}>Split the remainder</Text>
-          <View style={styles.row}>
-            {(['equal', 'shares'] as const).map((mode) => (
-              <TouchableOpacity key={mode} style={[styles.chip, adjustmentRemainder === mode && styles.chipSelected]} onPress={() => setAdjustmentRemainder(mode)}>
-                <Text style={[styles.chipText, adjustmentRemainder === mode && styles.chipTextSelected]}>{mode}</Text>
-              </TouchableOpacity>
-            ))}
+          <View>
+            <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Split the remainder</Text>
+            <View className="flex-row gap-2">
+              {(['equal', 'shares'] as const).map((mode) => (
+                <Chip key={mode} selected={adjustmentRemainder === mode} label={mode} onPress={() => setAdjustmentRemainder(mode)} />
+              ))}
+            </View>
           </View>
           {adjustmentRemainder === 'shares' && renderParticipantValues(remainderUnits, setRemainderUnits, 'Remainder units', '1')}
         </>
       )}
       {splitType === 'itemized' && (
-        <>
+        <View className="space-y-3">
           {items.map((item) => (
-            <View style={styles.itemCard} key={item.id}>
-              <TextInput style={styles.input} value={item.label} onChangeText={(value) => updateItem(item.id, { label: value })} placeholder="Item name" />
-              <TextInput style={styles.input} value={item.amount} onChangeText={(value) => updateItem(item.id, { amount: value })} placeholder="Item amount" keyboardType="decimal-pad" />
-              <Text style={styles.subLabel}>Shared by</Text>
-              <View style={styles.rowWrap}>
-                {participants.map((participant) => {
-                  const selected = item.sharedBy.includes(participant.id);
-                  return (
-                    <TouchableOpacity
-                      key={participant.id}
-                      style={[styles.chip, selected && styles.chipSelected]}
-                      onPress={() => updateItem(item.id, { sharedBy: selected ? item.sharedBy.filter((id) => id !== participant.id) : [...item.sharedBy, participant.id] })}
-                    >
-                      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{participant.display_name}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
+            <View className="card-elevated p-4 space-y-3" key={item.id}>
+              <TextInput
+                className="input-field text-sm text-slate-900"
+                value={item.label}
+                onChangeText={(value) => updateItem(item.id, { label: value })}
+                placeholder="Item name"
+                placeholderTextColor="#94a3b8"
+              />
+              <TextInput
+                className="input-field text-sm text-slate-900"
+                value={item.amount}
+                onChangeText={(value) => updateItem(item.id, { amount: value })}
+                placeholder="Item amount"
+                placeholderTextColor="#94a3b8"
+                keyboardType="decimal-pad"
+              />
+              <View>
+                <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Shared by</Text>
+                <View className="flex-row flex-wrap gap-2">
+                  {participants.map((participant) => {
+                    const selected = item.sharedBy.includes(participant.id);
+                    return (
+                      <Chip
+                        key={participant.id}
+                        selected={selected}
+                        label={participant.display_name}
+                        onPress={() =>
+                          updateItem(item.id, {
+                            sharedBy: selected ? item.sharedBy.filter((id) => id !== participant.id) : [...item.sharedBy, participant.id],
+                          })
+                        }
+                      />
+                    );
+                  })}
+                </View>
               </View>
-              <TouchableOpacity onPress={() => setItems((current) => current.filter((entry) => entry.id !== item.id))}>
-                <Text style={styles.removeText}>Remove item</Text>
-              </TouchableOpacity>
+              <Pressable
+                onPress={() => setItems((current) => current.filter((entry) => entry.id !== item.id))}
+                className="flex-row items-center gap-1 self-start"
+              >
+                <X size={12} color="#e11d48" />
+                <Text className="text-xs font-semibold text-rose-600">Remove item</Text>
+              </Pressable>
             </View>
           ))}
-          <TouchableOpacity style={styles.secondaryButton} onPress={addItem}><Text style={styles.secondaryText}>+ Add item</Text></TouchableOpacity>
-          <View style={styles.rowInputs}>
-            <View style={styles.half}><Text style={styles.subLabel}>Tax</Text><TextInput style={styles.input} value={tax} onChangeText={setTax} keyboardType="decimal-pad" /></View>
-            <View style={styles.half}><Text style={styles.subLabel}>Tip</Text><TextInput style={styles.input} value={tip} onChangeText={setTip} keyboardType="decimal-pad" /></View>
+          <Pressable onPress={addItem} className="btn-secondary flex-row items-center justify-center gap-2">
+            <Plus size={16} color="#475569" />
+            <Text className="text-slate-600 font-bold text-sm">Add item</Text>
+          </Pressable>
+          <View className="flex-row gap-3">
+            <View className="flex-1">
+              <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Tax</Text>
+              <TextInput className="input-field text-sm text-slate-900" value={tax} onChangeText={setTax} keyboardType="decimal-pad" />
+            </View>
+            <View className="flex-1">
+              <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Tip</Text>
+              <TextInput className="input-field text-sm text-slate-900" value={tip} onChangeText={setTip} keyboardType="decimal-pad" />
+            </View>
           </View>
-        </>
+        </View>
       )}
 
-      {error && <Text style={styles.error}>{error}</Text>}
+      {error && (
+        <View className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3">
+          <Text className="text-sm text-red-700 font-medium">{error}</Text>
+        </View>
+      )}
 
-      <View style={styles.actions}>
-        <TouchableOpacity style={styles.cancelButton} onPress={onCancel} disabled={busy}><Text style={styles.cancelText}>Cancel</Text></TouchableOpacity>
-        <TouchableOpacity style={styles.submitButton} onPress={submit} disabled={busy || !description.trim() || !amount || !paidBy}>
-          {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Add</Text>}
-        </TouchableOpacity>
+      <View className="flex-row gap-3 pt-2">
+        <Pressable onPress={onCancel} disabled={busy} className="flex-1 py-3.5 rounded-2xl items-center justify-center active:bg-slate-100">
+          <Text className="text-slate-600 font-semibold text-sm">Cancel</Text>
+        </Pressable>
+        <View className="flex-1">
+          <PrimaryButton onPress={submit} disabled={busy || !description.trim() || !amount || !paidBy} loading={busy} className="w-full">
+            Add
+          </PrimaryButton>
+        </View>
       </View>
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: '#fff' },
-  container: { paddingTop: 60, paddingHorizontal: 20, paddingBottom: 32 },
-  heading: { fontSize: 22, fontWeight: '700', marginBottom: 20 },
-  label: { fontSize: 13, color: '#666', marginBottom: 6, marginTop: 16 },
-  subLabel: { fontSize: 12, color: '#666', marginBottom: 6, marginTop: 14 },
-  input: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 16, marginBottom: 8 },
-  hint: { fontSize: 12, color: '#999', marginTop: 16 },
-  row: { flexDirection: 'row', gap: 8 },
-  rowWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  rowInputs: { flexDirection: 'row', gap: 10 },
-  categoryRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
-  categoryInput: { flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 },
-  categoryButton: { backgroundColor: '#111', borderRadius: 8, paddingHorizontal: 16, justifyContent: 'center' },
-  categoryButtonText: { color: '#fff', fontWeight: '600' },
-  half: { flex: 1 },
-  chip: { borderWidth: 1, borderColor: '#ddd', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
-  chipSelected: { backgroundColor: '#111', borderColor: '#111' },
-  chipText: { color: '#111' },
-  chipTextSelected: { color: '#fff' },
-  valueRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
-  valueName: { flex: 1, color: '#111' },
-  valueInput: { width: 110, borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, textAlign: 'right' },
-  itemCard: { borderWidth: 1, borderColor: '#eee', borderRadius: 10, padding: 12, marginTop: 10 },
-  secondaryButton: { borderWidth: 1, borderColor: '#111', borderRadius: 8, paddingVertical: 11, alignItems: 'center', marginTop: 10 },
-  secondaryText: { color: '#111', fontWeight: '600' },
-  removeText: { color: '#b00020', fontSize: 12, marginTop: 12 },
-  error: { color: '#b00020', fontSize: 13, marginTop: 16 },
-  actions: { flexDirection: 'row', gap: 12, marginTop: 32 },
-  cancelButton: { flex: 1, paddingVertical: 12, alignItems: 'center' },
-  cancelText: { color: '#666' },
-  submitButton: { flex: 1, backgroundColor: '#111', borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
-  submitText: { color: '#fff', fontWeight: '600' },
-});
