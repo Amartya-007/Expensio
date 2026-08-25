@@ -141,7 +141,7 @@ Flagging it here so it isn't rediscovered mid-port later.
 | `screens/ExpenseList.tsx` | `TripDetailScreen.tsx`'s Expenses tab | **Ported** | Row card uses a colored-initial badge instead of TripSpend's fixed-category icon map (`Food`/`Travel`/`Stay`/`Misc` doesn't fit Expensio's free-text custom categories) — same device already used for participant avatars. Added `category` to the query, same as `ExpenseDetailScreen.tsx` before it — existed on the table, wasn't being read. TripSpend's filter bottom-sheet (category/person/date filters) not ported — no filter UI exists on the Expensio side yet at all, not just unstyled |
 | `screens/ExpenseDetail.tsx` | `ExpenseDetailScreen.tsx` | **Ported** | Dropped the `isLocked` banner (same budget-schema gap) and note/tags/receipts sections (no matching columns). Added `category`/`expense_date` to the query — both already existed in the schema and in `add_expense`'s RPC signature, just weren't being read before. Split display shows each participant's real `share_amount` rather than TripSpend's single equal-split figure. Delete confirmation is now a real `Modal`, replacing the native `Alert.alert()`. Also gained a Comments card (`add_comment` RPC) merged in from the parallel work stream noted at the top — not part of TripSpend's original screen, kept as its own card in the ported design language rather than dropped |
 | `screens/AddExpense.tsx` | `AddExpenseScreen.tsx` | **Ported** | Not a structural port — TripSpend's version is built around receipts/tags/an AI category suggester/budget presets, none of which have a backing RPC or schema column here. Kept every one of Expensio's actual fields (7 formal split types, custom categories) and all client-side validation exactly as they were; only the JSX changed |
-| `screens/Settlement.tsx` | `SettlementScreen.tsx` (new, from the parallel work stream) | Not ported | Exists and displays balances now (real screen, not a gap) — but reads only, no `record_payment`/`confirm_payment` call yet (both RPCs exist). Still plain `StyleSheet`. No schema blocker for the visual pass; the payment-recording gap is a separate, non-UI follow-up |
+| `screens/Settlement.tsx` | `SettlementScreen.tsx` (new, from the parallel work stream) | **Ported** | TripSpend's own version isn't a usable visual reference at all (60KB, built around the budget concept), so this follows the established page-shell/card-elevated/badge patterns instead. Also newly wired: a "Record payment" action per suggestion, calling the now-fixed `record_payment` — only for suggestions where the current user is the payer, since the RPC infers payer from the session. Re-fetches the whole plan after a successful record rather than just removing that row client-side, since paying one debt can reshape the whole simplified plan. The recipient's confirm-side (`confirm_payment`) still isn't wired — needs a direct Supabase query against `ledger_entries` (no PowerSync sync stream for it; see sync-streams.yaml), scoped as an explicit follow-up rather than half-built here |
 | `screens/SettlementLog.tsx` | *(none)* | Not started | |
 | `screens/Analytics.tsx` | *(none)* | Not started | Partly depends on the budget concept (burn rate, health score) — split what needs budget data from what doesn't |
 | `screens/CategoryManager.tsx` | *(none — `custom_categories` table exists, unused by mobile so far)* | Not started | |
@@ -186,6 +186,9 @@ Flagging it here so it isn't rediscovered mid-port later.
   can't be restyled at all, RN or otherwise.
 - `npx tsc --noEmit` passes clean across the whole project after all of the above,
   including after merging in the parallel work stream noted at the top of this doc.
+- `SettlementScreen.tsx` fully ported — see its table row above, including the newly
+  wired "Record payment" action (payer side only; recipient confirm-side is a scoped
+  follow-up, not built this pass).
 
 **Not verified:** actual rendered output. This sandbox has no device/simulator, so nothing
 above has been visually confirmed — only that real packages installed without conflict and
@@ -200,12 +203,9 @@ catch).
    wired in, so worth settling before porting more of them. More pressing now than when
    this was first written, since `Settlement`/`Invite`/`Recurring` all exist as flat
    routes today and would need moving if the tab-shell direction is chosen later.
-2. `Settlement.tsx`/`SettlementScreen.tsx` (the balances/settlement item) — screen exists
-   and shows real data now, no schema blocker; still needs both the visual pass and
-   wiring `record_payment`/`confirm_payment` in (currently read-only).
-3. The budget-schema product decision, unblocking `Dashboard.tsx` / `TripDetails.tsx` /
+2. The budget-schema product decision, unblocking `Dashboard.tsx` / `TripDetails.tsx` /
    the budget half of `Analytics.tsx`.
-4. `InviteScreen.tsx` / `PhoneVerificationScreen.tsx` / `RecurringScreen.tsx` — functional,
+3. `InviteScreen.tsx` / `PhoneVerificationScreen.tsx` / `RecurringScreen.tsx` — functional,
    unstyled, no TripSpend screen to port from; visual treatment can follow this port's
    established patterns (page-shell/card-elevated/input-field/PrimaryButton) without a
    reference screen to match against.

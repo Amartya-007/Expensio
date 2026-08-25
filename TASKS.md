@@ -146,10 +146,14 @@ or behaves right on a real phone.*
       at an error on the OTP screen for a phone number that had, in fact, already been
       successfully verified. Now best-effort and non-blocking — `onDone()` always fires
       once `verifyOtp` succeeds.
-- [~] Balances / settlement view (`SettlementScreen.tsx`) — displays balances via the
-      FastAPI settlement-plan endpoint (correctly read-only by design, not a gap); no
-      `record_payment`/`confirm_payment` call wired into the UI yet even though both RPCs
-      exist and are now confirmed correct (`0005_backend_correctness.sql`'s entry above)
+- [~] Balances / settlement view (`SettlementScreen.tsx`) — restyled, and now wires in
+      `record_payment` (payer side: a "Record payment" button per suggestion, only shown
+      when the current user is the one who owes) — re-fetches the whole settlement plan
+      afterward rather than just removing that row, since paying one debt can reshape the
+      simplified plan for everyone else. `confirm_payment` (recipient side) still not
+      wired — needs a direct Supabase query against `ledger_entries` (no PowerSync sync
+      stream requests it — see `sync-streams.yaml` — so `db.watch` can't reach it),
+      scoped as its own follow-up rather than half-built alongside this
 - [~] Recurring expenses UI (`RecurringScreen.tsx`) — create/delete template wired
       (`create_expense_template`, `delete_expense_template`, params confirmed to match
       both RPC signatures exactly); the scheduled-trigger side
@@ -164,10 +168,10 @@ or behaves right on a real phone.*
       touched again; whether "Settle" should be a real fourth tab or stay a separate
       screen is a product call, not something to silently change
 - [~] TripSpend UI port — NativeWind + navigation + gradient/font foundation in place;
-      `AddParticipantScreen`, `ExpenseDetailScreen`, `AddExpenseScreen`, and
-      `TripDetailScreen` (all three tabs) restyled. See `expensio-ui-port-plan.md` for
-      stack decisions, the full screen-by-screen mapping, and the budget-schema gap
-      blocking `Dashboard`/`TripDetails`. Still open: `SettlementScreen`,
+      `AddParticipantScreen`, `ExpenseDetailScreen`, `AddExpenseScreen`,
+      `TripDetailScreen` (all three tabs), and `SettlementScreen` restyled. See
+      `expensio-ui-port-plan.md` for stack decisions, the full screen-by-screen mapping,
+      and the budget-schema gap blocking `Dashboard`/`TripDetails`. Still open:
       `InviteScreen`, `PhoneVerificationScreen`, `RecurringScreen`, and the
       navigation-shape decision (persistent tab bar vs. current drill-in nav)
 - [x] Archive / unarchive / delete trip UI — options menu on TripDetailScreen (⋯), plus a
