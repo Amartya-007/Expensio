@@ -94,8 +94,25 @@ or behaves right on a real phone.*
       fixes (balances settle to exactly 0.00, `exact`-split type also spot-checked).
 - [ ] Apply against the actual Supabase project and re-run the equivalent checks — local
       Postgres is a stand-in, not identical to Supabase's real `auth.users`/JWKS. Also now
-      needs to cover 0004/0005, not just 0002/0003 — **and per the above, 0005 as
+      needs to cover 0004/0005/0006, not just 0002/0003 — **and per the above, 0005 as
       originally committed would have failed outright**, so this is more than a formality.
+- [x] `0006_trip_budget.sql` — adds `total_budget` to `trips` (nullable — budget is
+      optional) and extends `create_trip`/adds `update_trip_details` to actually let a
+      client set name/dates/budget (backward compatible — new params default to null).
+      The budget-tracking product decision from `expensio-ui-port-plan.md` is now
+      resolved (add it) — see that doc for the full reasoning. Found and fixed 3 more
+      real bugs while verifying this one, all caught by actually calling the RPCs:
+      `create_trip` crashed for any brand-new user (`profiles.display_name` starts null
+      and anonymous sign-in never sets it before someone's first trip — pre-existing bug
+      in `0003`, not introduced here); `create or replace` with a changed parameter list
+      created a second overload instead of replacing `create_trip`, making the 2-arg call
+      ambiguous; `update_trip_details`'s own activity-log call violated a check
+      constraint and silently rolled back the whole update (looked like it worked from
+      the query output until a fresh `SELECT` proved otherwise). Migration re-run clean
+      from scratch after each fix.
+- [x] `src/utils/calculations.ts` — ports `calculateStats` from TripSpend's
+      `calculations.ts`, formula kept identical. Compiled standalone and checked against
+      a hand-calculated scenario (not just "it runs") — every output field matched.
 - [x] `compute_expense_splits` — all 7 split types (equal, exact, percentage, shares,
       reimbursement, adjustment, itemized) implemented as of `0005_backend_correctness.sql`
 - [x] Settlement-plan debt-simplification algorithm — `services/api/app/settlement.py`,
@@ -168,14 +185,16 @@ or behaves right on a real phone.*
       (`SettlementScreen.tsx` deleted — see that entry above). The bigger navigation-shape
       question (persistent global tab bar vs. current drill-in nav, see
       `expensio-ui-port-plan.md`) is still an open product call, unaffected by this fix
-- [~] TripSpend UI port — every screen that currently exists in the app is now restyled
-      with the NativeWind design system (`AddParticipantScreen`, `ExpenseDetailScreen`,
+- [~] TripSpend UI port — every screen that currently exists in the app is restyled with
+      the NativeWind design system (`AddParticipantScreen`, `ExpenseDetailScreen`,
       `AddExpenseScreen`, `TripDetailScreen`, `SettlementView`, `InviteScreen`,
-      `PhoneVerificationScreen`, `RecurringScreen`). Still `[~]` not `[x]` because two
-      things remain, both decisions rather than code: the global navigation-shape call
-      (persistent tab bar vs. current drill-in nav) and the budget-schema product
-      decision blocking `Dashboard`/`TripDetails` from having anything to port to. See
-      `expensio-ui-port-plan.md` for both, plus the full screen-by-screen mapping
+      `PhoneVerificationScreen`, `RecurringScreen`). Both former open decisions are now
+      resolved (build the persistent tab bar; add budget tracking) — still `[~]` because
+      resolving them started real work that isn't finished: budget's schema/RPCs/math are
+      done (see `0006_trip_budget.sql`'s entry above) but `Dashboard.tsx`/`TripDetails.tsx`
+      themselves aren't built yet, and the persistent tab bar itself isn't built either.
+      See `expensio-ui-port-plan.md` for the full screen-by-screen mapping and current
+      status of each piece
 - [x] Archive / unarchive / delete trip UI — options menu on TripDetailScreen (⋯), plus a
       "show archived trips" toggle on the trips list so archiving isn't a one-way trip.
       Caught a real bug building this: `rpc.ts`'s `callRpc` unconditionally added

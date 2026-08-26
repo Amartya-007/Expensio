@@ -119,20 +119,61 @@ out "whenever screen count or transition needs... outgrow it" — this was that 
 Every route still maps 1:1 onto the old screen union; no screen's own prop contract changed
 beyond Settle losing its `onOpenSettlement` prop (it doesn't navigate anywhere now).
 
-## The "budget" concept — a schema gap, not a UI gap
+## The "budget" concept — decided, in progress
 
-`Dashboard.tsx` (the per-trip budget snapshot — remaining balance, burn rate, "safe to
-spend today", overspend alerts) and `TripDetails.tsx` (budget-per-person + dates editor)
-are both built around a personal daily-budget concept that **has no field in Expensio's
-schema at all** — `trips` (`AppSchema.ts` / `0002_core_schema.sql`) has `name`, `currency`,
-`start_date`, `end_date`, `is_archived` — no `total_budget`, no `budget_per_person`.
-Expensio's design docs (`expensio-architecture.md`, `expensio-data-model.md`) scope it as
-pure shared-expense-splitting/settlement, with no budget-tracking feature at all so far.
+**Decided: add it.** `Dashboard.tsx` (the per-trip budget snapshot — remaining balance,
+burn rate, "safe to spend today", overspend alerts) and `TripDetails.tsx` (budget-per-
+person + dates editor) are TripSpend's most substantial screens, and the whole premise of
+this doc from message one was porting TripSpend's *exact* UI — leaving out its most
+developed feature permanently would make that structurally incomplete, not just
+unfinished. This was a real product decision (not a restyle call), made explicitly rather
+than assumed.
 
-Porting these two screens "exactly" needs a product decision (does Expensio want a
-budget-tracking feature at all?) and, if yes, a schema migration (`total_budget` and/or
-`budget_per_person` on `trips`) **before** any UI work — not attempted in this pass.
-Flagging it here so it isn't rediscovered mid-port later.
+**Schema, done and verified.** `0006_trip_budget.sql` adds `total_budget numeric(12,2)`
+to `trips` (nullable — budget stays optional, matching Expensio's already-more-flexible
+scope; a trip with no budget set just has nothing to compute). `start_date`/`end_date`
+already existed on `trips` since `0002_core_schema.sql` but nothing had ever let a client
+set them — `create_trip` only ever accepted name/currency/settings. Extended it
+(backward compatible — new params default to null) and added `update_trip_details` for
+editing after creation, matching TripSpend's `TripDetails.tsx`. Deliberately not porting
+`lockPreviousDays` (TripSpend's separate lock-past-days-from-editing toggle) or storing
+`peopleCount` (Expensio's participant list is already dynamic — derived live, not a fixed
+field). Migration re-run clean from scratch against local Postgres after every fix below;
+`create_trip`/`update_trip_details` called for real, not just read.
+
+Found and fixed three real bugs while verifying this migration, none hypothetical — all
+caught by actually calling the functions, not by reading them:
+1. `create_trip` crashed for essentially any brand-new user. `profiles.display_name`
+   starts `null` for every user (`handle_new_user` in `0002_core_schema.sql` sets it
+   unconditionally), and anonymous sign-in — the app's actual entry point — never sets
+   it before someone creates their first trip. `participants.display_name` is `not
+   null`, so `create_trip`'s own participant-insert (pre-existing code, not something
+   this migration introduced) would fail outright. Fixed with a `coalesce(..., 'Trip
+   creator')` fallback.
+2. `create or replace function create_trip(...)` with a different parameter list doesn't
+   replace the old function — Postgres only replaces on an exact signature match, so
+   this would have left both the old 4-param and new 7-param versions coexisting as
+   separate overloads, making `create_trip('name', 'currency')` ambiguous. Fixed with an
+   explicit `drop function` first.
+3. `update_trip_details`'s own `perform log_activity(...)` call violated
+   `trip_activity_log`'s `event_type` check constraint (`'trip_details_updated'` wasn't
+   in the allowed list) — and since an unhandled exception aborts the whole function
+   invocation, this silently rolled back the trip UPDATE too, not just the log insert.
+   Looked like it worked from the query output until a fresh `SELECT` showed nothing had
+   actually persisted. Fixed by widening the constraint.
+
+**Calculation logic, done and verified.** `src/utils/calculations.ts` ports
+`calculateStats` from `tripspend/src/utils/calculations.ts` — formula kept identical,
+only the input shape changed (plain fields instead of a `TripSetup`/`TripData` pair, no
+`memberRegistry`/legacy-migration concepts to thread through). Compiled standalone and
+ran against a hand-calculated scenario (₹10,000 budget, 11-day trip, ₹3,000 spent across
+two expenses) — every output field matched by hand, not just "ran without crashing":
+burn rate, days remaining, projected end balance, all exact.
+
+**Not done yet:** the actual `Dashboard.tsx`/`TripDetails.tsx` UI, and wiring
+`CreateTripScreen`/a trip-settings screen to actually call `create_trip`'s new params /
+`update_trip_details`. Schema and math are the foundation; the screens sit on top of
+them next.
 
 ## Screen-by-screen mapping
 

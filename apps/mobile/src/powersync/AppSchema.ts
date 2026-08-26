@@ -15,6 +15,7 @@ export const AppSchema = new Schema({
     created_by: column.text,
     start_date: column.text,
     end_date: column.text,
+    total_budget: column.real,
     is_archived: column.integer,
     created_at: column.text,
   }),
