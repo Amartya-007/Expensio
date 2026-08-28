@@ -96,6 +96,29 @@ or behaves right on a real phone.*
       Postgres is a stand-in, not identical to Supabase's real `auth.users`/JWKS. Also now
       needs to cover 0004/0005/0006, not just 0002/0003 — **and per the above, 0005 as
       originally committed would have failed outright**, so this is more than a formality.
+- [x] All 5 real migrations (`0002`–`0006`) made idempotent — `create function` →
+      `create or replace function` everywhere, every `create trigger` preceded by
+      `drop trigger if exists ... on <table>`, `trip_balances`'s view → `create or
+      replace view`. Prompted by a real, reproducible problem: deleting tables via the
+      Supabase dashboard's table editor doesn't drop standalone functions or triggers
+      that aren't owned by a dropped table — `handle_new_user()` and its trigger on
+      `auth.users` survived a full table wipe and broke a fresh `0002` re-run with
+      `function "handle_new_user" already exists`. Deliberately did NOT make table/policy
+      creation idempotent (`create table if not exists` would silently skip recreating a
+      table whose leftover shape might not match the current migration — a real table
+      genuinely needs to be gone, not skipped, before re-running; this is a difference
+      from functions, which `or replace` can always safely reconcile).
+      **Verified, not just written:** reproduced the exact failure first (dropped every
+      table, confirmed `handle_new_user`/its trigger were still there), then confirmed
+      all 6 migrations re-run clean in that exact state after the fix. Also caught a real
+      bug of my own in the process: `0006`'s `create_trip` called
+      `store_idempotency_result`, which doesn't exist — the real function (`0003`) is
+      `store_idempotent_result`. Every earlier manual test of `create_trip` had called it
+      *without* a `p_client_request_id`, which skips that code path entirely — exactly
+      how the real app's `callRpc` (idempotent: true by default) would call it in
+      practice. Fixed, then specifically re-tested by calling `create_trip` twice with
+      the same `p_client_request_id` and confirming both calls return the identical trip
+      id with only one row actually created.
 - [x] `0006_trip_budget.sql` — adds `total_budget` to `trips` (nullable — budget is
       optional) and extends `create_trip`/adds `update_trip_details` to actually let a
       client set name/dates/budget (backward compatible — new params default to null).

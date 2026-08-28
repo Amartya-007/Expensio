@@ -1,7 +1,7 @@
 -- Canonical money values in split_config are decimal currency units, represented as
 -- JSON numbers or strings (for example "20.00"), and converted to integer minor units
 -- only inside Postgres. Percentages and proportional units remain dimensionless numbers.
-create function money_to_minor(p_value jsonb)
+create or replace function money_to_minor(p_value jsonb)
 returns bigint language plpgsql immutable as $$
 declare
   v_text text;
@@ -23,7 +23,7 @@ begin
   return round(v_value * 100)::bigint;
 end; $$;
 
-create function validate_split_participant_map(
+create or replace function validate_split_participant_map(
   p_trip_id uuid,
   p_values jsonb,
   p_allow_negative boolean default false
@@ -64,7 +64,7 @@ begin
   end loop;
 end; $$;
 
-create function validate_weight_map(p_trip_id uuid, p_values jsonb)
+create or replace function validate_weight_map(p_trip_id uuid, p_values jsonb)
 returns void language plpgsql as $$
 declare
   v_key text;
@@ -323,7 +323,7 @@ select trip_id, participant_id, currency, sum(balance_delta) as balance_delta
 from movements
 group by trip_id, participant_id, currency;
 
-create function insert_expense_ledger_entries(
+create or replace function insert_expense_ledger_entries(
   p_expense_id uuid,
   p_entry_type text,
   p_created_by uuid,
@@ -358,7 +358,7 @@ begin
   end loop;
 end; $$;
 
-create function reverse_expense_ledger_entries(
+create or replace function reverse_expense_ledger_entries(
   p_expense_id uuid,
   p_entry_type text,
   p_created_by uuid,

@@ -28,7 +28,7 @@ create index notification_events_trip_idx
 
 alter table notification_events enable row level security;
 
-create function enqueue_notification_event(
+create or replace function enqueue_notification_event(
   p_event_key text,
   p_event_type text,
   p_trip_id uuid,
@@ -72,7 +72,7 @@ begin
   return v_id;
 end; $$;
 
-create function enqueue_ledger_notification()
+create or replace function enqueue_ledger_notification()
 returns trigger language plpgsql security definer set search_path = public as $$
 declare
   v_event_type text;
@@ -121,11 +121,12 @@ begin
   return new;
 end; $$;
 
+drop trigger if exists ledger_notification_event on ledger_entries;
 create trigger ledger_notification_event
   after insert on ledger_entries
   for each row execute function enqueue_ledger_notification();
 
-create function enqueue_comment_notification()
+create or replace function enqueue_comment_notification()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
   if new.comment_type = 'user' then
@@ -142,11 +143,12 @@ begin
   return new;
 end; $$;
 
+drop trigger if exists comment_notification_event on expense_comments;
 create trigger comment_notification_event
   after insert on expense_comments
   for each row execute function enqueue_comment_notification();
 
-create function enqueue_activity_notification()
+create or replace function enqueue_activity_notification()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
   if new.event_type in (
@@ -166,11 +168,12 @@ begin
   return new;
 end; $$;
 
+drop trigger if exists activity_notification_event on trip_activity_log;
 create trigger activity_notification_event
   after insert on trip_activity_log
   for each row execute function enqueue_activity_notification();
 
-create function update_notification_preferences(p_preferences jsonb)
+create or replace function update_notification_preferences(p_preferences jsonb)
 returns void language plpgsql security definer set search_path = public as $$
 begin
   if jsonb_typeof(p_preferences) <> 'object'

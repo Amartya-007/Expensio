@@ -95,18 +95,23 @@ export default function SettlementView({ tripId }: { tripId: string }) {
           // Non-fatal: settlement suggestions still show, just no confirm UI
           console.warn('Could not load pending receipts:', ledgerError.message);
         } else if (ledgerRows && ledgerRows.length > 0) {
-          // Filter to only those not yet confirmed. A confirmed entry stores
-          // { confirmed_entry_id: <original_id> } in its metadata jsonb column.
+          // Filter to only those not yet confirmed. confirm_payment (0005_backend_
+          // correctness.sql) stores the link back to the original entry as
+          // { confirms: <original_id> } -- 'confirms', not 'confirmed_entry_id'. Getting
+          // this key wrong doesn't break anything loudly (confirm_payment has its own
+          // server-side duplicate check and would reject a stale double-confirm
+          // cleanly), it just means this filter would silently match nothing and every
+          // already-confirmed payment would keep reappearing in the list forever.
           const recordedIds = ledgerRows.map((r) => r.id as string);
           const { data: confirmedRows } = await supabase
             .from('ledger_entries')
             .select('metadata')
             .eq('trip_id', tripId)
             .eq('entry_type', 'payment_confirmed')
-            .in('metadata->>confirmed_entry_id', recordedIds);
+            .in('metadata->>confirms', recordedIds);
 
           const alreadyConfirmed = new Set(
-            (confirmedRows ?? []).map((r) => (r.metadata as { confirmed_entry_id?: string })?.confirmed_entry_id)
+            (confirmedRows ?? []).map((r) => (r.metadata as { confirms?: string })?.confirms)
           );
 
           receipts = ledgerRows

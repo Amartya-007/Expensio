@@ -1,4 +1,4 @@
-create function is_active_member(p_trip_id uuid)
+create or replace function is_active_member(p_trip_id uuid)
 returns boolean language sql stable security definer set search_path = public as $$
   select exists (
     select 1 from trip_members
@@ -6,12 +6,12 @@ returns boolean language sql stable security definer set search_path = public as
   );
 $$;
 
-create function is_verified_user()
+create or replace function is_verified_user()
 returns boolean language sql stable as $$
   select coalesce((auth.jwt() ->> 'is_anonymous')::boolean, false) = false;
 $$;
 
-create function log_activity(
+create or replace function log_activity(
   p_trip_id uuid, p_event_type text, p_detail text,
   p_subject_participant_id uuid default null, p_metadata jsonb default '{}'
 ) returns void language plpgsql security definer set search_path = public as $$
@@ -23,7 +23,7 @@ begin
           v_actor_name || ' ' || p_detail, p_metadata);
 end; $$;
 
-create function claim_idempotency_key(p_key uuid)
+create or replace function claim_idempotency_key(p_key uuid)
 returns boolean language plpgsql security definer set search_path = public as $$
 begin
   insert into processed_requests (client_request_id) values (p_key);
@@ -32,7 +32,7 @@ exception when unique_violation then
   return false;
 end; $$;
 
-create function claim_idempotency_key_with_result(p_key uuid, out is_new boolean, out found_result jsonb)
+create or replace function claim_idempotency_key_with_result(p_key uuid, out is_new boolean, out found_result jsonb)
 returns record language plpgsql security definer set search_path = public as $$
 begin
   insert into processed_requests (client_request_id) values (p_key);
@@ -43,12 +43,12 @@ exception when unique_violation then
   select result into found_result from processed_requests where client_request_id = p_key;
 end; $$;
 
-create function store_idempotent_result(p_key uuid, p_result jsonb)
+create or replace function store_idempotent_result(p_key uuid, p_result jsonb)
 returns void language sql security definer set search_path = public as $$
   update processed_requests set result = p_result where client_request_id = p_key;
 $$;
 
-create function distribute_proportionally(p_total_minor bigint, p_weights jsonb)
+create or replace function distribute_proportionally(p_total_minor bigint, p_weights jsonb)
 returns jsonb language plpgsql immutable as $$
 declare
   v_weight_sum numeric;
@@ -86,7 +86,7 @@ begin
   return v_result;
 end; $$;
 
-create function trip_active_participant_weights(p_trip_id uuid)
+create or replace function trip_active_participant_weights(p_trip_id uuid)
 returns jsonb language sql stable as $$
   select coalesce(jsonb_object_agg(p.id::text, 1), '{}'::jsonb)
   from participants p
@@ -95,7 +95,7 @@ returns jsonb language sql stable as $$
     and (p.type = 'placeholder' or tm.status = 'active');
 $$;
 
-create function compute_expense_splits(p_expense_id uuid)
+create or replace function compute_expense_splits(p_expense_id uuid)
 returns void language plpgsql security definer set search_path = public as $$
 declare
   v_expense expenses;
@@ -246,7 +246,7 @@ create policy profiles_update on profiles for update using (id = auth.uid());
 create policy trip_activity_log_select on trip_activity_log for select
   using (is_active_member(trip_id));
 
-create function create_trip(
+create or replace function create_trip(
   p_name text, p_currency text, p_settings jsonb default '{}', p_client_request_id uuid default null
 ) returns uuid language plpgsql security definer set search_path = public as $$
 declare v_trip_id uuid; v_claim record;
@@ -277,7 +277,7 @@ begin
   return v_trip_id;
 end; $$;
 
-create function add_placeholder_participant(
+create or replace function add_placeholder_participant(
   p_trip_id uuid, p_display_name text, p_phone text default null, p_client_request_id uuid default null
 ) returns uuid language plpgsql security definer set search_path = public as $$
 declare v_id uuid; v_claim record;
@@ -306,7 +306,7 @@ begin
   return v_id;
 end; $$;
 
-create function add_custom_category(p_trip_id uuid, p_name text, p_icon text, p_client_request_id uuid default null)
+create or replace function add_custom_category(p_trip_id uuid, p_name text, p_icon text, p_client_request_id uuid default null)
 returns uuid language plpgsql security definer set search_path = public as $$
 declare v_id uuid; v_claim record;
 begin
@@ -330,7 +330,7 @@ begin
   return v_id;
 end; $$;
 
-create function add_attachment(p_expense_id uuid, p_storage_path text)
+create or replace function add_attachment(p_expense_id uuid, p_storage_path text)
 returns uuid language plpgsql security definer set search_path = public as $$
 declare v_trip_id uuid; v_id uuid;
 begin
@@ -344,7 +344,7 @@ begin
   return v_id;
 end; $$;
 
-create function generate_invite(
+create or replace function generate_invite(
   p_trip_id uuid, p_expires_in interval default '24 hours', p_max_uses int default 1,
   p_client_request_id uuid default null
 ) returns text language plpgsql security definer set search_path = public as $$
@@ -388,7 +388,7 @@ begin
   return v_code;
 end; $$;
 
-create function revoke_invite(p_invite_id uuid)
+create or replace function revoke_invite(p_invite_id uuid)
 returns void language plpgsql security definer set search_path = public as $$
 declare v_trip_id uuid;
 begin
@@ -400,7 +400,7 @@ begin
   perform log_activity(v_trip_id, 'invite_revoked', 'revoked an invite code');
 end; $$;
 
-create function join_trip_via_code(p_code text, p_client_request_id uuid default null)
+create or replace function join_trip_via_code(p_code text, p_client_request_id uuid default null)
 returns uuid language plpgsql security definer set search_path = public as $$
 declare v_invite trip_invites; v_member_count int; v_claimed_id uuid;
 declare v_verified_phone text; v_was_previously_member boolean; v_claim record;
@@ -467,7 +467,7 @@ begin
   return v_invite.trip_id;
 end; $$;
 
-create function revoke_recent_join(p_trip_id uuid, p_user_id uuid)
+create or replace function revoke_recent_join(p_trip_id uuid, p_user_id uuid)
 returns void language plpgsql security definer set search_path = public as $$
 declare v_member trip_members; v_invite trip_invites; v_undone_name text;
 begin
@@ -490,7 +490,7 @@ begin
   perform log_activity(p_trip_id, 'invite_join_undone', format('undid %s''s recent join (invite mistake)', v_undone_name));
 end; $$;
 
-create function leave_trip(p_trip_id uuid)
+create or replace function leave_trip(p_trip_id uuid)
 returns void language plpgsql security definer set search_path = public as $$
 begin
   update trip_members set status = 'left', left_at = now()
@@ -498,7 +498,7 @@ begin
   perform log_activity(p_trip_id, 'member_left', 'left the trip');
 end; $$;
 
-create function archive_trip(p_trip_id uuid)
+create or replace function archive_trip(p_trip_id uuid)
 returns void language plpgsql security definer set search_path = public as $$
 begin
   if not is_active_member(p_trip_id) then raise exception 'not an active member of this trip'; end if;
@@ -506,7 +506,7 @@ begin
   perform log_activity(p_trip_id, 'trip_archived', 'archived this trip');
 end; $$;
 
-create function unarchive_trip(p_trip_id uuid)
+create or replace function unarchive_trip(p_trip_id uuid)
 returns void language plpgsql security definer set search_path = public as $$
 begin
   if not is_active_member(p_trip_id) then raise exception 'not an active member of this trip'; end if;
@@ -514,7 +514,7 @@ begin
   perform log_activity(p_trip_id, 'trip_unarchived', 'unarchived this trip');
 end; $$;
 
-create function delete_trip(p_trip_id uuid)
+create or replace function delete_trip(p_trip_id uuid)
 returns void language plpgsql security definer set search_path = public as $$
 declare v_active_count int;
 begin
@@ -527,7 +527,7 @@ begin
   update trips set deleted_at = now() where id = p_trip_id;
 end; $$;
 
-create function add_expense(
+create or replace function add_expense(
   p_trip_id uuid, p_paid_by uuid, p_description text, p_amount numeric, p_currency text,
   p_split_type text, p_split_config jsonb, p_category text default null, p_client_request_id uuid default null
 ) returns uuid language plpgsql security definer set search_path = public as $$
@@ -564,7 +564,7 @@ begin
   return v_expense_id;
 end; $$;
 
-create function edit_expense(
+create or replace function edit_expense(
   p_expense_id uuid, p_description text, p_amount numeric, p_split_type text, p_split_config jsonb,
   p_client_request_id uuid default null
 ) returns void language plpgsql security definer set search_path = public as $$
@@ -591,7 +591,7 @@ begin
   perform log_activity(v_trip_id, 'expense_edited', format('edited an expense: %s', p_description));
 end; $$;
 
-create function delete_expense(p_expense_id uuid, p_client_request_id uuid default null)
+create or replace function delete_expense(p_expense_id uuid, p_client_request_id uuid default null)
 returns void language plpgsql security definer set search_path = public as $$
 declare v_trip_id uuid; v_amount numeric; v_currency text; v_description text;
 begin
@@ -608,7 +608,7 @@ begin
   perform log_activity(v_trip_id, 'expense_deleted', format('deleted an expense: %s', v_description));
 end; $$;
 
-create function add_comment(p_expense_id uuid, p_body text)
+create or replace function add_comment(p_expense_id uuid, p_body text)
 returns uuid language plpgsql security definer set search_path = public as $$
 declare v_trip_id uuid; v_id uuid;
 begin
@@ -619,7 +619,7 @@ begin
   return v_id;
 end; $$;
 
-create function record_payment(
+create or replace function record_payment(
   p_trip_id uuid, p_to_participant uuid, p_amount numeric, p_currency text, p_client_request_id uuid default null
 ) returns uuid language plpgsql security definer set search_path = public as $$
 declare v_id uuid; v_from_participant uuid; v_claim record;
@@ -650,7 +650,7 @@ begin
   return v_id;
 end; $$;
 
-create function confirm_payment(p_ledger_entry_id uuid, p_client_request_id uuid default null)
+create or replace function confirm_payment(p_ledger_entry_id uuid, p_client_request_id uuid default null)
 returns uuid language plpgsql security definer set search_path = public as $$
 declare v_entry ledger_entries; v_to_participant participants; v_id uuid; v_claim record;
 begin
@@ -684,7 +684,7 @@ begin
   return v_id;
 end; $$;
 
-create function generate_due_recurring_expenses()
+create or replace function generate_due_recurring_expenses()
 returns void language plpgsql security definer set search_path = public as $$
 declare v_template expense_templates;
 begin
@@ -705,7 +705,7 @@ begin
   end loop;
 end; $$;
 
-create function update_display_name(p_new_name text)
+create or replace function update_display_name(p_new_name text)
 returns void language plpgsql security definer set search_path = public as $$
 declare v_old_name text; v_trip record;
 begin
@@ -718,7 +718,7 @@ begin
   end loop;
 end; $$;
 
-create function delete_account()
+create or replace function delete_account()
 returns void language plpgsql security definer set search_path = public as $$
 begin
   update profiles set display_name = 'Deleted user', avatar_url = null, deleted_at = now()

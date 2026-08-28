@@ -6,13 +6,14 @@ create table profiles (
   created_at timestamptz not null default now()
 );
 
-create function handle_new_user()
+create or replace function handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
   insert into public.profiles (id, display_name) values (new.id, null);
   return new;
 end; $$;
 
+drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function handle_new_user();
@@ -157,7 +158,7 @@ create table ledger_entries (
   created_at timestamptz not null default now()
 );
 
-create view trip_balances as
+create or replace view trip_balances as
 select trip_id, from_participant as participant_id, currency, -sum(amount) as balance_delta
 from ledger_entries where from_participant is not null
 group by trip_id, from_participant, currency
@@ -191,14 +192,16 @@ create table trip_activity_log (
   created_at timestamptz not null default now()
 );
 
-create function prevent_activity_log_mutation()
+create or replace function prevent_activity_log_mutation()
 returns trigger language plpgsql as $$
 begin
   raise exception 'trip_activity_log is immutable — % is not permitted', TG_OP;
 end; $$;
 
+drop trigger if exists no_update_activity_log on trip_activity_log;
 create trigger no_update_activity_log before update on trip_activity_log
   for each row execute function prevent_activity_log_mutation();
+drop trigger if exists no_delete_activity_log on trip_activity_log;
 create trigger no_delete_activity_log before delete on trip_activity_log
   for each row execute function prevent_activity_log_mutation();
 

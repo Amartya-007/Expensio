@@ -43,7 +43,7 @@ alter table trips add column total_budget numeric(12, 2);
 -- it with the 2 truly-required args (name, currency) becomes ambiguous between them.
 -- Caught by actually calling create_trip after applying this migration, not by reading it.
 drop function if exists create_trip(text, text, jsonb, uuid);
-create function create_trip(
+create or replace function create_trip(
   p_name text, p_currency text, p_settings jsonb default '{}',
   p_start_date date default null, p_end_date date default null, p_total_budget numeric default null,
   p_client_request_id uuid default null
@@ -76,7 +76,7 @@ begin
   perform log_activity(v_trip_id, 'trip_created', 'created this trip');
 
   if p_client_request_id is not null then
-    perform store_idempotency_result(p_client_request_id, jsonb_build_object('trip_id', v_trip_id));
+    perform store_idempotent_result(p_client_request_id, jsonb_build_object('trip_id', v_trip_id));
   end if;
 
   return v_trip_id;
@@ -88,7 +88,7 @@ end; $$;
 -- to null and a null means "leave this field alone" (via coalesce), not "clear it" --
 -- matching how a partial-update form naturally works (only send what changed), and
 -- avoiding a footgun where omitting a param would blank out the trip's name.
-create function update_trip_details(
+create or replace function update_trip_details(
   p_trip_id uuid, p_name text default null, p_start_date date default null,
   p_end_date date default null, p_total_budget numeric default null,
   p_clear_budget boolean default false
