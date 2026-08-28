@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -15,12 +17,23 @@ def create_app(
     repository: BalanceRepository | None = None,
     verifier: SupabaseJwtVerifier | None = None,
 ) -> FastAPI:
-    app = FastAPI(title="Expensio API", version="0.1.0")
     balance_repository = repository or PostgresBalanceRepository()
     jwt_verifier = verifier or SupabaseJwtVerifier(
         jwks_url=os.getenv("SUPABASE_JWKS_URL"),
         issuer=os.getenv("SUPABASE_JWT_ISSUER"),
     )
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        yield
+        # Close the asyncpg connection pool gracefully on shutdown so that
+        # in-flight connections are not abandoned. PostgresBalanceRepository.close()
+        # is a no-op when the pool was never opened (e.g. in tests that inject a
+        # fake repository), so this is always safe to call.
+        if hasattr(balance_repository, "close"):
+            await balance_repository.close()  # type: ignore[union-attr]
+
+    app = FastAPI(title="Expensio API", version="0.1.0", lifespan=lifespan)
     bearer = HTTPBearer(auto_error=False)
 
     def authenticate(
@@ -57,6 +70,14 @@ def create_app(
             balances = await balance_repository.get_balances(trip_id, claims.user_id)
         except TripAccessError as exc:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+        except ValueError as exc:
+            # asyncpg raises InvalidTextRepresentationError (a ValueError subclass) when
+            # trip_id or user_id is not a valid UUID. Surface this as 400 Bad Request
+            # rather than letting it propagate as an unhandled 500.
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="trip_id must be a valid UUID",
+            ) from exc
         except RuntimeError as exc:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

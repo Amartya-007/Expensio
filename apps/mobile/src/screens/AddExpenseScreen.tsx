@@ -265,6 +265,10 @@ export default function AddExpenseScreen({
         items: items.map((item) => ({ label: item.label.trim(), amount: item.amount.trim(), shared_by: item.sharedBy })),
         tax: tax.trim() || '0.00',
         tip: tip.trim() || '0.00',
+        // Tax and tip are distributed proportionally to each participant's item subtotal
+        // (architecture doc data model §split_config shapes). The UI doesn't yet expose a
+        // toggle for 'equal', so we always send 'proportional' to match the displayed intent.
+        tax_tip_split: 'proportional',
       };
     }
 

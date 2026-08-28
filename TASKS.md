@@ -126,6 +126,19 @@ or behaves right on a real phone.*
       and ran the actual pytest suite this session (not just confirmed the files exist):
       all 10 tests pass. `settlement.py`'s debt-simplification algorithm reviewed in
       depth (see the note under `0005`'s entry above) — real, working code, not a stub.
+- [x] Four real bugs fixed and verified (all 14 tests pass after fixes):
+      1. `test_api.py` had a misaligned `"amount"` key in the expected JSON dict.
+      2. `main.py` had no shutdown handler — asyncpg pool was never closed. Fixed with
+         an `asynccontextmanager` lifespan that calls `balance_repository.close()`.
+      3. `auth.py` rejected Supabase anonymous tokens (`role='anon'`) as 401. Fixed:
+         both `'authenticated'` and `'anon'` are now accepted; any other role (e.g.
+         `'service_role'`) is rejected. `test_auth.py` updated accordingly.
+      4. `main.py` had no `ValueError` handler — asyncpg's
+         `InvalidTextRepresentationError` (a `ValueError` subclass) for a non-UUID
+         `trip_id` would have been an unhandled 500. Now returns 400 with a clear message.
+- [x] Three new pytest cases added (`test_api.py`): 403 for non-member
+      (`TripAccessError`), 400 for invalid UUID (`ValueError`), and 200 for an anonymous
+      Supabase token (`role='anon'`). Suite is now 14 tests, all passing.
 
 ## Mobile client (`apps/mobile/`) — React Native + Expo
 
@@ -145,7 +158,11 @@ or behaves right on a real phone.*
       (`src/supabaseClient.ts`) with a Keychain/Keystore-backed adapter
 - [x] Trips list, create trip
 - [x] Add expense — all 7 split types now have a picker (`AddExpenseScreen.tsx`); was
-      equal-only before this batch
+      equal-only before this batch. Fixed a bug this session: the `itemized` split type's
+      `buildSplitConfig` was not sending `tax_tip_split` to the RPC — the field is
+      required by the data model doc's `split_config` shape and the backend
+      `compute_expense_splits` implementation. Now always sends `'proportional'`
+      (matching the screen's existing UI behaviour).
 - [x] View expense list, activity log tab
 - [x] Placeholder participants — Members tab, add person, real `paid_by` picker
 - [x] Edit / delete expense (soft-delete, splits recompute on edit)
@@ -154,7 +171,11 @@ or behaves right on a real phone.*
       batch as the rest of this section; merged into the restyled version by hand this
       session (see `expensio-ui-port-plan.md`)
 - [x] **Real invites** (`InviteScreen.tsx`) — `generate_invite`, `join_trip_via_code`,
-      `revoke_invite` all wired
+      `revoke_invite` all wired. Fixed a bug this session: verification errors in both
+      `generateInvite` and `joinTrip` were setting a plain error string and waiting for
+      the user to tap a secondary "Verify with phone →" link, rather than calling
+      `onRequireVerification()` immediately. The design intent (onboarding-auth.md §3) is
+      that hitting the collaborative gate should route straight to verification — fixed.
 - [x] Phone verification (`PhoneVerificationScreen.tsx`) — Supabase Auth `verifyOtp`
       (`type: 'phone_change'`) linking a phone number to the anonymous session, satisfying
       `is_verified_user()` for real invites above. Fixed a real bug this session: the
@@ -163,16 +184,22 @@ or behaves right on a real phone.*
       at an error on the OTP screen for a phone number that had, in fact, already been
       successfully verified. Now best-effort and non-blocking — `onDone()` always fires
       once `verifyOtp` succeeds.
-- [~] Balances / settlement view (`SettlementView.tsx`, rendered inline as
+- [x] Balances / settlement view (`SettlementView.tsx`, rendered inline as
       `TripDetailScreen`'s Settle tab — no longer a standalone screen, see the mobile
-      client section below) — restyled, and now wires in `record_payment` (payer side: a
-      "Record payment" button per suggestion, only shown when the current user is the one
-      who owes) — re-fetches the whole settlement plan afterward rather than just
-      removing that row, since paying one debt can reshape the simplified plan for
-      everyone else. `confirm_payment` (recipient side) still not wired — needs a direct
-      Supabase query against `ledger_entries` (no PowerSync sync stream requests it — see
-      `sync-streams.yaml` — so `db.watch` can't reach it), scoped as its own follow-up
-      rather than half-built alongside this
+      client section below) — restyled, and now wires in both `record_payment` and
+      `confirm_payment`:
+      - Payer side (`record_payment`): "I paid this" button per suggestion, only shown
+        when the current user is the from_participant. Re-fetches the full plan after a
+        successful record.
+      - Recipient side (`confirm_payment`): direct `supabase.from('ledger_entries')` query
+        for `payment_recorded` rows where the current user is the `to_participant` and no
+        matching `payment_confirmed` row exists; "Confirm received" button calls the RPC.
+        Uses a direct Supabase query (not PowerSync) because `ledger_entries` has no sync
+        stream — confirmed in `AppSchema.ts` and `sync-streams.yaml`.
+      Fixed two bugs in this pass: (1) `recordingKey` was never cleared on a successful
+      payment record, leaving the button spinner stuck if the same suggestion reappeared
+      in the refreshed plan — now cleared before `load()`. (2) The `confirm_payment`
+      wiring was explicitly scoped as a follow-up in the original code; now complete.
 - [~] Recurring expenses UI (`RecurringScreen.tsx`) — create/delete template wired
       (`create_expense_template`, `delete_expense_template`, params confirmed to match
       both RPC signatures exactly); the scheduled-trigger side
@@ -218,7 +245,9 @@ or behaves right on a real phone.*
       `0004_notifications.sql`, covering core invariants, split math, RPC permissions,
       notifications
 - [x] FastAPI pytest suite (`services/api/tests/`) — actually run this session (real venv,
-      real `pip install -e .[test]`), all 10 pass
+      real `pip install -e .[test]`), all 14 tests pass (10 original + 4 added this
+      session: `test_verifier_accepts_anon_role`, 403 non-member, 400 invalid UUID, 200
+      anonymous token)
 
 ## Launch-blockers, not code-blockers
 

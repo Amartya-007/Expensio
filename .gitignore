@@ -43,3 +43,10 @@ __pycache__/
 .venv/
 venv/
 *.egg
+
+# Environment files — real secrets, never committed
+# apps/mobile/.env is also covered by apps/mobile/.gitignore
+.env
+services/api/.env
+
+node_modules

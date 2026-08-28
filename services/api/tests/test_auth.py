@@ -28,12 +28,26 @@ class AuthTests(unittest.TestCase):
         verifier = SupabaseJwtVerifier(
             decode_token=lambda token: {
                 "sub": "10000000-0000-0000-0000-000000000001",
-                "role": "anon",
+                "role": "service_role",
             }
         )
 
-        with self.assertRaisesRegex(AuthError, "authenticated"):
+        with self.assertRaisesRegex(AuthError, "role"):
             verifier.verify("token")
+
+    def test_verifier_accepts_anon_role(self) -> None:
+        """Supabase anonymous sessions carry role='anon'; they are valid callers."""
+        verifier = SupabaseJwtVerifier(
+            decode_token=lambda token: {
+                "sub": "10000000-0000-0000-0000-000000000002",
+                "role": "anon",
+                "aud": "authenticated",
+            }
+        )
+
+        claims = verifier.verify("token")
+        self.assertEqual(claims.role, "anon")
+        self.assertEqual(claims.user_id, "10000000-0000-0000-0000-000000000002")
 
 
 if __name__ == "__main__":

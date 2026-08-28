@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
-import { CheckCircle2, HandCoins } from 'lucide-react-native';
+import { CheckCircle2, HandCoins, ThumbsUp } from 'lucide-react-native';
 import { supabase } from '../supabaseClient';
 import { db } from '../powersync/db';
 import { callRpc } from '../rpc';
@@ -13,32 +13,37 @@ type Suggestion = {
   currency: string;
 };
 
+// A pending payment: a ledger_entries row with entry_type='payment_recorded' that has
+// no matching 'payment_confirmed' row yet, and where the current user is the recipient.
+// ledger_entries is not in the PowerSync sync stream so this must be a direct Supabase
+// query, not db.watch — see sync-streams.yaml and AppSchema.ts comments.
+type PendingReceipt = {
+  id: string;
+  from_participant: string;
+  amount: string;
+  currency: string;
+};
+
 // Content-only piece of the settlement UI -- no header, no page-shell padding, so it can
-// sit inside a page that already has its own (TripDetailScreen's Settle tab) as well as
-// stand alone (SettlementScreen.tsx). Extracted rather than duplicated once it needed a
-// second home; see TripDetailScreen.tsx's header comment for why Settle became a real
-// local tab instead of navigating away.
+// sit inside a page that already has its own (TripDetailScreen's Settle tab).
 //
-// Wires in record_payment (payer side): a "Record payment" action per suggestion, only
-// for suggestions where the current user IS the payer (from_participant), since the RPC
-// infers the payer from the caller's own session, not a parameter. After a successful
-// record, the whole settlement plan is re-fetched rather than just marking that one row
-// done client-side -- paying off one debt can change what the debt-simplification
-// algorithm suggests for everyone else, not just remove a single row.
+// Wires in record_payment (payer side): "I paid this" per suggestion, only shown to the
+// current user when they are the from_participant. Re-fetches the full plan after a
+// successful record since paying one debt can reshape the suggestions for everyone.
 //
-// Deliberately NOT built: the recipient's side (confirm_payment). That needs a list of
-// not-yet-confirmed payments where the current user is the recipient, which requires
-// reading ledger_entries directly -- it has no PowerSync sync stream (see
-// sync-streams.yaml: the table's in the Postgres publication but nothing requests it, so
-// it never reaches the client's local database), so this needs a direct Supabase query,
-// not db.watch. Scoped as its own explicit follow-up.
+// Wires in confirm_payment (recipient side): a "Confirm received" list is shown below
+// the suggestions for unconfirmed payments where the current user is the to_participant.
+// This requires a direct Supabase query against ledger_entries (not PowerSync) because
+// that table has no sync stream — confirmed in AppSchema.ts and sync-streams.yaml.
 export default function SettlementView({ tripId }: { tripId: string }) {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [names, setNames] = useState<Record<string, string>>({});
   const [myParticipantId, setMyParticipantId] = useState<string | null>(null);
+  const [pendingReceipts, setPendingReceipts] = useState<PendingReceipt[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [recordingKey, setRecordingKey] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!env.apiUrl) {
@@ -57,14 +62,68 @@ export default function SettlementView({ tripId }: { tripId: string }) {
         ),
       ]);
       if (!sessionData.session) throw new Error('Your session has expired. Sign in again.');
+
+      const nameMap = Object.fromEntries(participantRows.map((row) => [row.id, row.display_name]));
+      const myId = participantRows.find((row) => row.linked_user_id === sessionData.session!.user.id)?.id ?? null;
+
+      // --- Settlement suggestions (FastAPI) ---
       const response = await fetch(`${env.apiUrl.replace(/\/$/, '')}/trip/${tripId}/settlement-plan`, {
         headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
       });
       if (!response.ok) throw new Error((await response.json()).detail ?? 'Could not load settlement suggestions.');
       const data = (await response.json()) as { suggestions: Suggestion[] };
+
+      // --- Pending receipts to confirm (direct Supabase query) ---
+      // Find all payment_recorded ledger entries for this trip where:
+      //   1. to_participant = current user's participant row (they are the recipient)
+      //   2. There is no corresponding payment_confirmed entry for the same expense/amount chain
+      // The simplest reliable shape: any payment_recorded whose ledger entry id does NOT
+      // appear in a payment_confirmed entry's metadata.confirmed_entry_id.
+      // confirm_payment creates a new ledger row; it stores the confirmed entry id in
+      // its own metadata. We key off the absence of any row with
+      // entry_type='payment_confirmed' that references this entry id.
+      let receipts: PendingReceipt[] = [];
+      if (myId) {
+        const { data: ledgerRows, error: ledgerError } = await supabase
+          .from('ledger_entries')
+          .select('id, from_participant, amount, currency')
+          .eq('trip_id', tripId)
+          .eq('entry_type', 'payment_recorded')
+          .eq('to_participant', myId);
+
+        if (ledgerError) {
+          // Non-fatal: settlement suggestions still show, just no confirm UI
+          console.warn('Could not load pending receipts:', ledgerError.message);
+        } else if (ledgerRows && ledgerRows.length > 0) {
+          // Filter to only those not yet confirmed. A confirmed entry stores
+          // { confirmed_entry_id: <original_id> } in its metadata jsonb column.
+          const recordedIds = ledgerRows.map((r) => r.id as string);
+          const { data: confirmedRows } = await supabase
+            .from('ledger_entries')
+            .select('metadata')
+            .eq('trip_id', tripId)
+            .eq('entry_type', 'payment_confirmed')
+            .in('metadata->>confirmed_entry_id', recordedIds);
+
+          const alreadyConfirmed = new Set(
+            (confirmedRows ?? []).map((r) => (r.metadata as { confirmed_entry_id?: string })?.confirmed_entry_id)
+          );
+
+          receipts = ledgerRows
+            .filter((r) => !alreadyConfirmed.has(r.id as string))
+            .map((r) => ({
+              id: r.id as string,
+              from_participant: r.from_participant as string,
+              amount: (r.amount as number).toFixed(2),
+              currency: r.currency as string,
+            }));
+        }
+      }
+
       setSuggestions(data.suggestions);
-      setNames(Object.fromEntries(participantRows.map((row) => [row.id, row.display_name])));
-      setMyParticipantId(participantRows.find((row) => row.linked_user_id === sessionData.session!.user.id)?.id ?? null);
+      setNames(nameMap);
+      setMyParticipantId(myId);
+      setPendingReceipts(receipts);
     } catch (err) {
       setError(String(err));
     } finally {
@@ -86,12 +145,30 @@ export default function SettlementView({ tripId }: { tripId: string }) {
         p_amount: Number(suggestion.amount),
         p_currency: suggestion.currency,
       });
+      // Clear the spinner key BEFORE re-fetching so it doesn't persist across the reload
+      // if the same suggestion reappears in the refreshed plan.
+      setRecordingKey(null);
       await load();
     } catch (err) {
       setError(String(err));
       setRecordingKey(null);
     }
   }
+
+  async function confirmPayment(entryId: string) {
+    setConfirmingId(entryId);
+    setError(null);
+    try {
+      await callRpc('confirm_payment', { p_ledger_entry_id: entryId });
+      setConfirmingId(null);
+      await load();
+    } catch (err) {
+      setError(String(err));
+      setConfirmingId(null);
+    }
+  }
+
+  const settled = !loading && !error && suggestions.length === 0 && pendingReceipts.length === 0;
 
   return (
     <View className="space-y-4">
@@ -103,7 +180,7 @@ export default function SettlementView({ tripId }: { tripId: string }) {
         </View>
       )}
 
-      {!loading && !error && suggestions.length === 0 && (
+      {settled && (
         <View className="card-elevated p-8 items-center mt-6">
           <View className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 items-center justify-center mb-3">
             <CheckCircle2 size={22} color="#059669" />
@@ -112,6 +189,7 @@ export default function SettlementView({ tripId }: { tripId: string }) {
         </View>
       )}
 
+      {/* Settlement suggestions — payer side */}
       {!loading &&
         suggestions.map((suggestion, index) => {
           const key = `${suggestion.from_participant}-${suggestion.to_participant}-${suggestion.currency}-${index}`;
@@ -146,6 +224,41 @@ export default function SettlementView({ tripId }: { tripId: string }) {
             </View>
           );
         })}
+
+      {/* Pending receipts to confirm — recipient side */}
+      {!loading && pendingReceipts.length > 0 && (
+        <View className="space-y-2">
+          <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mt-2">
+            Payments awaiting your confirmation
+          </Text>
+          {pendingReceipts.map((receipt) => (
+            <View className="card-elevated p-4 flex-row items-center gap-3" key={receipt.id}>
+              <View className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-100 items-center justify-center">
+                <ThumbsUp size={18} color="#059669" />
+              </View>
+              <View className="flex-1">
+                <Text className="text-sm font-semibold text-slate-700">
+                  {names[receipt.from_participant] ?? receipt.from_participant} paid you
+                </Text>
+                <Text className="text-lg font-black text-slate-900 mt-0.5">
+                  {receipt.currency} {receipt.amount}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => confirmPayment(receipt.id)}
+                disabled={confirmingId === receipt.id}
+                className="px-3 py-2 rounded-xl bg-emerald-600 items-center justify-center"
+              >
+                {confirmingId === receipt.id ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text className="text-xs font-bold text-white">Confirm</Text>
+                )}
+              </Pressable>
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   );
 }

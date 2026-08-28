@@ -61,10 +61,15 @@ export default function InviteScreen({
       }
     } catch (err) {
       if (isVerificationError(err)) {
-        setError('Verify your account once before inviting someone.');
-      } else {
-        setError(String(err));
+        // Route directly to the verification flow instead of making the user
+        // read the error and tap a separate "Verify with phone →" link.
+        // This matches the design intent in expensio-onboarding-auth.md §3:
+        // hitting the collaborative gate should immediately trigger verification.
+        setBusy(null);
+        onRequireVerification();
+        return;
       }
+      setError(String(err));
     } finally {
       setBusy(null);
     }
@@ -93,10 +98,13 @@ export default function InviteScreen({
       }
     } catch (err) {
       if (isVerificationError(err)) {
-        setError('Verify your account once before joining a trip.');
-      } else {
-        setError(String(err));
+        // Same immediate redirect as generateInvite — don't make the user
+        // tap a secondary link in the error card.
+        setBusy(null);
+        onRequireVerification();
+        return;
       }
+      setError(String(err));
     } finally {
       setBusy(null);
     }

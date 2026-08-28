@@ -72,6 +72,11 @@ class SupabaseJwtVerifier:
         role = raw.get("role")
         if not isinstance(user_id, str) or not user_id:
             raise AuthError("access token is missing a subject")
-        if role != "authenticated":
-            raise AuthError("access token is not authenticated")
+        # Supabase issues role="authenticated" for verified users and role="anon" for
+        # anonymous sessions. Both are valid callers — the settlement endpoint's own
+        # membership check decides whether the user can see a specific trip. Rejecting
+        # "anon" here would prevent a guest user who created a trip (valid anonymous
+        # Supabase session) from ever fetching their own settlement plan.
+        if role not in ("authenticated", "anon"):
+            raise AuthError("access token role is not recognised")
         return Claims(user_id=user_id, role=role, raw=raw)
