@@ -137,9 +137,8 @@ or behaves right on a real phone.*
       `calculations.ts`, formula kept identical. Compiled standalone and checked against
       a hand-calculated scenario (not just "it runs") — every output field matched.
 - [x] `0007_processed_requests_policy.sql` — adds the missing RLS SELECT policy on
-      `processed_requests` (see Testing section below for how this was found). **Not yet
-      applied to the real Supabase project** — needs running there like `0001`–`0006`
-      were.
+      `processed_requests` (see Testing section below for how this was found). Confirmed
+      applied to the real Supabase project.
 - [x] `compute_expense_splits` — all 7 split types (equal, exact, percentage, shares,
       reimbursement, adjustment, itemized) implemented as of `0005_backend_correctness.sql`
 - [x] Settlement-plan debt-simplification algorithm — `services/api/app/settlement.py`,
@@ -294,7 +293,9 @@ or behaves right on a real phone.*
         table has no owner/user column to scope tighter, and `client_request_id` is an
         unguessable client-generated UUID, so this is a reasonable tradeoff, not a real
         exposure)
-      Not yet applied to the real Supabase project — `0007` needs running there too.
+      Confirmed applied to the real Supabase project (`processed_requests_select` shows
+      up in `pg_policies`) — full table-structure diff of the live schema against
+      `0001`–`0007` also came back clean, no drift.
 - [x] FastAPI pytest suite (`services/api/tests/`) — actually run this session (real venv,
       real `pip install -e .[test]`), all 14 tests pass (10 original + 4 added this
       session: `test_verifier_accepts_anon_role`, 403 non-member, 400 invalid UUID, 200
