@@ -6,6 +6,15 @@ select tests.as_user('10000000-0000-0000-0000-000000000001', false);
 
 insert into trips (id, name, currency, created_by)
 values ('20000000-0000-0000-0000-000000000001', 'Split math', 'INR', '10000000-0000-0000-0000-000000000001');
+-- trip_active_participant_weights only counts a registered participant when their
+-- linked_user_id has an *active* trip_members row (0003_rls_and_rpcs.sql) -- true for
+-- every real trip, since create_trip/join_trip_via_code always insert both rows
+-- together, but this fixture bypassed both RPCs and inserted straight into
+-- trips/participants without ever adding one here. That silently dropped the owner from
+-- every equal-split weight below, so a 3-way equal split came out as a 2-way 50/50 split
+-- instead -- confirmed by actually running this file, not by reading it.
+insert into trip_members (trip_id, user_id, status)
+values ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'active');
 insert into participants (id, trip_id, type, linked_user_id, display_name, created_by)
 values
   ('30000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', 'registered', '10000000-0000-0000-0000-000000000001', 'Owner', '10000000-0000-0000-0000-000000000001'),
@@ -37,9 +46,15 @@ select lives_ok(
 );
 insert into expenses (id, trip_id, description, amount, currency, paid_by, split_type, split_config, created_by)
 values ('40000000-0000-0000-0000-000000000004', '20000000-0000-0000-0000-000000000001', 'Bad exact', 100, 'INR', '30000000-0000-0000-0000-000000000001', 'exact', '{"shares":{"30000000-0000-0000-0000-000000000001":"20.00"}}', '10000000-0000-0000-0000-000000000001');
+-- This pgTAP install's throws_ok compares the message argument with exact string
+-- equality (SQLERRM = errmsg), not a regex -- '.*' as a literal pattern can never equal
+-- the real message, so this assertion could never pass as written. NULL/NULL means "any
+-- exception, don't check code or message," which is what "invalid config is rejected"
+-- actually needs. Found by actually running this suite, not by reading it -- same root
+-- cause behind every other throws_ok fix in this pass (see 0003_rpc_permissions.sql).
 select throws_ok(
   $$select compute_expense_splits('40000000-0000-0000-0000-000000000004')$$,
-  '.*',
+  NULL, NULL,
   'invalid exact configuration is rejected by split computation'
 );
 

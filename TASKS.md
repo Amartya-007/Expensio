@@ -136,6 +136,10 @@ or behaves right on a real phone.*
 - [x] `src/utils/calculations.ts` — ports `calculateStats` from TripSpend's
       `calculations.ts`, formula kept identical. Compiled standalone and checked against
       a hand-calculated scenario (not just "it runs") — every output field matched.
+- [x] `0007_processed_requests_policy.sql` — adds the missing RLS SELECT policy on
+      `processed_requests` (see Testing section below for how this was found). **Not yet
+      applied to the real Supabase project** — needs running there like `0001`–`0006`
+      were.
 - [x] `compute_expense_splits` — all 7 split types (equal, exact, percentage, shares,
       reimbursement, adjustment, itemized) implemented as of `0005_backend_correctness.sql`
 - [x] Settlement-plan debt-simplification algorithm — `services/api/app/settlement.py`,
@@ -264,13 +268,46 @@ or behaves right on a real phone.*
 
 ## Testing
 
-- [x] pgTAP suite (`supabase/tests/`) — `0000_test_helpers.sql` through
-      `0004_notifications.sql`, covering core invariants, split math, RPC permissions,
-      notifications
+- [x] pgTAP suite (`supabase/tests/`) — actually executed this session for the first time
+      (real Postgres 16, a faithful mock of Supabase's `auth` schema/roles/default grants,
+      run as the genuine `authenticated` role for RLS-sensitive files rather than the
+      `postgres` superuser, which silently bypasses RLS). All 44 assertions across
+      `0000_test_helpers.sql`–`0004_notifications.sql` pass now; they did not before this
+      session — found and fixed 6 distinct bugs in the test infrastructure itself:
+      - `0002_split_math.sql`'s fixture never added the trip owner to `trip_members`, so
+        `trip_active_participant_weights` correctly excluded them and a 3-way equal split
+        silently ran as 2-way
+      - `0003_rpc_permissions.sql` still called `create_trip()` with the old 4-argument
+        positional signature from before `0006_trip_budget.sql` inserted 3 new params
+        into the middle of it — switched to named arguments
+      - `tests.create_user()` wasn't `security definer`, so the suite could only ever be
+        run as a superuser (which bypasses RLS entirely) — every "an outsider cannot
+        read/mutate" assertion was passing or failing on session privilege, not on
+        whether RLS actually works. Now `security definer`, suite runs as `authenticated`
+      - Every `throws_ok(sql, '.*pattern.*', description)` call in the suite (4 of them)
+        was silently unpassable — this pgTAP install's `throws_ok` compares the message
+        argument with exact string equality (`SQLERRM = errmsg`), not a regex. Switched
+        to exact message text (or `NULL, NULL` for "any exception" checks)
+      - `processed_requests` had RLS enabled but was the only table with zero policies —
+        default-deny blocked even legitimate direct reads of your own idempotency record.
+        Added `0007_processed_requests_policy.sql` (broad `authenticated` SELECT — the
+        table has no owner/user column to scope tighter, and `client_request_id` is an
+        unguessable client-generated UUID, so this is a reasonable tradeoff, not a real
+        exposure)
+      Not yet applied to the real Supabase project — `0007` needs running there too.
 - [x] FastAPI pytest suite (`services/api/tests/`) — actually run this session (real venv,
       real `pip install -e .[test]`), all 14 tests pass (10 original + 4 added this
       session: `test_verifier_accepts_anon_role`, 403 non-member, 400 invalid UUID, 200
       anonymous token)
+
+## Housekeeping
+
+- [x] Root `.env` (0 bytes) was tracked in git despite being listed in `.gitignore` —
+      gitignore only stops *new* files from being added, it doesn't untrack a file
+      already committed. Left as-is, the first time anyone filled it in locally with real
+      keys, `git commit -a`/`git add -u` would have committed them silently. Untracked
+      with `git rm --cached`; nothing else in the repo depends on a root-level `.env`.
+
 
 ## Launch-blockers, not code-blockers
 

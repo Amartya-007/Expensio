@@ -77,11 +77,9 @@ export default function SettlementView({ tripId }: { tripId: string }) {
       // Find all payment_recorded ledger entries for this trip where:
       //   1. to_participant = current user's participant row (they are the recipient)
       //   2. There is no corresponding payment_confirmed entry for the same expense/amount chain
-      // The simplest reliable shape: any payment_recorded whose ledger entry id does NOT
-      // appear in a payment_confirmed entry's metadata.confirmed_entry_id.
-      // confirm_payment creates a new ledger row; it stores the confirmed entry id in
-      // its own metadata. We key off the absence of any row with
-      // entry_type='payment_confirmed' that references this entry id.
+      // confirm_payment (0005_backend_correctness.sql) stores the link back to the
+      // original entry as { confirms: <original_id> } in its own metadata -- we key off
+      // the absence of any payment_confirmed row referencing this entry's id that way.
       let receipts: PendingReceipt[] = [];
       if (myId) {
         const { data: ledgerRows, error: ledgerError } = await supabase

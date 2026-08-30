@@ -5,8 +5,14 @@ select tests.create_user('10000000-0000-0000-0000-000000000011', 'rpc-owner@exam
 select tests.create_user('10000000-0000-0000-0000-000000000012', 'rpc-outsider@example.test');
 select tests.as_user('10000000-0000-0000-0000-000000000011', false);
 
+-- Named arguments, not positional: 0006_trip_budget.sql inserted p_start_date/p_end_date/
+-- p_total_budget in the middle of create_trip's parameter list. The old positional call
+-- here (4th arg = the client_request_id) silently became "p_start_date", so this whole
+-- file's first test failed with "invalid input syntax for type date" on a UUID string --
+-- and every test after it cascaded to failure since 'RPC trip' was never created. Found
+-- by actually running this suite against the current migrations, not by reading it.
 select lives_ok(
-  $$select create_trip('RPC trip', 'INR', '{}', '50000000-0000-0000-0000-000000000001')$$,
+  $$select create_trip(p_name => 'RPC trip', p_currency => 'INR', p_client_request_id => '50000000-0000-0000-0000-000000000001')$$,
   'create_trip succeeds for an authenticated user'
 );
 select is(
@@ -60,9 +66,14 @@ select is(
 
 select tests.as_user('10000000-0000-0000-0000-000000000012', false);
 select is((select count(*) from trips), 0::bigint, 'an outsider cannot read another trip');
+-- Exact message text, not a '.*wildcard.*' pattern: this pgTAP install's throws_ok
+-- compares the message argument with exact string equality (SQLERRM = errmsg) rather
+-- than a regex, so a wildcard pattern can never actually match and every throws_ok call
+-- using one in this file was failing regardless of whether the right exception was
+-- thrown. Found by actually running this suite, not by reading it.
 select throws_ok(
   $$select add_placeholder_participant('00000000-0000-0000-0000-000000000000', 'No access')$$,
-  '.*not an active member.*',
+  NULL, 'not an active member of this trip',
   'an outsider cannot mutate another trip'
 );
 
@@ -78,12 +89,12 @@ select ok(
 set local role postgres;
 select throws_ok(
   $$update trip_activity_log set description = 'tampered'$$,
-  '.*immutable.*',
+  NULL, 'trip_activity_log is immutable — UPDATE is not permitted',
   'activity log trigger rejects updates that bypass RLS'
 );
 select throws_ok(
   $$delete from trip_activity_log$$,
-  '.*immutable.*',
+  NULL, 'trip_activity_log is immutable — DELETE is not permitted',
   'activity log trigger rejects deletes that bypass RLS'
 );
 select is(

@@ -1,11 +1,22 @@
 create schema if not exists tests;
+grant usage on schema tests to anon, authenticated, service_role;
 
+-- security definer, not invoker (the previous default): a real end-user connection is
+-- always Postgres role "authenticated" (or "anon") in Supabase, never a superuser or the
+-- table owner -- that's precisely what makes RLS apply to it at all. Without this, the
+-- only way this whole suite's RLS assertions ("an outsider cannot read another trip",
+-- etc.) could ever run was as postgres/superuser, which silently bypasses row-level
+-- security altogether regardless of what any policy says -- so those assertions were
+-- passing or failing on artifacts of the test session's privilege level, not on whether
+-- RLS actually works. This function needs to write directly to auth.users no matter which
+-- role calls it, exactly like Supabase's own supabase_test_helpers extension does it.
+-- Found by actually running this suite as role authenticated, not by reading it.
 create or replace function tests.create_user(
   p_id uuid,
   p_email text,
   p_phone text default null,
   p_is_anonymous boolean default false
-) returns void language plpgsql as $$
+) returns void language plpgsql security definer set search_path = public, auth as $$
 begin
   insert into auth.users (
     id, aud, role, email, encrypted_password, email_confirmed_at,
