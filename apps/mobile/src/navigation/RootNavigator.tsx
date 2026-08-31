@@ -8,25 +8,20 @@ import ExpenseDetailScreen from '../screens/ExpenseDetailScreen';
 import PhoneVerificationScreen from '../screens/PhoneVerificationScreen';
 import InviteScreen from '../screens/InviteScreen';
 import RecurringScreen from '../screens/RecurringScreen';
+import MembersScreen from '../screens/MembersScreen';
+import ActivityLogScreen from '../screens/ActivityLogScreen';
 
 // Replaces App.tsx's old hand-rolled `Screen` state union (see git history) with real
 // React Navigation -- the comment that used to sit on that type said to swap it in
 // "whenever screen count or transition needs... outgrow it"; porting TripSpend's UI is
 // that moment, since TripSpend's own BottomNav.tsx assumes a real navigator underneath it.
-// Every route below maps 1:1 onto the old screen union -- same screens, same callback
-// props, just invoked via navigation.navigate()/goBack() instead of setScreen(). No
-// screen's own prop contract changed, only how it's reached.
 //
-// The persistent bottom-tab shell mirroring TripSpend's BottomNav.tsx still isn't wired
-// in globally -- see docs/architecture/expensio-ui-port-plan.md's "Navigation shape"
-// section for why: its first tab is TripSpend's budget Dashboard, and Expensio doesn't
-// have anywhere to send that tab yet (deliberately -- see the budget-schema note in that
-// same doc). What IS resolved: Settle used to be the one tab in TripDetailScreen that
-// looked like its siblings but actually navigated away to a separate route (this file
-// used to have a Settlement route here) -- it's a real local tab now, same as
-// Expenses/Log/Members, rendering SettlementView inline. This stack is still what a
-// future global tab shell would sit on top of, once the Home/Dashboard question is
-// settled.
+// TripDetail now renders the persistent Home/Expenses/Settle/Settings tab bar (see
+// TripDetailScreen.tsx's own header comment for the full history of why this was
+// blocked, then unblocked once the budget schema landed) rather than the old in-page
+// Expenses/Log/Members/Settle tab row. Members and Activity Log moved out of that in-page
+// row into their own routes here (reached from the new Settings tab), since TripSpend's
+// BottomNav.tsx has no tab for either of them.
 export type RootStackParamList = {
   Trips: undefined;
   CreateTrip: undefined;
@@ -37,6 +32,8 @@ export type RootStackParamList = {
   VerifyPhone: undefined;
   Invite: { tripId: string };
   Recurring: { tripId: string; currency: string };
+  Members: { tripId: string; currency: string };
+  ActivityLog: { tripId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -68,12 +65,28 @@ function TripDetailRoute({ navigation, route }: NativeStackScreenProps<RootStack
       tripId={tripId}
       onBack={() => navigation.navigate('Trips')}
       onAddExpense={() => navigation.navigate('AddExpense', { tripId, currency })}
-      onAddParticipant={() => navigation.navigate('AddParticipant', { tripId, currency })}
-      onOpenInvite={() => navigation.navigate('Invite', { tripId })}
-      onOpenRecurring={() => navigation.navigate('Recurring', { tripId, currency })}
       onOpenExpense={(expenseId) => navigation.navigate('ExpenseDetail', { expenseId, tripId, currency })}
+      onOpenMembers={() => navigation.navigate('Members', { tripId, currency })}
+      onOpenActivityLog={() => navigation.navigate('ActivityLog', { tripId })}
+      onOpenRecurring={() => navigation.navigate('Recurring', { tripId, currency })}
     />
   );
+}
+
+function MembersRoute({ navigation, route }: NativeStackScreenProps<RootStackParamList, 'Members'>) {
+  const { tripId, currency } = route.params;
+  return (
+    <MembersScreen
+      tripId={tripId}
+      onBack={() => navigation.goBack()}
+      onAddParticipant={() => navigation.navigate('AddParticipant', { tripId, currency })}
+      onOpenInvite={() => navigation.navigate('Invite', { tripId })}
+    />
+  );
+}
+
+function ActivityLogRoute({ navigation, route }: NativeStackScreenProps<RootStackParamList, 'ActivityLog'>) {
+  return <ActivityLogScreen tripId={route.params.tripId} onBack={() => navigation.goBack()} />;
 }
 
 function AddExpenseRoute({ navigation, route }: NativeStackScreenProps<RootStackParamList, 'AddExpense'>) {
@@ -121,6 +134,8 @@ export default function RootNavigator() {
       <Stack.Screen name="VerifyPhone" component={VerifyPhoneRoute} />
       <Stack.Screen name="Invite" component={InviteRoute} />
       <Stack.Screen name="Recurring" component={RecurringRoute} />
+      <Stack.Screen name="Members" component={MembersRoute} />
+      <Stack.Screen name="ActivityLog" component={ActivityLogRoute} />
     </Stack.Navigator>
   );
 }

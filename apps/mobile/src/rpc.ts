@@ -13,12 +13,12 @@ import { db } from './powersync/db';
 // PowerSync's ordinary replication, same as any other Postgres change -- there's nothing
 // extra to do to make a successful write show up locally.
 //
-// Not every RPC takes p_client_request_id — 10 of the ~20 do (create_trip, add_expense,
+// Not every RPC takes p_client_request_id — 10 of the ~21 do (create_trip, add_expense,
 // edit_expense, delete_expense, generate_invite, join_trip_via_code,
 // add_placeholder_participant, add_custom_category, record_payment, confirm_payment); the
-// other 10 (archive_trip, unarchive_trip, delete_trip, leave_trip, revoke_invite,
-// revoke_recent_join, add_comment, add_attachment, update_display_name, delete_account)
-// don't. Sending it to one that doesn't accept it fails outright — PostgREST can't match
+// other 11 (archive_trip, unarchive_trip, delete_trip, leave_trip, revoke_invite,
+// revoke_recent_join, add_comment, add_attachment, update_display_name, delete_account,
+// update_trip_details) don't. Sending it to one that doesn't accept it fails outright — PostgREST can't match
 // an unexpected named parameter to any function signature. callRpc's idempotent option
 // (default true) controls whether it gets added; pass { idempotent: false } for the RPCs
 // that don't declare it. Those are naturally idempotent-enough in effect anyway (setting
