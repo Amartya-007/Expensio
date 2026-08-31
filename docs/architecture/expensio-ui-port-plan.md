@@ -105,19 +105,33 @@ home) inline, exactly like its three siblings. `TripDetailScreen`'s options menu
 reaches `Invite`/`Recurring`/`VerifyPhone` as separate pushed routes — those don't have
 the same "looks like a tab but isn't" problem Settle had, so they weren't touched.
 
-**Still not resolved — the bigger question this section was really about:** does opening a
-trip from the Trips List switch into TripSpend's persistent-tab-bar mode for that trip
-(closest to "exact UI"), replacing today's drill-in header entirely? That's a materially
-bigger change than the Settle fix above, and it runs straight into the budget-schema gap
-below: TripSpend's bar's first tab is the Dashboard, and there's nothing to send that tab
-to on this side yet. Worth deciding once, rather than building a global tab shell now and
-discovering it needs Home to point somewhere.
+**Fully resolved.** The bigger question this section was really about — does opening a
+trip switch into TripSpend's persistent-tab-bar mode, closest to "exact UI"? — is decided
+and built: `TripDetailScreen.tsx` now renders the real Home/Expenses/Settle/Settings tab
+bar (`TripTabBar.tsx`, ported from `BottomNav.tsx`) plus the raised center FAB, replacing
+the old in-page Expenses/Log/Members/Settle tab row entirely. This didn't need a real
+nested React Navigation tab navigator — the existing screen already held its own `tab`
+union in local state before this pass; that state's four values changed to
+`'home'|'expenses'|'settle'|'settings'` and the UI around it changed from an in-page row
+to a fixed bottom bar, same mechanism, lower risk than introducing nested-navigator
+typing for what's still fundamentally one screen switching what it renders.
+
+Members and Activity Log moved out of that in-page row into their own routes
+(`MembersScreen.tsx`, `ActivityLogScreen.tsx`), reached from the new Settings tab's nav
+rows — this actually matches TripSpend's real structure *more* closely than the old flat
+tab row did: TripSpend's own member management isn't a bottom tab either (it's one level
+under Settings, via `TripDetails.tsx`), and Activity Log has no TripSpend equivalent at
+all so it was given the same kind of home. `colorFor`/`AVATAR_COLORS` extracted into
+`src/utils/avatarColor.ts` once `MembersScreen.tsx` needed the same device
+`TripDetailScreen.tsx` already used for expense-row avatars.
 
 What's in place: `src/navigation/RootNavigator.tsx`, a real `@react-navigation/native-stack`
 replacing `App.tsx`'s old hand-rolled `Screen` state union (its own comment said to swap it
 out "whenever screen count or transition needs... outgrow it" — this was that moment).
-Every route still maps 1:1 onto the old screen union; no screen's own prop contract changed
-beyond Settle losing its `onOpenSettlement` prop (it doesn't navigate anywhere now).
+`TripDetail`'s prop contract changed for the new shell (dropped `onAddParticipant`/
+`onOpenInvite`, now owned by the new `Members` route instead; added `onOpenMembers`/
+`onOpenActivityLog`). Two new stack routes, `Members` and `ActivityLog`, for the screens
+that moved out of the in-page tabs.
 
 ## The "budget" concept — decided, in progress
 
@@ -170,18 +184,25 @@ ran against a hand-calculated scenario (₹10,000 budget, 11-day trip, ₹3,000 
 two expenses) — every output field matched by hand, not just "ran without crashing":
 burn rate, days remaining, projected end balance, all exact.
 
-**Not done yet:** the actual `Dashboard.tsx`/`TripDetails.tsx` UI, and wiring
-`CreateTripScreen`/a trip-settings screen to actually call `create_trip`'s new params /
-`update_trip_details`. Schema and math are the foundation; the screens sit on top of
-them next.
+**UI, done.** `DashboardScreen.tsx` (Home tab) and `TripSettingsScreen.tsx` (Settings
+tab) are both built and wired to real data — see the mapping table below for what
+changed versus the original TripSpend screens. `CreateTripScreen` still isn't wired to
+`create_trip`'s budget/date params (a trip created there has no budget until someone
+visits the Settings tab and saves one) — deliberately deferred, not a blocker, since
+`total_budget`/dates are nullable and `DashboardScreen` already handles "no budget set"
+gracefully with a prompt pointing at Settings. TripSpend's own `SetupScreen.tsx` is a
+separate, larger port (38KB, more than trip creation alone) that this doc's mapping
+table already tracks as "Not ported" independently of this section.
 
 ## Screen-by-screen mapping
 
 | TripSpend file | Maps to (Expensio) | Status | Notes |
 |---|---|---|---|
-| `screens/Dashboard.tsx` | *(no current equivalent)* | Not started | Needs the budget schema decision above first |
-| `screens/TripDetails.tsx` | *(no current equivalent)* | Not started | Same budget-schema blocker; the Members/Categories nav rows at the bottom are unblocked and portable independently |
-| `screens/GroupMemberManager.tsx` | `AddParticipantScreen.tsx`, `TripDetailScreen.tsx`'s Members tab | **Partial** | "Add" slice ported (`AddParticipantScreen.tsx`); the Members tab now shows the real list with colored-initial avatars, matching the badge visual language elsewhere in this port. Inline rename, remove-with-settlement-check, restore-inactive-members still not built — bigger scope, `trip_balances` view already exists to support the settlement-check part whenever this is picked up |
+| `screens/Dashboard.tsx` | `DashboardScreen.tsx` (Home tab) | **Ported** | Dropped: the `TripSwitcher` section (`TripsListScreen` already covers multi-trip nav), the header's Settings gear icon (Settings is one tap away in the tab bar itself), the browser `Notification` API overspend alert (no RN equivalent; a real push would need a `notification_events` worker, which doesn't exist yet), and the "Full Analytics" CTA (no Analytics screen exists). `peopleCount` is a live `COUNT(*)` on `participants`, not a stored field, per the schema decision above |
+| `screens/TripDetails.tsx` | `TripSettingsScreen.tsx` (Settings tab) | **Ported, reshaped** | Single total-budget field instead of TripSpend's per-person-budget × fixed-headcount (matches `trips.total_budget` being a plain total and participant count being live, not fixed). No "lock past days" toggle — deliberately not ported, matching the schema decision above. The People & Categories nav-row section became Members/Activity Log/Recurring — Categories dropped (no management screen exists for it yet, nothing to point at), Invite moved to `MembersScreen.tsx` instead of duplicated here. Also gained rows TripSpend's `TripDetails.tsx` never had at all: the trip-action rows (archive/unarchive/delete/leave), which used to be `TripDetailScreen.tsx`'s hidden `Alert.alert` options menu — same RPC calls, now visible rows since this is a real settings screen rather than a three-dot menu |
+| `components/DatePicker.tsx` | `DatePicker.tsx` | **Ported, reshaped** | TripSpend's wraps a native HTML `<input type="date">` for a free platform picker UI — no RN equivalent from a plain component. A real native picker (`@react-native-community/datetimepicker`) would add a new native module this sandbox has no device to visually verify; used a validated `YYYY-MM-DD` text field instead, same data shape in and out, swappable later without touching any caller |
+| `screens/GroupMemberManager.tsx` | `AddParticipantScreen.tsx`, `MembersScreen.tsx` | **Partial** | "Add" slice ported (`AddParticipantScreen.tsx`); member list + colored-initial avatars ported to `MembersScreen.tsx` (moved out of `TripDetailScreen.tsx`'s old in-page Members tab once the tab bar shell needed that slot — see "Navigation shape" above). Inline rename, remove-with-settlement-check, restore-inactive-members still not built — bigger scope, `trip_balances` view already exists to support the settlement-check part whenever this is picked up |
+| *(no TripSpend equivalent — moved out of the old in-page tab row)* | `ActivityLogScreen.tsx` | **Ported** | This feature doesn't exist in TripSpend at all. Reachable from the Settings tab, next to Members, rather than given a bottom tab TripSpend's `BottomNav.tsx` doesn't have |
 | `screens/ExpenseList.tsx` | `TripDetailScreen.tsx`'s Expenses tab | **Ported** | Row card uses a colored-initial badge instead of TripSpend's fixed-category icon map (`Food`/`Travel`/`Stay`/`Misc` doesn't fit Expensio's free-text custom categories) — same device already used for participant avatars. Added `category` to the query, same as `ExpenseDetailScreen.tsx` before it — existed on the table, wasn't being read. TripSpend's filter bottom-sheet (category/person/date filters) not ported — no filter UI exists on the Expensio side yet at all, not just unstyled |
 | `screens/ExpenseDetail.tsx` | `ExpenseDetailScreen.tsx` | **Ported** | Dropped the `isLocked` banner (same budget-schema gap) and note/tags/receipts sections (no matching columns). Added `category`/`expense_date` to the query — both already existed in the schema and in `add_expense`'s RPC signature, just weren't being read before. Split display shows each participant's real `share_amount` rather than TripSpend's single equal-split figure. Delete confirmation is now a real `Modal`, replacing the native `Alert.alert()`. Also gained a Comments card (`add_comment` RPC) merged in from the parallel work stream noted at the top — not part of TripSpend's original screen, kept as its own card in the ported design language rather than dropped |
 | `screens/AddExpense.tsx` | `AddExpenseScreen.tsx` | **Ported** | Not a structural port — TripSpend's version is built around receipts/tags/an AI category suggester/budget presets, none of which have a backing RPC or schema column here. Kept every one of Expensio's actual fields (7 formal split types, custom categories) and all client-side validation exactly as they were; only the JSX changed |
@@ -192,7 +213,7 @@ them next.
 | `screens/Onboarding.tsx` | *(none — App.tsx signs in anonymously with no onboarding UI)* | Not started | |
 | `screens/Settings.tsx` | *(none)* | Not started | |
 | `screens/SetupScreen.tsx` | `CreateTripScreen.tsx` | Not ported | TripSpend's version (38KB) covers more than trip creation alone — check what before porting 1:1 |
-| `components/BottomNav.tsx` | *(the global tab shell — see "Navigation shape" above; still blocked on the Home/Dashboard decision)* | Blocked on decision | |
+| `components/BottomNav.tsx` | `TripTabBar.tsx` | **Ported** | Same 4 tabs (Home/Expenses/Settle/Settings) in the same order with the same raised center FAB between Expenses and Settle — see "Navigation shape" above |
 | `components/TripSwitcher.tsx` | *(none — `TripsListScreen.tsx` is the closest thing)* | Not started | Relevant to the same navigation-shape decision |
 | `components/AccountSwitchDialog.tsx` | *(none)* | Not started | |
 | `components/CustomSelect.tsx`, `DatePicker.tsx` | *(none yet — shared form components)* | Not started | Needed once `TripDetails`/`SetupScreen` are tackled |
@@ -246,34 +267,36 @@ them next.
   Expenses/Log/Members. See "Navigation shape" above for what's still open versus what
   this resolved.
 
+- Both open decisions from "Navigation shape" and "The budget concept" — build the
+  persistent tab bar, add the budget feature — resolved and built: `TripTabBar.tsx`
+  (Home/Expenses/Settle/Settings + FAB) now wraps `DashboardScreen.tsx`,
+  `TripDetailScreen.tsx`'s existing Expenses content, `SettlementView.tsx`, and the new
+  `TripSettingsScreen.tsx`. `MembersScreen.tsx`/`ActivityLogScreen.tsx` extracted out of
+  the old in-page tab row into routes reached from Settings.
+
 **Not verified:** actual rendered output. This sandbox has no device/simulator, so nothing
 above has been visually confirmed — only that real packages installed without conflict and
 the whole project compiles. Run `npx expo start` locally to confirm the Metro bundle
-actually builds and the ported screen looks right, especially the two gradient components
+actually builds and the ported screens look right, especially the two gradient components
 (masked-view interacting with Metro's bundler is the one piece a clean `tsc` run can't
-catch).
+catch), and the new tab bar's raised FAB positioning/safe-area behavior specifically —
+`env(safe-area-inset-bottom)` was a plain CSS property TripSpend's web build got for free;
+`TripTabBar.tsx` doesn't yet handle a device's bottom safe-area inset explicitly (worth
+checking on a real device, especially anything with a home indicator).
 
 ## Suggested order from here
 
-Every screen that currently exists and works in Expensio's mobile client is now ported —
-that closes out the original scope of this doc (port TripSpend's *existing* UI onto this
-app). What's left splits into two different kinds of work, not really an ordered list
-anymore:
-
-**Decisions, not code:**
-1. The navigation-shape decision above — `Settlement`/`Invite`/`Recurring` all exist as
-   flat stack routes today and would need moving if the persistent-tab-bar direction is
-   chosen.
-2. The budget-schema product decision — unblocks `Dashboard.tsx` / `TripDetails.tsx` /
-   the budget half of `Analytics.tsx`, none of which can be *ported* until Expensio
-   decides whether it wants that feature at all.
-
-**New screens Expensio doesn't have yet** (`Settings`, `CategoryManager`'s management UI,
-`Onboarding`, `SetupScreen`'s fuller flow, `TripSwitcher`/`BottomNav`,
-`AccountSwitchDialog`, `CustomSelect`/`DatePicker`, `NotificationCard`/
-`PeoplePickerSheet`/`PreSetupTripChoice`) — these aren't restyle jobs like everything
-above was. They're new features, and TripSpend's screens for them are a reasonable
-design reference once Expensio actually needs the feature, but building them now would
-be scope invented by this doc rather than scope this doc was tracking. Worth picking up
-in whatever order matches what Expensio's roadmap actually calls for next, not TripSpend's
-file sizes.
+The navigation shape and the budget feature — the two things that were genuinely blocking
+further "exact UI" work — are both resolved and built now. What's left is entirely **new
+screens Expensio doesn't have yet** (`CategoryManager`'s management UI, `Onboarding`,
+`SetupScreen`'s fuller flow wiring budget/dates into trip *creation* rather than only
+post-creation editing, `TripSwitcher`, `AccountSwitchDialog`, `CustomSelect`,
+`NotificationCard`/`PeoplePickerSheet`/`PreSetupTripChoice`) — these aren't restyle jobs
+like everything above was. They're new features, and TripSpend's screens for them are a
+reasonable design reference once Expensio actually needs the feature, but building them
+now would be scope invented by this doc rather than scope this doc was tracking. Worth
+picking up in whatever order matches what Expensio's roadmap actually calls for next, not
+TripSpend's file sizes. `CreateTripScreen` not accepting budget/dates at creation time
+(only via the Settings tab afterward) is the one loose end from this pass most likely to
+matter soon — worth an explicit decision on whether that's acceptable long-term or worth
+closing next.

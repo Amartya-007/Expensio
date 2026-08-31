@@ -231,23 +231,30 @@ or behaves right on a real phone.*
       both RPC signatures exactly); the scheduled-trigger side
       (`generate_due_recurring_expenses` actually firing on a schedule, not just existing
       as an RPC) not confirmed this session
-- [x] Leave trip UI (`TripDetailScreen.tsx`'s options menu, `leave_trip` RPC). The
-      "Settle" tab cosmetic inconsistency noted when this screen was first ported (styled
-      like the three real in-place tabs but actually navigated away) is fixed in a later
-      pass: it's a real local tab now, rendering `SettlementView.tsx` inline
-      (`SettlementScreen.tsx` deleted — see that entry above). The bigger navigation-shape
-      question (persistent global tab bar vs. current drill-in nav, see
-      `expensio-ui-port-plan.md`) is still an open product call, unaffected by this fix
+- [x] Leave trip UI — moved from `TripDetailScreen.tsx`'s old hidden options menu to a
+      visible row on `TripSettingsScreen.tsx` (the new Settings tab), same `leave_trip`
+      RPC. The "Settle" tab cosmetic inconsistency noted when this screen was first
+      ported (styled like the three real in-place tabs but actually navigated away) is
+      long fixed (real local tab, `SettlementView.tsx` inline). The bigger
+      navigation-shape question is resolved now too — see the tab-bar entry below
+- [x] Persistent tab bar (`TripTabBar.tsx`, ported from `BottomNav.tsx`) —
+      Home/Expenses/Settle/Settings + raised center FAB, replacing
+      `TripDetailScreen.tsx`'s old in-page Expenses/Log/Members/Settle tab row.
+      `DashboardScreen.tsx` (Home) and `TripSettingsScreen.tsx` (Settings, budget/dates
+      editor wired to `update_trip_details` + nav rows to Members/Activity Log/Recurring
+      + the archive/delete/leave rows moved out of the old options menu) are both new
+      this session. `MembersScreen.tsx`/`ActivityLogScreen.tsx` extracted out of the old
+      in-page tabs, reached from Settings. See `expensio-ui-port-plan.md` for the full
+      screen-by-screen mapping and what changed versus each TripSpend original
 - [~] TripSpend UI port — every screen that currently exists in the app is restyled with
-      the NativeWind design system (`AddParticipantScreen`, `ExpenseDetailScreen`,
-      `AddExpenseScreen`, `TripDetailScreen`, `SettlementView`, `InviteScreen`,
-      `PhoneVerificationScreen`, `RecurringScreen`). Both former open decisions are now
-      resolved (build the persistent tab bar; add budget tracking) — still `[~]` because
-      resolving them started real work that isn't finished: budget's schema/RPCs/math are
-      done (see `0006_trip_budget.sql`'s entry above) but `Dashboard.tsx`/`TripDetails.tsx`
-      themselves aren't built yet, and the persistent tab bar itself isn't built either.
-      See `expensio-ui-port-plan.md` for the full screen-by-screen mapping and current
-      status of each piece
+      the NativeWind design system, and the two decisions that were blocking further
+      "exact UI" work (persistent tab bar, budget tracking) are both resolved *and*
+      built now — see the tab-bar entry above. Still `[~]`, not `[x]`: TripSpend has
+      several screens Expensio has no equivalent of yet at all (Onboarding, Settings'
+      account-level concerns, CategoryManager's management UI, a fuller `SetupScreen`
+      that wires budget/dates into trip *creation* rather than only post-creation
+      editing) — see `expensio-ui-port-plan.md`'s "Suggested order from here" for the
+      current honest list
 - [x] Archive / unarchive / delete trip UI — options menu on TripDetailScreen (⋯), plus a
       "show archived trips" toggle on the trips list so archiving isn't a one-way trip.
       Caught a real bug building this: `rpc.ts`'s `callRpc` unconditionally added
