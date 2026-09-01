@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   ChevronRight,
   Clock,
-  IndianRupee,
   LogOut,
   Repeat,
   Trash2,
@@ -13,6 +12,7 @@ import {
 } from 'lucide-react-native';
 import { db } from '../powersync/db';
 import { callRpc } from '../rpc';
+import { currencyIcon } from '../utils/currencyIcon';
 import PrimaryButton from '../components/PrimaryButton';
 import DatePicker from '../components/DatePicker';
 
@@ -114,6 +114,7 @@ export default function TripSettingsScreen({
   const budgetNum = Number(budget);
   const budgetError = budget !== '' && (!Number.isFinite(budgetNum) || budgetNum <= 0) ? 'Enter a budget greater than 0.' : '';
   const dateError = endDate < startDate ? "End date can't be before the start date." : '';
+  const BudgetIcon = currencyIcon(trip?.currency);
 
   async function handleSave() {
     if (budgetError || dateError) {
@@ -236,7 +237,7 @@ export default function TripSettingsScreen({
               Total budget ({trip?.currency ?? '\u2026'})
             </Text>
             <View className={`flex-row items-center gap-2 input-field ${budgetFocused ? 'input-field-focused' : ''} ${budgetError ? 'border-red-300' : ''}`}>
-              <IndianRupee size={16} color="#94a3b8" />
+              <BudgetIcon size={16} color="#94a3b8" />
               <TextInput
                 className="flex-1 text-2xl font-black text-slate-900"
                 value={budget}
