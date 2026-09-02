@@ -41,6 +41,16 @@ endpoint instead: `https://<project-ref>.supabase.co/auth/v1/.well-known/jwks.js
 one Supabase session token authenticate both `supabase-js` calls and the PowerSync connection —
 matches `expensio-architecture.md` §6.
 
+**Hit during testing (2026-09-02):** every `/sync/stream` connection failed with 401 and
+`PSYNC_S2105 Unexpected "aud" claim value: "authenticated"` — see
+`log/powersync-logs-*.csv`. Supabase's session tokens carry `"aud": "authenticated"` (its
+standard audience) unconditionally; the PowerSync instance's Credentials config was only
+allowing its own instance URL as a valid audience, so it rejected every token before any
+stream could sync — participants, categories, expenses, all of it. Fix: on the JWKS/Supabase
+Auth config under **Credentials**, add `authenticated` to the allowed **Audience** values
+(alongside or instead of the instance URL). Confirm the fix by re-running the app and
+checking that new `/sync/stream` entries in the PowerSync log come back `200`, not `401`.
+
 ## 4. Define what syncs
 
 **Correction, found the hard way:** an earlier version of this doc claimed Sync Rules and
@@ -53,18 +63,19 @@ with a single `query:` per stream, JOINs allowed directly in that query, and eac
 syncs rows from one table. What was one Sync Rules bucket covering 4 tables became 4
 separate streams.
 
-Paste in `supabase/powersync/sync-streams.yaml` from this repo — 5 streams (`user_trips`,
+Paste in `supabase/powersync/sync-streams.yaml` from this repo — 6 streams (`user_trips`,
 `user_trip_participants`, `user_trip_expenses`, `user_trip_activity_log`,
-`user_expense_splits`), each scoped to trips you're an active member of via a JOIN against
+`user_expense_splits`, `user_trip_custom_categories`), each scoped to trips you're an active member of via a JOIN against
 `trip_members`, each with `auto_subscribe: true` so it syncs automatically on connect — the
 client doesn't call any explicit subscription API, so without `auto_subscribe: true` nothing
 would sync at all. Deploy it.
 
 If `auth.user_id()` doesn't resolve (some instance versions may still expect
 `request.user_id()` — check whatever the dashboard's own inline docs/examples show for your
-specific instance before assuming one or the other), swap it in all 5 queries. Either way,
+specific instance before assuming one or the other), swap it in all 6 queries. Either way,
 this still depends on step 3's Supabase Auth / JWKS setup being done — that's what lets the
 function resolve to the signed-in user's id.
+
 
 ## 5. Install and configure the client
 

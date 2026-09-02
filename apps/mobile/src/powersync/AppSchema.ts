@@ -1,13 +1,15 @@
 import { Schema, Table, column } from '@powersync/react-native';
 
 // Real Expensio tables, matching supabase/migrations/0002_core_schema.sql and the
-// bucket definitions in supabase/powersync/sync-rules.yaml. PowerSync SQLite columns
+// stream definitions in supabase/powersync/sync-streams.yaml. PowerSync SQLite columns
 // are text/real/integer only — uuid/timestamptz map to text, numeric to real, jsonb to
-// text (parsed with JSON.parse where read). Scope matches the sync rules: trips,
-// participants, expenses, expense_splits, trip_activity_log. Everything else
-// (custom_categories, trip_invites, comments, attachments, ledger_entries,
-// expense_templates) isn't synced yet — see sync-rules.yaml's header for why, and add a
-// Table here to match whenever a bucket is added for it.
+// text (parsed with JSON.parse where read). Scope matches the sync streams: trips,
+// participants, expenses, expense_splits, trip_activity_log, custom_categories
+// (user_trip_custom_categories — added after AddExpenseScreen's category picker shipped
+// without it, which meant new categories saved fine server-side via add_custom_category
+// but never replicated back down, so they never appeared in the picker). Everything else
+// (trip_invites, comments, attachments, ledger_entries, expense_templates) still isn't
+// synced yet — add a stream + Table here together whenever one of those needs it.
 export const AppSchema = new Schema({
   trips: new Table({
     name: column.text,

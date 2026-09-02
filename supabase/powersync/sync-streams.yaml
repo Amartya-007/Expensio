@@ -35,4 +35,11 @@ streams:
       WHERE tm.user_id = auth.user_id() AND tm.status = 'active'
     auto_subscribe: true
 
+  user_trip_custom_categories:
+    query: |
+      SELECT custom_categories.* FROM custom_categories
+      JOIN trip_members tm ON tm.trip_id = custom_categories.trip_id
+      WHERE tm.user_id = auth.user_id() AND tm.status = 'active'
+    auto_subscribe: true
+
 config: {edition: 3}
