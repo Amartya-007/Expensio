@@ -131,8 +131,15 @@ export default function DashboardScreen({ tripId, onBack }: { tripId: string; on
             colors={['#1e40af', '#2563eb', '#3b82f6']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            className="rounded-3xl p-5 shadow-xl shadow-blue-500/20"
-            style={{ elevation: 6 }}
+            style={{
+              borderRadius: 24,
+              padding: 20,
+              shadowColor: '#3b82f6',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.25,
+              shadowRadius: 20,
+              elevation: 6,
+            }}
           >
             <View className="flex-row items-center justify-between mb-4">
               <Text className="text-blue-100 text-xs font-bold uppercase tracking-wider">Current Trip</Text>
@@ -234,8 +241,15 @@ export default function DashboardScreen({ tripId, onBack }: { tripId: string; on
             colors={['#0f172a', '#1e293b']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            className="p-5 rounded-3xl shadow-lg shadow-slate-900/10"
-            style={{ elevation: 5 }}
+            style={{
+              borderRadius: 24,
+              padding: 20,
+              shadowColor: '#0f172a',
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.15,
+              shadowRadius: 16,
+              elevation: 5,
+            }}
           >
             <Text className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-3">
               Today's Spending Guide
