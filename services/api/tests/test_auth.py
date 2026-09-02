@@ -55,6 +55,35 @@ class AuthTests(unittest.TestCase):
         self.assertEqual(claims.role, "anon")
         self.assertEqual(claims.user_id, "10000000-0000-0000-0000-000000000002")
 
+    def test_verifier_rejects_empty_token(self) -> None:
+        verifier = SupabaseJwtVerifier(decode_token=lambda token: {})
+        with self.assertRaisesRegex(AuthError, "access token is required"):
+            verifier.verify("")
+        with self.assertRaisesRegex(AuthError, "access token is required"):
+            verifier.verify("   ")
+
+    def test_verifier_rejects_non_uuid_subject(self) -> None:
+        verifier = SupabaseJwtVerifier(
+            decode_token=lambda token: {
+                "sub": "not-a-uuid-string",
+                "role": "authenticated",
+                "aud": "authenticated",
+            }
+        )
+        with self.assertRaisesRegex(AuthError, "valid UUID"):
+            verifier.verify("token")
+
+    def test_verifier_rejects_missing_jwks_url_when_no_decoder_injected(self) -> None:
+        verifier = SupabaseJwtVerifier(jwks_url="")
+        with self.assertRaisesRegex(AuthError, "SUPABASE_JWKS_URL is not configured"):
+            verifier.verify("token")
+
+    def test_verifier_rejects_non_mapping_payload(self) -> None:
+        verifier = SupabaseJwtVerifier(decode_token=lambda token: "not-a-dict")  # type: ignore[return-value]
+        with self.assertRaisesRegex(AuthError, "invalid Supabase access token payload"):
+            verifier.verify("token")
+
+
 
 def _make_keypair_and_jwks(kid: str = "test-key-1"):
     """A real EC (P-256/ES256) keypair plus the JWKS document Supabase would publish for

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { FlatList, Pressable, ScrollView, Text, View } from 'react-native';
 import { ArrowLeft } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { db } from '../powersync/db';
 import GradientText from '../components/GradientText';
 import SettlementView from '../components/SettlementView';
@@ -129,26 +130,28 @@ export default function TripDetailScreen({
       .map((s) => `${nameFor(s.participant_id)} owes ${currency} ${s.share_amount.toFixed(2)}`)
       .join(' \u00b7 ');
 
+  const insets = useSafeAreaInsets();
+
   return (
     <View className="flex-1 bg-white">
       {activeTab === 'home' && <DashboardScreen tripId={tripId} onBack={onBack} />}
 
       {activeTab === 'expenses' && (
         <View className="flex-1">
-          <View className="page-shell pb-0">
-            <View className="flex-row items-center gap-3 page-header">
-              <Pressable onPress={onBack} className="p-2 -ml-1 rounded-xl active:bg-slate-100">
-                <ArrowLeft size={20} color="#64748b" />
+          <View style={{ paddingTop: Math.max(insets.top, 16) }} className="px-4 pb-2 bg-white border-b border-slate-100">
+            <View className="flex-row items-center gap-3 py-1">
+              <Pressable onPress={onBack} className="p-2 -ml-2 rounded-xl active:bg-slate-100">
+                <ArrowLeft size={20} color="#1e293b" />
               </Pressable>
               <View className="flex-1">
-                <GradientText className="page-title" numberOfLines={1}>
+                <GradientText className="text-2xl font-black" numberOfLines={1}>
                   {trip?.name ?? '\u2026'}
                 </GradientText>
-                <Text className="page-subtitle">Expenses</Text>
+                <Text className="text-xs font-semibold text-slate-500">Expenses</Text>
               </View>
               {!!trip?.is_archived && (
-                <View className="badge-warning">
-                  <Text className="text-xs font-bold text-amber-700">Archived</Text>
+                <View className="bg-amber-100 border border-amber-200 px-3 py-1 rounded-full">
+                  <Text className="text-xs font-bold text-amber-800">Archived</Text>
                 </View>
               )}
             </View>
@@ -156,14 +159,23 @@ export default function TripDetailScreen({
           <FlatList
             data={expenses}
             keyExtractor={(item) => item.id}
-            contentContainerClassName="px-4 pb-32 pt-3"
-            ListEmptyComponent={<Text className="text-slate-400 text-center mt-16">No expenses yet.</Text>}
+            contentContainerStyle={{
+              paddingHorizontal: 16,
+              paddingTop: 12,
+              paddingBottom: Math.max(insets.bottom, 16) + 90,
+            }}
+            ListEmptyComponent={
+              <View className="items-center py-16">
+                <Text className="text-sm font-semibold text-slate-400 text-center">No expenses yet.</Text>
+                <Text className="text-xs text-slate-400 text-center mt-1">Tap the + button below to add your first expense.</Text>
+              </View>
+            }
             renderItem={({ item }) => {
               const color = colorFor(item.paid_by);
               return (
                 <Pressable
                   onPress={() => onOpenExpense(item.id)}
-                  className="card-elevated p-4 flex-row items-center gap-3 mb-3"
+                  className="bg-white rounded-2xl border border-slate-200/80 p-4 flex-row items-center gap-3 mb-3 shadow-sm active:bg-slate-50"
                 >
                   <View className={`w-12 h-12 rounded-2xl items-center justify-center ${color.bg} border ${color.border}`}>
                     <Text className={`text-base font-black ${color.text}`}>{item.description[0]?.toUpperCase() ?? '?'}</Text>
@@ -184,7 +196,7 @@ export default function TripDetailScreen({
                     <Text className="text-xs text-slate-400 mt-0.5" numberOfLines={1}>
                       {splitSummary(item.id, item.currency)}
                     </Text>
-                    <Text className="text-[11px] text-slate-300 mt-1">{formatTimestamp(item.created_at)}</Text>
+                    <Text className="text-[11px] text-slate-400 mt-1">{formatTimestamp(item.created_at)}</Text>
                   </View>
                 </Pressable>
               );
@@ -195,20 +207,26 @@ export default function TripDetailScreen({
 
       {activeTab === 'settle' && (
         <View className="flex-1">
-          <View className="page-shell pb-0">
-            <View className="flex-row items-center gap-3 page-header">
-              <Pressable onPress={onBack} className="p-2 -ml-1 rounded-xl active:bg-slate-100">
-                <ArrowLeft size={20} color="#64748b" />
+          <View style={{ paddingTop: Math.max(insets.top, 16) }} className="px-4 pb-2 bg-white border-b border-slate-100">
+            <View className="flex-row items-center gap-3 py-1">
+              <Pressable onPress={onBack} className="p-2 -ml-2 rounded-xl active:bg-slate-100">
+                <ArrowLeft size={20} color="#1e293b" />
               </Pressable>
               <View>
-                <GradientText className="page-title" numberOfLines={1}>
+                <GradientText className="text-2xl font-black" numberOfLines={1}>
                   {trip?.name ?? '\u2026'}
                 </GradientText>
-                <Text className="page-subtitle">Settle Up</Text>
+                <Text className="text-xs font-semibold text-slate-500">Settle Up & Balances</Text>
               </View>
             </View>
           </View>
-          <ScrollView contentContainerClassName="px-4 pb-32 pt-3">
+          <ScrollView
+            contentContainerStyle={{
+              paddingHorizontal: 16,
+              paddingTop: 12,
+              paddingBottom: Math.max(insets.bottom, 16) + 90,
+            }}
+          >
             <SettlementView tripId={tripId} />
           </ScrollView>
         </View>

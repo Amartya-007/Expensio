@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { Pressable, SafeAreaView, Text, TextInput, View } from 'react-native';
+import { Pressable, Text, TextInput, View } from 'react-native';
 import { ArrowLeft, UserCircle2 } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { callRpc } from '../rpc';
+import { formatError } from '../utils/errors';
 import PrimaryButton from '../components/PrimaryButton';
 import GradientText from '../components/GradientText';
 
@@ -27,6 +29,7 @@ export default function AddParticipantScreen({
   onDone: () => void;
   onCancel: () => void;
 }) {
+  const insets = useSafeAreaInsets();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [nameFocused, setNameFocused] = useState(false);
@@ -39,30 +42,47 @@ export default function AddParticipantScreen({
     setBusy(true);
     setError(null);
     try {
-      await callRpc('add_placeholder_participant', {
+      const result = await callRpc('add_placeholder_participant', {
         p_trip_id: tripId,
         p_display_name: name.trim(),
         p_phone: phone.trim() || null,
       });
-      onDone();
+      if (result.status === 'ok') {
+        // RPC ran immediately — the new participant will sync back down via
+        // PowerSync within seconds and appear in MembersScreen's db.watch query.
+        onDone();
+      } else {
+        // Queued for later (offline). The participant won't appear on the
+        // members list until the connection returns and the RPC actually runs.
+        setError(
+          'You appear to be offline. The member will be added automatically when you reconnect.'
+        );
+      }
     } catch (err) {
-      setError(String(err));
+      setError(formatError(err));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-white">
-      <View className="page-shell space-y-6">
-        {/* Header — matches TripDetails.tsx's back-arrow + page-title pattern */}
-        <View className="flex-row items-center gap-3 page-header">
-          <Pressable onPress={onCancel} disabled={busy} className="p-2 -ml-1 rounded-xl active:bg-slate-100">
-            <ArrowLeft size={20} color="#64748b" />
+    <View
+      style={{
+        paddingTop: Math.max(insets.top, 16),
+        paddingBottom: Math.max(insets.bottom, 16),
+        paddingHorizontal: 16,
+      }}
+      className="flex-1 bg-white justify-between"
+    >
+      <View className="space-y-5">
+        {/* Header */}
+        <View className="flex-row items-center gap-3 mb-2">
+          <Pressable onPress={onCancel} disabled={busy} className="p-2 -ml-2 rounded-xl active:bg-slate-100">
+            <ArrowLeft size={20} color="#1e293b" />
           </Pressable>
           <View>
-            <GradientText className="page-title">Add a person</GradientText>
-            <Text className="page-subtitle">For splitting expenses together</Text>
+            <GradientText className="text-2xl font-black">Add a Person</GradientText>
+            <Text className="text-xs font-semibold text-slate-500">For splitting expenses together</Text>
           </View>
         </View>
 
@@ -115,28 +135,30 @@ export default function AddParticipantScreen({
           </View>
 
           {error && (
-            <View className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3">
-              <Text className="text-sm text-red-700 font-medium">⚠ {error}</Text>
+            <View className={`rounded-2xl px-4 py-3 ${error.includes('offline') ? 'bg-amber-50 border border-amber-200' : 'bg-red-50 border border-red-200'}`}>
+              <Text className={`text-sm font-medium ${error.includes('offline') ? 'text-amber-800' : 'text-red-700'}`}>
+                {error.includes('offline') ? '📶 ' : '⚠ '}{error}
+              </Text>
             </View>
           )}
         </View>
 
         {/* Actions */}
-        <View className="flex-row gap-3">
+        <View className="flex-row gap-3 mt-auto pt-4">
           <Pressable
             onPress={onCancel}
             disabled={busy}
-            className="flex-1 py-3.5 rounded-2xl items-center justify-center active:bg-slate-100"
+            className="flex-1 py-3.5 rounded-2xl items-center justify-center border border-slate-300 active:bg-slate-100"
           >
-            <Text className="text-slate-600 font-semibold text-sm">Cancel</Text>
+            <Text className="text-slate-700 font-bold text-sm">Cancel</Text>
           </Pressable>
           <View className="flex-1">
             <PrimaryButton onPress={submit} disabled={!name.trim()} loading={busy} className="w-full">
-              Add
+              Add Member
             </PrimaryButton>
           </View>
         </View>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }

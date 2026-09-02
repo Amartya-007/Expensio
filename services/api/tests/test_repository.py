@@ -33,6 +33,36 @@ class PoolCreationRaceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(create_calls, 1)
         self.assertTrue(all(result is fake_pool for result in results))
 
+    async def test_missing_dsn_raises_runtime_error(self) -> None:
+        repo = PostgresBalanceRepository(dsn="")
+        with self.assertRaisesRegex(RuntimeError, "DATABASE_URL is not configured"):
+            await repo._get_pool()
+
+    async def test_connection_error_raises_runtime_error(self) -> None:
+        async def failing_create_pool(*args, **kwargs):
+            raise OSError("connection refused")
+
+        repo = PostgresBalanceRepository(dsn="postgres://fake/dsn")
+        with patch("asyncpg.create_pool", side_effect=failing_create_pool):
+            with self.assertRaisesRegex(RuntimeError, "failed to connect to database"):
+                await repo._get_pool()
+
+    async def test_close_resets_pool(self) -> None:
+        class FakePool:
+            def __init__(self) -> None:
+                self.closed = False
+
+            async def close(self) -> None:
+                self.closed = True
+
+        fake_pool = FakePool()
+        repo = PostgresBalanceRepository(dsn="postgres://fake/dsn")
+        repo._pool = fake_pool
+        await repo.close()
+        self.assertTrue(fake_pool.closed)
+        self.assertIsNone(repo._pool)
+
 
 if __name__ == "__main__":
     unittest.main()
+

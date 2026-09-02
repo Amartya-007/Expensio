@@ -1,5 +1,6 @@
 import { Pressable, Text, View } from 'react-native';
 import { ArrowLeftRight, Home, List, Plus, Settings } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export type TripTab = 'home' | 'expenses' | 'settle' | 'settings';
 
@@ -10,12 +11,6 @@ const NAV_ITEMS: Array<{ key: TripTab; label: string; Icon: typeof Home }> = [
   { key: 'settings', label: 'Settings', Icon: Settings },
 ];
 
-// Ported from tripspend/src/components/BottomNav.tsx -- same 4 tabs in the same order
-// with the same raised center FAB between Expenses and Settle. `fixed bottom-0` +
-// `env(safe-area-inset-bottom)` (web/CSS) becomes `absolute` positioning from the parent
-// plus RN's own SafeAreaView/insets handling one level up in the navigation shell; the
-// active-tab underline dot and hover states have no RN equivalent and are dropped, same
-// as everywhere else in this port (see global.css's header comment).
 export default function TripTabBar({
   active,
   onChange,
@@ -25,18 +20,28 @@ export default function TripTabBar({
   onChange: (tab: TripTab) => void;
   onAddExpense: () => void;
 }) {
+  const insets = useSafeAreaInsets();
+  const bottomPadding = Math.max(insets.bottom, 10);
+
   return (
-    <View className="absolute bottom-0 left-0 right-0 bg-white/95 border-t border-slate-200 shadow-xl">
-      <View className="flex-row items-center justify-around px-2 h-16">
+    <View
+      style={{ paddingBottom: bottomPadding }}
+      className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-200/80 shadow-2xl z-40"
+    >
+      <View className="flex-row items-center justify-around px-3 h-16">
         <NavItem item={NAV_ITEMS[0]} active={active === NAV_ITEMS[0].key} onPress={() => onChange(NAV_ITEMS[0].key)} />
         <NavItem item={NAV_ITEMS[1]} active={active === NAV_ITEMS[1].key} onPress={() => onChange(NAV_ITEMS[1].key)} />
 
-        <Pressable
-          onPress={onAddExpense}
-          className="w-14 h-14 bg-blue-600 rounded-full shadow-xl items-center justify-center border-4 border-white -mt-4 active:scale-95"
-        >
-          <Plus size={22} color="#fff" strokeWidth={2.5} />
-        </Pressable>
+        {/* Center Add Expense Action Button */}
+        <View className="items-center justify-center -mt-6">
+          <Pressable
+            onPress={onAddExpense}
+            className="w-14 h-14 bg-blue-600 rounded-full shadow-lg shadow-blue-500/40 items-center justify-center border-4 border-white active:scale-95"
+            style={{ elevation: 8 }}
+          >
+            <Plus size={26} color="#ffffff" strokeWidth={2.5} />
+          </Pressable>
+        </View>
 
         <NavItem item={NAV_ITEMS[2]} active={active === NAV_ITEMS[2].key} onPress={() => onChange(NAV_ITEMS[2].key)} />
         <NavItem item={NAV_ITEMS[3]} active={active === NAV_ITEMS[3].key} onPress={() => onChange(NAV_ITEMS[3].key)} />
@@ -56,9 +61,11 @@ function NavItem({
 }) {
   const color = active ? '#2563eb' : '#64748b';
   return (
-    <Pressable onPress={onPress} className="items-center justify-center gap-1 rounded-xl py-2 px-3">
-      <item.Icon size={20} color={color} />
-      <Text className={`text-[9px] font-bold uppercase tracking-wide ${active ? 'text-blue-600' : 'text-slate-500'}`}>
+    <Pressable onPress={onPress} className="items-center justify-center gap-1 py-1.5 px-3 rounded-2xl active:bg-slate-50">
+      <View className={`p-1.5 rounded-xl ${active ? 'bg-blue-50' : 'bg-transparent'}`}>
+        <item.Icon size={20} color={color} strokeWidth={active ? 2.5 : 2} />
+      </View>
+      <Text className={`text-[10px] font-bold tracking-tight ${active ? 'text-blue-600 font-black' : 'text-slate-500'}`}>
         {item.label}
       </Text>
     </Pressable>

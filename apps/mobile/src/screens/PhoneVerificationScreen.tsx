@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { ArrowLeft, MessageSquareText, ShieldCheck } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../supabaseClient';
 import { callRpc } from '../rpc';
+import { formatError } from '../utils/errors';
 import PrimaryButton from '../components/PrimaryButton';
 import GradientText from '../components/GradientText';
 
@@ -25,6 +27,7 @@ export default function PhoneVerificationScreen({
   onDone: () => void;
   onCancel: () => void;
 }) {
+  const insets = useSafeAreaInsets();
   const [phone, setPhone] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [otp, setOtp] = useState('');
@@ -59,7 +62,7 @@ export default function PhoneVerificationScreen({
       setStep('otp');
       setCooldown(60);
     } catch (err) {
-      setError(String(err));
+      setError(formatError(err));
     } finally {
       setBusy(false);
     }
@@ -76,7 +79,7 @@ export default function PhoneVerificationScreen({
       const { error: verifyError } = await supabase.auth.verifyOtp({
         phone: canonicalPhone,
         token: otp,
-        type: 'phone_change',
+        type: 'sms',
       });
       if (verifyError) throw verifyError;
 
@@ -96,7 +99,7 @@ export default function PhoneVerificationScreen({
       }
       onDone();
     } catch (err) {
-      setError(String(err));
+      setError(formatError(err));
     } finally {
       setBusy(false);
     }
@@ -104,14 +107,23 @@ export default function PhoneVerificationScreen({
 
   return (
     <KeyboardAvoidingView className="flex-1 bg-white" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerClassName="page-shell space-y-6" keyboardShouldPersistTaps="handled">
-        <View className="flex-row items-center gap-3 page-header">
-          <Pressable onPress={onCancel} disabled={busy} className="p-2 -ml-1 rounded-xl active:bg-slate-100">
-            <ArrowLeft size={20} color="#64748b" />
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{
+          paddingTop: Math.max(insets.top, 16),
+          paddingBottom: Math.max(insets.bottom, 16) + 32,
+          paddingHorizontal: 16,
+        }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View className="flex-row items-center gap-3 mb-5">
+          <Pressable onPress={onCancel} disabled={busy} className="p-2 -ml-2 rounded-xl active:bg-slate-100">
+            <ArrowLeft size={20} color="#1e293b" />
           </Pressable>
           <View className="flex-1">
-            <GradientText className="page-title">Verify your account</GradientText>
-            <Text className="page-subtitle">Required before you can invite someone or join another trip</Text>
+            <GradientText className="text-2xl font-black">Verify Account</GradientText>
+            <Text className="text-xs font-semibold text-slate-500">Required to collaborate and join group trips</Text>
           </View>
         </View>
 

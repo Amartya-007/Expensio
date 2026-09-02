@@ -1,8 +1,8 @@
 import './global.css';
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
 import NetInfo from '@react-native-community/netinfo';
@@ -16,6 +16,7 @@ import {
 import { supabase } from './src/supabaseClient';
 import { db, connectPowerSync } from './src/powersync/db';
 import { flushPendingActions } from './src/rpc';
+import { formatError } from './src/utils/errors';
 import RootNavigator from './src/navigation/RootNavigator';
 
 export default function App() {
@@ -49,7 +50,7 @@ export default function App() {
         setReady(true);
         setStatus('connected');
       } catch (err) {
-        if (!cancelled) setError(String(err));
+        if (!cancelled) setError(formatError(err));
       }
     }
 
@@ -71,35 +72,27 @@ export default function App() {
     return unsubscribe;
   }, [ready]);
 
-  if (!ready || !fontsLoaded) {
-    return (
-      <SafeAreaView style={styles.centered}>
-        <Text style={styles.status}>{fontsLoaded ? status : 'loading…'}</Text>
-        {error && <Text style={styles.error}>{error}</Text>}
-      </SafeAreaView>
-    );
-  }
-
-  // GestureHandlerRootView: required at the app root by react-native-gesture-handler,
-  // a peer dependency of @react-navigation/native-stack. SafeAreaProvider: what
-  // react-native-safe-area-context (also a navigation peer dependency) expects wrapping
-  // the app, replacing the plain react-native SafeAreaView the loading state above still
-  // uses (that one doesn't need the provider, so left as-is).
+  // Always render the full provider tree — NavigationContainer must wrap everything
+  // because NativeWind's react-native-css-interop globally patches RN components and
+  // its renderComponent accesses NavigationStateContext. Rendering any NativeWind-patched
+  // component (View, Text, SafeAreaView, etc.) OUTSIDE NavigationContainer causes the
+  // "Couldn't find a navigation context" crash.
   return (
-    <GestureHandlerRootView style={styles.flex}>
-      <SafeAreaProvider>
+    <SafeAreaProvider>
+      <GestureHandlerRootView style={styles.flex}>
         <StatusBar style="auto" />
         <NavigationContainer>
-          <RootNavigator />
+          <RootNavigator
+            ready={ready && fontsLoaded}
+            status={fontsLoaded ? status : 'loading…'}
+            error={error}
+          />
         </NavigationContainer>
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+      </GestureHandlerRootView>
+    </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: '#fff' },
-  centered: { flex: 1, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
-  status: { color: '#666' },
-  error: { color: '#b00020', marginTop: 8, paddingHorizontal: 20, textAlign: 'center' },
 });

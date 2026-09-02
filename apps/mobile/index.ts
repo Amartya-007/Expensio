@@ -2,6 +2,7 @@
 // — must be imported before anything that uses PowerSync. See
 // docs/architecture/expensio-react-native-setup.md.
 import '@azure/core-asynciterator-polyfill';
+import './src/utils/uuid';
 
 import { registerRootComponent } from 'expo';
 

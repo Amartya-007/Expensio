@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { ArrowLeft, Repeat, X } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { db } from '../powersync/db';
 import { callRpc } from '../rpc';
+import { formatError } from '../utils/errors';
 import PrimaryButton from '../components/PrimaryButton';
 import GradientText from '../components/GradientText';
 import Chip from '../components/Chip';
@@ -18,6 +20,7 @@ const RULES = ['weekly', 'monthly', 'yearly'] as const;
 // changed, plus the paid-by/repeats selectors now use the same shared Chip component
 // AddExpenseScreen.tsx uses, extracted there once it was needed in a second place.
 export default function RecurringScreen({ tripId, currency, onBack }: { tripId: string; currency: string; onBack: () => void }) {
+  const insets = useSafeAreaInsets();
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [description, setDescription] = useState('');
@@ -66,7 +69,7 @@ export default function RecurringScreen({ tripId, currency, onBack }: { tripId: 
       setDescription('');
       setAmount('');
     } catch (err) {
-      setError(String(err));
+      setError(formatError(err));
     } finally {
       setBusy(false);
     }
@@ -77,19 +80,27 @@ export default function RecurringScreen({ tripId, currency, onBack }: { tripId: 
     try {
       await callRpc('delete_expense_template', { p_template_id: id }, { idempotent: false });
     } catch (err) {
-      setError(String(err));
+      setError(formatError(err));
     }
   }
 
   return (
-    <ScrollView className="flex-1 bg-white" contentContainerClassName="page-shell space-y-6">
-      <View className="flex-row items-center gap-3 page-header">
-        <Pressable onPress={onBack} disabled={busy} className="p-2 -ml-1 rounded-xl active:bg-slate-100">
-          <ArrowLeft size={20} color="#64748b" />
+    <ScrollView
+      className="flex-1 bg-white"
+      contentContainerStyle={{
+        paddingTop: Math.max(insets.top, 16),
+        paddingBottom: Math.max(insets.bottom, 16) + 32,
+        paddingHorizontal: 16,
+      }}
+      showsVerticalScrollIndicator={false}
+    >
+      <View className="flex-row items-center gap-3 mb-5">
+        <Pressable onPress={onBack} disabled={busy} className="p-2 -ml-2 rounded-xl active:bg-slate-100">
+          <ArrowLeft size={20} color="#1e293b" />
         </Pressable>
         <View>
-          <GradientText className="page-title">Recurring expenses</GradientText>
-          <Text className="page-subtitle">Templates use the same split and ledger rules as any expense</Text>
+          <GradientText className="text-2xl font-black">Recurring Expenses</GradientText>
+          <Text className="text-xs font-semibold text-slate-500">Auto-repeating expenses and templates</Text>
         </View>
       </View>
 

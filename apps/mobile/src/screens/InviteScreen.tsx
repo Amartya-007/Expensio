@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Share, Text, TextInput, View } from 'react-native';
 import { ArrowLeft, Share2, ShieldAlert, Ticket, UserPlus, X } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { callRpc } from '../rpc';
 import { db } from '../powersync/db';
+import { formatError } from '../utils/errors';
 import PrimaryButton from '../components/PrimaryButton';
 import GradientText from '../components/GradientText';
 
@@ -28,6 +30,7 @@ export default function InviteScreen({
   onJoined: (tripId: string) => void;
   onDone: () => void;
 }) {
+  const insets = useSafeAreaInsets();
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [joinCode, setJoinCode] = useState('');
   const [busy, setBusy] = useState<'generate' | 'join' | null>(null);
@@ -69,7 +72,7 @@ export default function InviteScreen({
         onRequireVerification();
         return;
       }
-      setError(String(err));
+      setError(formatError(err));
     } finally {
       setBusy(null);
     }
@@ -104,7 +107,7 @@ export default function InviteScreen({
         onRequireVerification();
         return;
       }
-      setError(String(err));
+      setError(formatError(err));
     } finally {
       setBusy(null);
     }
@@ -117,21 +120,29 @@ export default function InviteScreen({
       await callRpc('revoke_invite', { p_invite_id: inviteId }, { idempotent: false });
       setInviteCode(null);
     } catch (err) {
-      setError(String(err));
+      setError(formatError(err));
     } finally {
       setBusy(null);
     }
   }
 
   return (
-    <ScrollView className="flex-1 bg-white" contentContainerClassName="page-shell space-y-6">
-      <View className="flex-row items-center gap-3 page-header">
-        <Pressable onPress={onDone} disabled={busy !== null} className="p-2 -ml-1 rounded-xl active:bg-slate-100">
-          <ArrowLeft size={20} color="#64748b" />
+    <ScrollView
+      className="flex-1 bg-white"
+      contentContainerStyle={{
+        paddingTop: Math.max(insets.top, 16),
+        paddingBottom: Math.max(insets.bottom, 16) + 32,
+        paddingHorizontal: 16,
+      }}
+      showsVerticalScrollIndicator={false}
+    >
+      <View className="flex-row items-center gap-3 mb-5">
+        <Pressable onPress={onDone} disabled={busy !== null} className="p-2 -ml-2 rounded-xl active:bg-slate-100">
+          <ArrowLeft size={20} color="#1e293b" />
         </Pressable>
         <View>
-          <GradientText className="page-title">Invite or join</GradientText>
-          <Text className="page-subtitle">Share a one-time code with a verified account</Text>
+          <GradientText className="text-2xl font-black">Invite or Join</GradientText>
+          <Text className="text-xs font-semibold text-slate-500">Share a one-time code with a verified account</Text>
         </View>
       </View>
 

@@ -38,10 +38,18 @@ def build_settlement_plan(balances: Iterable[Balance]) -> list[Settlement]:
 
     grouped: dict[str, dict[str, Decimal]] = {}
     for balance in balances:
-        currency = balance.currency.upper()
-        grouped.setdefault(currency, {})[balance.participant_id] = _money(
-            grouped.setdefault(currency, {}).get(balance.participant_id, Decimal("0"))
-            + balance.balance
+        if not balance.currency or not str(balance.currency).strip():
+            continue
+        if not balance.participant_id or not str(balance.participant_id).strip():
+            continue
+
+        currency = str(balance.currency).strip().upper()
+        participant_id = str(balance.participant_id).strip()
+        balance_val = balance.balance if isinstance(balance.balance, Decimal) else Decimal(str(balance.balance))
+
+        currency_map = grouped.setdefault(currency, {})
+        currency_map[participant_id] = _money(
+            currency_map.get(participant_id, Decimal("0")) + balance_val
         )
 
     suggestions: list[Settlement] = []

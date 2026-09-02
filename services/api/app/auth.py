@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import uuid
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping
 
@@ -57,21 +58,34 @@ class SupabaseJwtVerifier:
             raise AuthError("invalid Supabase access token") from exc
 
     def verify(self, token: str) -> Claims:
+        if not isinstance(token, str) or not token.strip():
+            raise AuthError("access token is required")
+
         try:
             raw = (
-                self._decode_token(token)
+                self._decode_token(token.strip())
                 if self._decode_token is not None
-                else self._decode_with_supabase_jwks(token)
+                else self._decode_with_supabase_jwks(token.strip())
             )
         except AuthError:
             raise
         except Exception as exc:
             raise AuthError("invalid Supabase access token") from exc
 
+        if not isinstance(raw, Mapping):
+            raise AuthError("invalid Supabase access token payload")
+
         user_id = raw.get("sub")
         role = raw.get("role")
-        if not isinstance(user_id, str) or not user_id:
+        if not isinstance(user_id, str) or not user_id.strip():
             raise AuthError("access token is missing a subject")
+        user_id = user_id.strip()
+
+        try:
+            uuid.UUID(user_id)
+        except ValueError as exc:
+            raise AuthError("access token subject must be a valid UUID") from exc
+
         # Supabase issues role="authenticated" for verified users and role="anon" for
         # anonymous sessions. Both are valid callers — the settlement endpoint's own
         # membership check decides whether the user can see a specific trip. Rejecting
@@ -80,3 +94,4 @@ class SupabaseJwtVerifier:
         if role not in ("authenticated", "anon"):
             raise AuthError("access token role is not recognised")
         return Claims(user_id=user_id, role=role, raw=raw)
+

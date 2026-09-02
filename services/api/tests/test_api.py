@@ -37,6 +37,13 @@ class BadUuidBalanceRepository:
         raise ValueError(f'invalid input syntax for type uuid: "{trip_id}"')
 
 
+class FailingBalanceRepository:
+    """Always raises RuntimeError — simulates database outage or missing config."""
+
+    async def get_balances(self, trip_id: str, user_id: str) -> list[Balance]:
+        raise RuntimeError("database connection failed")
+
+
 def _make_verifier(role: str = "authenticated") -> SupabaseJwtVerifier:
     return SupabaseJwtVerifier(
         decode_token=lambda token: {
@@ -53,6 +60,36 @@ class ApiTests(unittest.TestCase):
         self.verifier = _make_verifier()
         self.client = TestClient(create_app(self.repository, self.verifier))
 
+    def test_root_endpoint(self) -> None:
+        response = self.client.get("/")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["name"], "Expensio API")
+        self.assertEqual(data["status"], "ok")
+        self.assertEqual(data["docs_url"], "/docs")
+        self.assertEqual(data["health_url"], "/health")
+
+    def test_favicon_endpoint(self) -> None:
+        response = self.client.get("/favicon.ico")
+        self.assertEqual(response.status_code, 204)
+
+    def test_cors_headers_present(self) -> None:
+        response = self.client.get("/", headers={"Origin": "http://localhost:3000"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers.get("access-control-allow-origin"), "http://localhost:3000")
+
+    def test_cors_preflight(self) -> None:
+        response = self.client.options(
+            "/trip/20000000-0000-0000-0000-000000000001/settlement-plan",
+            headers={
+                "Origin": "http://localhost:3000",
+                "Access-Control-Request-Method": "GET",
+                "Access-Control-Request-Headers": "Authorization",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers.get("access-control-allow-origin"), "http://localhost:3000")
+
     def test_health_endpoint(self) -> None:
         response = self.client.get("/health")
         self.assertEqual(response.status_code, 200)
@@ -64,6 +101,13 @@ class ApiTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 401)
         self.assertEqual(self.repository.calls, [])
+
+    def test_settlement_endpoint_rejects_empty_bearer_token(self) -> None:
+        response = self.client.get(
+            "/trip/20000000-0000-0000-0000-000000000001/settlement-plan",
+            headers={"Authorization": "Bearer  "},
+        )
+        self.assertEqual(response.status_code, 401)
 
     def test_settlement_endpoint_reads_only_authorized_trip_balances(self) -> None:
         response = self.client.get(
@@ -101,7 +145,7 @@ class ApiTests(unittest.TestCase):
         self.assertIn("active member", response.json()["detail"])
 
     def test_settlement_endpoint_returns_400_for_invalid_uuid(self) -> None:
-        """A ValueError from the repository (asyncpg UUID coercion) must surface as 400."""
+        """A non-UUID trip_id must surface as 400 Bad Request."""
         client = TestClient(create_app(BadUuidBalanceRepository(), _make_verifier()))
         response = client.get(
             "/trip/not-a-uuid/settlement-plan",
@@ -109,6 +153,16 @@ class ApiTests(unittest.TestCase):
         )
         self.assertEqual(response.status_code, 400)
         self.assertIn("UUID", response.json()["detail"])
+
+    def test_settlement_endpoint_returns_503_when_repository_fails(self) -> None:
+        """A RuntimeError from repository must surface as 503 Service Unavailable."""
+        client = TestClient(create_app(FailingBalanceRepository(), _make_verifier()))
+        response = client.get(
+            "/trip/20000000-0000-0000-0000-000000000001/settlement-plan",
+            headers={"Authorization": "Bearer test-token"},
+        )
+        self.assertEqual(response.status_code, 503)
+        self.assertIn("unavailable", response.json()["detail"])
 
     def test_settlement_endpoint_accepts_anonymous_token(self) -> None:
         """Supabase anonymous sessions carry role='anon' and must not be rejected as 401."""
@@ -123,3 +177,4 @@ class ApiTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

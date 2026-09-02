@@ -1,44 +1,52 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { ArrowLeft } from 'lucide-react-native';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { ArrowLeft, Calendar, Compass, DollarSign, Sparkles, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { callRpc } from '../rpc';
 import { detectCurrency } from '../utils/detectCurrency';
 import { currencyIcon } from '../utils/currencyIcon';
+import { formatError } from '../utils/errors';
 import GradientText from '../components/GradientText';
 import PrimaryButton from '../components/PrimaryButton';
-import Chip from '../components/Chip';
 import DatePicker from '../components/DatePicker';
 
-const CURRENCIES = ['INR', 'USD', 'EUR', 'GBP', 'AUD', 'CAD', 'JPY', 'SGD'];
+const CURRENCIES = [
+  { code: 'INR', symbol: '₹', name: 'Indian Rupee' },
+  { code: 'USD', symbol: '$', name: 'US Dollar' },
+  { code: 'EUR', symbol: '€', name: 'Euro' },
+  { code: 'GBP', symbol: '£', name: 'British Pound' },
+  { code: 'AUD', symbol: 'A$', name: 'Australian Dollar' },
+  { code: 'CAD', symbol: 'C$', name: 'Canadian Dollar' },
+  { code: 'JPY', symbol: '¥', name: 'Japanese Yen' },
+  { code: 'SGD', symbol: 'S$', name: 'Singapore Dollar' },
+];
 
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
+
 function plusDaysIso(days: number) {
   const d = new Date();
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
-// This is a genuinely original design, not a port of either tripspend/src/screens/
-// SetupScreen.tsx or its own Onboarding.tsx (a 3-slide feature carousel) -- deliberately
-// asked for as its own thing, not a photocopy of either. It's also not built from the
-// "TripSpend UX/UI Psychology" document pasted into this project's chat at one point:
-// that doc's specific techniques (a progress bar pre-filled before any real progress,
-// "I'll risk it" loss-aversion copy, manufactured urgency) were considered and explicitly
-// rejected as manipulative, not just skipped for scope reasons -- see that conversation
-// for the full reasoning. What carried over from it is only the legitimate part: fewer
-// decisions, sensible defaults, no signup wall (already true of this app's anonymous-auth
-// architecture, nothing to add there).
-//
-// The actual design choice here: no slides, no "skip" (there's nothing to skip), one
-// screen. The trip name is the hero -- a large, borderless input merged into the
-// question itself ("Where to?") rather than a small boxed field under a separate
-// headline, since naming the trip *is* the one thing this screen is for. Currency
-// defaults from the device's own locale (detectCurrency.ts) -- a real friction reducer,
-// not a manufactured one, and fully overridable right there. Budget and dates are
-// genuinely optional and collapsed by default, so the fewest-taps path is: type a name,
-// tap Start Planning.
 export default function CreateTripScreen({
   onCreated,
   onCancel,
@@ -46,12 +54,13 @@ export default function CreateTripScreen({
   onCreated: (tripId: string | null, currency: string) => void;
   onCancel: () => void;
 }) {
+  const insets = useSafeAreaInsets();
   const [name, setName] = useState('');
   const [currency, setCurrency] = useState(detectCurrency);
-  const [showMore, setShowMore] = useState(false);
+  const [showMore, setShowMore] = useState(true);
   const [budget, setBudget] = useState('');
   const [startDate, setStartDate] = useState(todayIso());
-  const [endDate, setEndDate] = useState(plusDaysIso(3));
+  const [endDate, setEndDate] = useState(plusDaysIso(4));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -79,77 +88,220 @@ export default function CreateTripScreen({
         onCreated(null, currency);
       }
     } catch (err) {
-      setError(String(err));
+      setError(formatError(err));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <ScrollView className="flex-1 bg-white" contentContainerClassName="page-shell pb-10" keyboardShouldPersistTaps="handled">
-      <Pressable onPress={onCancel} className="p-2 -ml-2 -mt-1 mb-6 self-start rounded-xl active:bg-slate-100">
-        <ArrowLeft size={20} color="#64748b" />
-      </Pressable>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      className="flex-1 bg-slate-50"
+    >
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{
+          paddingTop: Math.max(insets.top, 16),
+          paddingBottom: Math.max(insets.bottom, 24) + 24,
+          paddingHorizontal: 16,
+        }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Navigation / Header */}
+        <View className="flex-row items-center justify-between mb-4">
+          <TouchableOpacity
+            onPress={onCancel}
+            activeOpacity={0.7}
+            className="w-10 h-10 -ml-1 rounded-2xl bg-white border border-slate-200/80 items-center justify-center shadow-sm"
+          >
+            <ArrowLeft size={20} color="#334155" />
+          </TouchableOpacity>
 
-      <GradientText className="text-4xl font-black tracking-tight mb-1">Where to?</GradientText>
-      <Text className="text-sm text-slate-400 mb-6">Name it, and we'll set everything else up as you go.</Text>
-
-      <TextInput
-        className="text-3xl font-black text-slate-900 pb-3 border-b-2 border-slate-100 mb-8"
-        value={name}
-        onChangeText={setName}
-        placeholder="Goa, December"
-        placeholderTextColor="#cbd5e1"
-        autoFocus
-        returnKeyType="done"
-      />
-
-      <Text className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2.5">Currency</Text>
-      <View className="flex-row flex-wrap gap-2 mb-2">
-        {CURRENCIES.map((c) => (
-          <Chip key={c} label={c} selected={currency === c} onPress={() => setCurrency(c)} />
-        ))}
-      </View>
-      <Text className="text-xs text-slate-300 mb-8">Guessed from your device — tap to change it.</Text>
-
-      {!showMore ? (
-        <Pressable onPress={() => setShowMore(true)} className="mb-8">
-          <Text className="text-sm font-bold text-blue-600">+ Add a budget or dates</Text>
-        </Pressable>
-      ) : (
-        <View className="card-elevated p-5 space-y-4 mb-8">
-          <View>
-            <Text className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Total budget (optional)</Text>
-            <View className="flex-row items-center gap-2 input-field">
-              <BudgetIcon size={16} color="#94a3b8" />
-              <TextInput
-                className="flex-1 text-lg font-bold text-slate-900"
-                value={budget}
-                onChangeText={setBudget}
-                placeholder="No limit"
-                placeholderTextColor="#94a3b8"
-                keyboardType="decimal-pad"
-              />
-            </View>
-            {!budgetValid && <Text className="text-xs text-red-500 font-semibold mt-1.5">Enter a budget greater than 0.</Text>}
-          </View>
-          <View className="h-px bg-slate-100" />
-          <View>
-            <Text className="text-xs text-slate-400 mb-1.5">Start</Text>
-            <DatePicker value={startDate} onChange={setStartDate} />
-          </View>
-          <View>
-            <Text className="text-xs text-slate-400 mb-1.5">End</Text>
-            <DatePicker value={endDate} onChange={setEndDate} minDate={startDate} />
+          <View className="flex-row items-center gap-1.5 px-3 py-1 bg-blue-50/80 border border-blue-100 rounded-full">
+            <Sparkles size={12} color="#2563eb" />
+            <Text className="text-xs font-bold text-blue-700">New Journey</Text>
           </View>
         </View>
-      )}
 
-      {!!error && <Text className="text-sm text-red-600 font-medium mb-4">{error}</Text>}
+        {/* Title */}
+        <View className="mb-6">
+          <GradientText className="text-3xl font-black tracking-tight mb-1">
+            Where to?
+          </GradientText>
+          <Text className="text-sm font-medium text-slate-500">
+            Name your trip, set your currency, and start splitting effortlessly.
+          </Text>
+        </View>
 
-      <PrimaryButton onPress={submit} loading={busy} disabled={!name.trim() || !budgetValid} className="w-full">
-        Start Planning
-      </PrimaryButton>
-    </ScrollView>
+        {/* Hero Trip Name Input Card */}
+        <View className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm mb-6">
+          <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2.5">
+            Trip Name
+          </Text>
+          <View className="flex-row items-center gap-3 bg-slate-50 border border-slate-200/80 rounded-2xl px-4 py-3 focus:border-blue-500">
+            <Compass size={22} color="#2563eb" />
+            <TextInput
+              className="flex-1 text-xl font-bold text-slate-900"
+              value={name}
+              onChangeText={setName}
+              placeholder="e.g. Goa Trip, Euro Summer"
+              placeholderTextColor="#94a3b8"
+              autoFocus
+              returnKeyType="next"
+            />
+          </View>
+        </View>
+
+        {/* Currency Selection Card */}
+        <View className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm mb-6">
+          <View className="flex-row items-center justify-between mb-3">
+            <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+              Primary Currency
+            </Text>
+            <Text className="text-[11px] font-semibold text-slate-400">
+              Auto-detected
+            </Text>
+          </View>
+
+          <View className="flex-row flex-wrap gap-2">
+            {CURRENCIES.map((c) => {
+              const isSelected = currency === c.code;
+              return (
+                <TouchableOpacity
+                  key={c.code}
+                  activeOpacity={0.7}
+                  onPress={() => setCurrency(c.code)}
+                  className={`flex-row items-center gap-1.5 px-3.5 py-2.5 rounded-2xl border ${isSelected
+                      ? 'bg-blue-600 border-blue-600 shadow-sm shadow-blue-500/20'
+                      : 'bg-slate-50 border-slate-200 active:bg-slate-100'
+                    }`}
+                >
+                  <Text
+                    className={`text-xs font-bold ${isSelected ? 'text-blue-100' : 'text-slate-400'
+                      }`}
+                  >
+                    {c.symbol}
+                  </Text>
+                  <Text
+                    className={`text-xs font-bold ${isSelected ? 'text-white' : 'text-slate-700'
+                      }`}
+                  >
+                    {c.code}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* Dates & Budget Card */}
+        <View className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm mb-6">
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => setShowMore((prev) => !prev)}
+            className="flex-row items-center justify-between"
+          >
+            <View className="flex-row items-center gap-2">
+              <Calendar size={18} color="#2563eb" />
+              <Text className="text-sm font-bold text-slate-800">
+                Dates & Budget (Optional)
+              </Text>
+            </View>
+            <View className="w-7 h-7 rounded-xl bg-slate-100 items-center justify-center">
+              {showMore ? (
+                <ChevronUp size={16} color="#64748b" />
+              ) : (
+                <ChevronDown size={16} color="#64748b" />
+              )}
+            </View>
+          </TouchableOpacity>
+
+          {showMore && (
+            <View className="mt-4 pt-4 border-t border-slate-100 space-y-4">
+              {/* Dates */}
+              <View className="space-y-3">
+                <View>
+                  <Text className="text-xs font-bold text-slate-500 mb-1.5">
+                    Start Date
+                  </Text>
+                  <DatePicker
+                    value={startDate}
+                    onChange={(d) => {
+                      setStartDate(d);
+                      if (endDate < d) {
+                        setEndDate(d);
+                      }
+                    }}
+                    label="Trip Start Date"
+                  />
+                </View>
+
+                <View className="mt-3">
+                  <Text className="text-xs font-bold text-slate-500 mb-1.5">
+                    End Date
+                  </Text>
+                  <DatePicker
+                    value={endDate}
+                    onChange={setEndDate}
+                    minDate={startDate}
+                    label="Trip End Date"
+                  />
+                </View>
+              </View>
+
+              {/* Total Budget */}
+              <View className="pt-2">
+                <Text className="text-xs font-bold text-slate-500 mb-1.5">
+                  Total Budget ({currency})
+                </Text>
+                <View className="flex-row items-center gap-2.5 px-4 py-3 bg-slate-50 border border-slate-200/80 rounded-2xl">
+                  <BudgetIcon size={18} color="#64748b" />
+                  <TextInput
+                    className="flex-1 text-base font-bold text-slate-900"
+                    value={budget}
+                    onChangeText={setBudget}
+                    placeholder="No limit"
+                    placeholderTextColor="#94a3b8"
+                    keyboardType="decimal-pad"
+                  />
+                </View>
+                {!budgetValid && (
+                  <Text className="text-xs text-red-500 font-semibold mt-1.5">
+                    Enter a valid budget greater than 0.
+                  </Text>
+                )}
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* Error Banner */}
+        {!!error && (
+          <View className="flex-row items-start gap-2.5 p-4 rounded-2xl bg-red-50 border border-red-200 mb-6">
+            <AlertCircle size={18} color="#dc2626" className="mt-0.5 shrink-0" />
+            <View className="flex-1">
+              <Text className="text-xs font-bold text-red-800">
+                Could not create trip
+              </Text>
+              <Text className="text-xs text-red-600 mt-0.5 leading-relaxed font-medium">
+                {error}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Submit Button */}
+        <PrimaryButton
+          onPress={submit}
+          loading={busy}
+          disabled={!name.trim() || !budgetValid}
+          className="w-full shadow-lg shadow-blue-600/25"
+        >
+          Start Planning
+        </PrimaryButton>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }

@@ -85,6 +85,38 @@ class SettlementPlanTests(unittest.TestCase):
         )
         self.assertEqual(sum((s.amount for s in plan), Decimal("0")), Decimal("100.00"))
 
+    def test_empty_balances_returns_empty_plan(self) -> None:
+        self.assertEqual(build_settlement_plan([]), [])
+
+    def test_normalizes_currency_casing_and_whitespace(self) -> None:
+        plan = build_settlement_plan(
+            [
+                Balance("alice", "Alice", " inr ", Decimal("50.00")),
+                Balance("bob", "Bob", "INR", Decimal("-50.00")),
+            ]
+        )
+        self.assertEqual(plan, [Settlement("bob", "alice", Decimal("50.00"), "INR")])
+
+    def test_handles_unbalanced_ledger_without_hanging(self) -> None:
+        """If total creditors > total debtors, pair up to available and stop."""
+        plan = build_settlement_plan(
+            [
+                Balance("alice", "Alice", "USD", Decimal("100.00")),
+                Balance("bob", "Bob", "USD", Decimal("-40.00")),
+            ]
+        )
+        self.assertEqual(plan, [Settlement("bob", "alice", Decimal("40.00"), "USD")])
+
+    def test_ignores_invalid_or_blank_entries(self) -> None:
+        plan = build_settlement_plan(
+            [
+                Balance("", "Anonymous", "USD", Decimal("-40.00")),
+                Balance("alice", "Alice", "", Decimal("40.00")),
+            ]
+        )
+        self.assertEqual(plan, [])
+
 
 if __name__ == "__main__":
     unittest.main()
+

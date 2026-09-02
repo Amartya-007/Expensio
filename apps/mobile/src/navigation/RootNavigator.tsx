@@ -1,3 +1,4 @@
+import { ActivityIndicator, Text, View } from 'react-native';
 import { createNativeStackNavigator, NativeStackScreenProps } from '@react-navigation/native-stack';
 import TripsListScreen from '../screens/TripsListScreen';
 import CreateTripScreen from '../screens/CreateTripScreen';
@@ -23,6 +24,7 @@ import ActivityLogScreen from '../screens/ActivityLogScreen';
 // row into their own routes here (reached from the new Settings tab), since TripSpend's
 // BottomNav.tsx has no tab for either of them.
 export type RootStackParamList = {
+  Loading: undefined;
   Trips: undefined;
   CreateTrip: undefined;
   TripDetail: { tripId: string; currency: string };
@@ -122,7 +124,35 @@ function RecurringRoute({ navigation, route }: NativeStackScreenProps<RootStackP
   return <RecurringScreen tripId={route.params.tripId} currency={route.params.currency} onBack={() => navigation.goBack()} />;
 }
 
-export default function RootNavigator() {
+export default function RootNavigator({
+  ready = true,
+  status = 'loading…',
+  error = null,
+}: {
+  ready?: boolean;
+  status?: string;
+  error?: string | null;
+}) {
+  if (!ready) {
+    return (
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="Loading" options={{ headerShown: false }}>
+          {() => (
+            <View className="flex-1 bg-white items-center justify-center p-6">
+              <ActivityIndicator size="large" color="#2563eb" />
+              <Text className="text-sm font-semibold text-slate-500 mt-4">{status}</Text>
+              {error && (
+                <View className="mt-4 p-4 rounded-2xl bg-red-50 border border-red-200 max-w-xs">
+                  <Text className="text-xs font-bold text-red-700 text-center">{error}</Text>
+                </View>
+              )}
+            </View>
+          )}
+        </Stack.Screen>
+      </Stack.Navigator>
+    );
+  }
+
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName="Trips">
       <Stack.Screen name="Trips" component={TripsRoute} />

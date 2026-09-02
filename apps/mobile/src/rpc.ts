@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient';
 import { db } from './powersync/db';
+import { randomUUID } from './utils/uuid';
 
 // Why RPCs are called directly here instead of through PowerSync's CRUD upload queue
 // (which is what the earlier spike used, and what most PowerSync tutorials show): real
@@ -45,7 +46,7 @@ function isNetworkError(err: unknown): boolean {
 async function queueForLater(rpcName: string, params: Record<string, unknown>, clientRequestId: string) {
   await db.execute(
     'INSERT INTO pending_actions (id, rpc_name, params_json, client_request_id, created_at) VALUES (?, ?, ?, ?, ?)',
-    [crypto.randomUUID(), rpcName, JSON.stringify(params), clientRequestId, new Date().toISOString()]
+    [randomUUID(), rpcName, JSON.stringify(params), clientRequestId, new Date().toISOString()]
   );
 }
 
@@ -69,12 +70,12 @@ export async function callRpc<T = unknown>(
   const finalParams = idempotent
     ? {
         ...params,
-        p_client_request_id: (params.p_client_request_id as string | undefined) ?? crypto.randomUUID(),
+        p_client_request_id: (params.p_client_request_id as string | undefined) ?? randomUUID(),
       }
     : params;
   // pending_actions still needs a unique local key even for a non-idempotent RPC, purely
   // for its own row identity -- separate from whether that value is ALSO sent to Postgres.
-  const localTrackingId = (finalParams.p_client_request_id as string | undefined) ?? crypto.randomUUID();
+  const localTrackingId = (finalParams.p_client_request_id as string | undefined) ?? randomUUID();
 
   try {
     const { data, error } = await supabase.rpc(rpcName, finalParams);

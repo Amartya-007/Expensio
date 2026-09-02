@@ -17,7 +17,8 @@ class BalanceRepository(Protocol):
 
 class PostgresBalanceRepository:
     def __init__(self, dsn: str | None = None) -> None:
-        self._dsn = dsn or os.getenv("DATABASE_URL")
+        raw_dsn = dsn or os.getenv("DATABASE_URL")
+        self._dsn = raw_dsn.strip() if raw_dsn and isinstance(raw_dsn, str) else None
         self._pool = None
         # Guards pool creation. Without this, two requests arriving before the pool
         # exists could both pass the `self._pool is None` check, both start
@@ -39,38 +40,46 @@ class PostgresBalanceRepository:
                         raise RuntimeError("DATABASE_URL is not configured")
                     import asyncpg
 
-                    self._pool = await asyncpg.create_pool(self._dsn, min_size=1, max_size=5)
+                    try:
+                        self._pool = await asyncpg.create_pool(self._dsn, min_size=1, max_size=5)
+                    except Exception as exc:
+                        raise RuntimeError(f"failed to connect to database: {exc}") from exc
         return self._pool
 
     async def get_balances(self, trip_id: str, user_id: str) -> list[Balance]:
         pool = await self._get_pool()
-        async with pool.acquire() as connection:
-            has_access = await connection.fetchval(
-                """
-                select exists (
-                  select 1 from trip_members
-                  where trip_id = $1::uuid and user_id = $2::uuid and status = 'active'
+        try:
+            async with pool.acquire() as connection:
+                has_access = await connection.fetchval(
+                    """
+                    select exists (
+                      select 1 from trip_members
+                      where trip_id = $1::uuid and user_id = $2::uuid and status = 'active'
+                    )
+                    """,
+                    trip_id,
+                    user_id,
                 )
-                """,
-                trip_id,
-                user_id,
-            )
-            if not has_access:
-                raise TripAccessError("not an active member of this trip")
+                if not has_access:
+                    raise TripAccessError("not an active member of this trip")
 
-            rows = await connection.fetch(
-                """
-                select tb.participant_id::text,
-                       coalesce(p.display_name, 'Participant') as display_name,
-                       tb.currency,
-                       tb.balance_delta
-                from trip_balances tb
-                join participants p on p.id = tb.participant_id
-                where tb.trip_id = $1::uuid and p.trip_id = $1::uuid
-                order by tb.currency, tb.participant_id
-                """,
-                trip_id,
-            )
+                rows = await connection.fetch(
+                    """
+                    select tb.participant_id::text,
+                           coalesce(p.display_name, 'Participant') as display_name,
+                           tb.currency,
+                           tb.balance_delta
+                    from trip_balances tb
+                    join participants p on p.id = tb.participant_id
+                    where tb.trip_id = $1::uuid and p.trip_id = $1::uuid
+                    order by tb.currency, tb.participant_id
+                    """,
+                    trip_id,
+                )
+        except (TripAccessError, ValueError):
+            raise
+        except Exception as exc:
+            raise RuntimeError(f"database query failed: {exc}") from exc
 
         return [
             Balance(

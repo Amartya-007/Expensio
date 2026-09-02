@@ -13,6 +13,8 @@ import {
 import { db } from '../powersync/db';
 import { callRpc } from '../rpc';
 import { currencyIcon } from '../utils/currencyIcon';
+import { formatError } from '../utils/errors';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import PrimaryButton from '../components/PrimaryButton';
 import DatePicker from '../components/DatePicker';
 
@@ -68,6 +70,7 @@ export default function TripSettingsScreen({
   onOpenActivityLog: () => void;
   onOpenRecurring: () => void;
 }) {
+  const insets = useSafeAreaInsets();
   const [trip, setTrip] = useState<Trip | null>(null);
   const [participantCount, setParticipantCount] = useState(0);
   const [budget, setBudget] = useState('');
@@ -138,7 +141,7 @@ export default function TripSettingsScreen({
         { idempotent: false }
       );
     } catch (err) {
-      setError(String(err));
+      setError(formatError(err));
     } finally {
       setSaving(false);
     }
@@ -203,21 +206,30 @@ export default function TripSettingsScreen({
   }
 
   return (
-    <ScrollView className="flex-1 bg-white" contentContainerClassName="page-shell pb-32 space-y-4" keyboardShouldPersistTaps="handled">
-      <View className="flex-row items-center gap-3 page-header">
-        <Pressable onPress={onBack} className="p-2 -ml-1 rounded-xl active:bg-slate-100">
-          <ArrowLeft size={20} color="#64748b" />
+    <ScrollView
+      className="flex-1 bg-white"
+      contentContainerStyle={{
+        paddingTop: Math.max(insets.top, 16),
+        paddingBottom: Math.max(insets.bottom, 16) + 90,
+        paddingHorizontal: 16,
+      }}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+    >
+      <View className="flex-row items-center gap-3 mb-4">
+        <Pressable onPress={onBack} className="p-2 -ml-2 rounded-xl active:bg-slate-100">
+          <ArrowLeft size={20} color="#1e293b" />
         </Pressable>
-        <View>
-          <Text className="page-title">Trip Settings</Text>
-          <Text className="page-subtitle">
+        <View className="flex-1">
+          <Text className="text-2xl font-black text-slate-900">Trip Settings</Text>
+          <Text className="text-xs font-semibold text-slate-500">
             {participantCount} people
             {trip?.total_budget != null ? ` \u00b7 ${trip.currency} ${trip.total_budget.toFixed(2)} total` : ''}
           </Text>
         </View>
         {!!trip?.is_archived && (
-          <View className="badge-warning">
-            <Text className="text-xs font-bold text-amber-700">Archived</Text>
+          <View className="bg-amber-100 border border-amber-200 px-3 py-1 rounded-full">
+            <Text className="text-xs font-bold text-amber-800">Archived</Text>
           </View>
         )}
       </View>

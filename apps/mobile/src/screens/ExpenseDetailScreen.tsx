@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { ArrowLeft, Calendar, MessageSquare, Pencil, Trash2, User, Users, X, AlertCircle } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { format, parseISO } from 'date-fns';
 import { db } from '../powersync/db';
 import { callRpc } from '../rpc';
+import { formatError } from '../utils/errors';
 import PrimaryButton from '../components/PrimaryButton';
 
 type Expense = {
@@ -50,6 +52,7 @@ function formatTimestamp(iso: string): string {
 //   separate route wasn't needed to get the same visual result and would have meant
 //   touching RootNavigator's routes for no visible difference.
 export default function ExpenseDetailScreen({ expenseId, onBack }: { expenseId: string; onBack: () => void }) {
+  const insets = useSafeAreaInsets();
   const [expense, setExpense] = useState<Expense | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [splits, setSplits] = useState<Split[]>([]);
@@ -136,7 +139,7 @@ export default function ExpenseDetailScreen({ expenseId, onBack }: { expenseId: 
       });
       setEditing(false);
     } catch (err) {
-      setError(String(err));
+      setError(formatError(err));
     } finally {
       setBusy(false);
     }
@@ -148,7 +151,7 @@ export default function ExpenseDetailScreen({ expenseId, onBack }: { expenseId: 
       await callRpc('delete_expense', { p_expense_id: expenseId });
       onBack();
     } catch (err) {
-      setError(String(err));
+      setError(formatError(err));
       setBusy(false);
       setShowDeleteConfirm(false);
     }
@@ -163,7 +166,7 @@ export default function ExpenseDetailScreen({ expenseId, onBack }: { expenseId: 
       await callRpc('add_comment', { p_expense_id: expenseId, p_body: body }, { idempotent: false });
       setComment('');
     } catch (err) {
-      setError(String(err));
+      setError(formatError(err));
     } finally {
       setCommentBusy(false);
     }
@@ -185,10 +188,18 @@ export default function ExpenseDetailScreen({ expenseId, onBack }: { expenseId: 
   const createdAtLabel = expense.created_at ? format(new Date(expense.created_at), 'hh:mm a') : null;
 
   return (
-    <ScrollView className="flex-1 bg-white" contentContainerClassName="page-shell space-y-6">
-      <Pressable onPress={onBack} className="flex-row items-center gap-2">
-        <ArrowLeft size={16} color="#475569" />
-        <Text className="text-sm font-semibold text-slate-600">Back</Text>
+    <ScrollView
+      className="flex-1 bg-white"
+      contentContainerStyle={{
+        paddingTop: Math.max(insets.top, 16),
+        paddingBottom: Math.max(insets.bottom, 16) + 32,
+        paddingHorizontal: 16,
+      }}
+      showsVerticalScrollIndicator={false}
+    >
+      <Pressable onPress={onBack} className="flex-row items-center gap-2 py-1 -ml-1 mb-2">
+        <ArrowLeft size={18} color="#1e293b" />
+        <Text className="text-sm font-bold text-slate-800">Back</Text>
       </Pressable>
 
       {error && !editing && (

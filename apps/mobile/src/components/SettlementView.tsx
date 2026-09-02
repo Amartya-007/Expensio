@@ -4,6 +4,7 @@ import { CheckCircle2, HandCoins, ThumbsUp } from 'lucide-react-native';
 import { supabase } from '../supabaseClient';
 import { db } from '../powersync/db';
 import { callRpc } from '../rpc';
+import { formatError } from '../utils/errors';
 import { env } from '../env';
 
 type Suggestion = {
@@ -67,11 +68,20 @@ export default function SettlementView({ tripId }: { tripId: string }) {
       const myId = participantRows.find((row) => row.linked_user_id === sessionData.session!.user.id)?.id ?? null;
 
       // --- Settlement suggestions (FastAPI) ---
-      const response = await fetch(`${env.apiUrl.replace(/\/$/, '')}/trip/${tripId}/settlement-plan`, {
-        headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
-      });
-      if (!response.ok) throw new Error((await response.json()).detail ?? 'Could not load settlement suggestions.');
-      const data = (await response.json()) as { suggestions: Suggestion[] };
+      let data: { suggestions: Suggestion[] } = { suggestions: [] };
+      try {
+        const response = await fetch(`${env.apiUrl.replace(/\/$/, '')}/trip/${tripId}/settlement-plan`, {
+          headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
+        });
+        if (response.ok) {
+          data = (await response.json()) as { suggestions: Suggestion[] };
+        } else {
+          const errBody = await response.json().catch(() => ({}));
+          console.warn('Settlement plan response not ok:', errBody);
+        }
+      } catch (fetchErr) {
+        console.warn('Could not reach settlement API at', env.apiUrl, fetchErr);
+      }
 
       // --- Pending receipts to confirm (direct Supabase query) ---
       // Find all payment_recorded ledger entries for this trip where:
@@ -128,7 +138,7 @@ export default function SettlementView({ tripId }: { tripId: string }) {
       setMyParticipantId(myId);
       setPendingReceipts(receipts);
     } catch (err) {
-      setError(String(err));
+      setError(formatError(err));
     } finally {
       setLoading(false);
     }
@@ -153,7 +163,7 @@ export default function SettlementView({ tripId }: { tripId: string }) {
       setRecordingKey(null);
       await load();
     } catch (err) {
-      setError(String(err));
+      setError(formatError(err));
       setRecordingKey(null);
     }
   }
@@ -166,7 +176,7 @@ export default function SettlementView({ tripId }: { tripId: string }) {
       setConfirmingId(null);
       await load();
     } catch (err) {
-      setError(String(err));
+      setError(formatError(err));
       setConfirmingId(null);
     }
   }

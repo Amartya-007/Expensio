@@ -1,19 +1,23 @@
 import { useEffect, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
-import { ArrowRight } from 'lucide-react-native';
+import { ArrowRight, Compass, MapPin, Plus, Sparkles } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { db } from '../powersync/db';
 import { flushPendingActions } from '../rpc';
 import GradientText from '../components/GradientText';
 import PrimaryButton from '../components/PrimaryButton';
 
-type Trip = { id: string; name: string; currency: string; created_at: string; is_archived: number };
+type Trip = {
+  id: string;
+  name: string;
+  currency: string;
+  start_date: string | null;
+  end_date: string | null;
+  total_budget: number | null;
+  created_at: string;
+  is_archived: number;
+};
 
-// Restyled with the rest of the app's NativeWind design system — this screen (and
-// CreateTripScreen.tsx, reached from here) had never been touched since before the
-// TripSpend UI port started, still on the original plain StyleSheet. The empty state is
-// the real point of this pass: it used to be a single line of grey "No trips yet" text,
-// which undercuts a brand-new user's very first impression of the app. Now it's a full,
-// inviting prompt leading straight to CreateTripScreen's "Where to?" screen.
 export default function TripsListScreen({
   onOpenTrip,
   onCreateTrip,
@@ -21,6 +25,7 @@ export default function TripsListScreen({
   onOpenTrip: (tripId: string, currency: string) => void;
   onCreateTrip: () => void;
 }) {
+  const insets = useSafeAreaInsets();
   const [trips, setTrips] = useState<Trip[]>([]);
   const [showArchived, setShowArchived] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
@@ -29,7 +34,7 @@ export default function TripsListScreen({
   useEffect(() => {
     const abortController = new AbortController();
     db.watch(
-      'SELECT id, name, currency, created_at, is_archived FROM trips WHERE is_archived = ? ORDER BY created_at DESC',
+      'SELECT id, name, currency, start_date, end_date, total_budget, created_at, is_archived FROM trips WHERE is_archived = ? ORDER BY created_at DESC',
       [showArchived ? 1 : 0],
       { onResult: (result) => setTrips(result.rows?._array ?? []) },
       { signal: abortController.signal }
@@ -38,9 +43,6 @@ export default function TripsListScreen({
   }, [showArchived]);
 
   useEffect(() => {
-    // pending_actions is a plain local table, same watch mechanism works on it —
-    // this is what turns "N changes waiting to sync" into a live count rather than a
-    // one-time check.
     const abortController = new AbortController();
     db.watch(
       'SELECT count(*) as n FROM pending_actions',
@@ -59,36 +61,69 @@ export default function TripsListScreen({
 
   if (!showArchived && trips.length === 0) {
     return (
-      <View className="flex-1 bg-white page-shell items-center justify-center">
-        <Text className="text-5xl mb-4">✈️</Text>
+      <View
+        style={{
+          paddingTop: Math.max(insets.top, 24),
+          paddingBottom: Math.max(insets.bottom, 24),
+        }}
+        className="flex-1 bg-white px-6 items-center justify-center"
+      >
+        <View className="w-20 h-20 rounded-3xl bg-blue-50 border border-blue-100 items-center justify-center mb-6 shadow-sm">
+          <Compass size={40} color="#2563eb" strokeWidth={2} />
+        </View>
+
         <GradientText className="text-3xl font-black tracking-tight text-center mb-2">
-          Let's plan your first trip
+          Plan Your Next Adventure
         </GradientText>
-        <Text className="text-sm text-slate-400 text-center mb-8 max-w-[280px]">
-          Track spending, split costs, and settle up — all in one place.
+        <Text className="text-sm text-slate-500 text-center mb-8 max-w-[280px] leading-relaxed">
+          Track shared expenses, set daily budgets, and split bills effortlessly with your travel group.
         </Text>
-        <PrimaryButton onPress={onCreateTrip} icon={<ArrowRight size={16} color="#fff" />} className="w-full max-w-xs">
-          Get Started
+
+        <PrimaryButton
+          onPress={onCreateTrip}
+          icon={<ArrowRight size={18} color="#fff" strokeWidth={2.5} />}
+          className="w-full max-w-xs shadow-lg shadow-blue-500/25"
+        >
+          Create Trip
         </PrimaryButton>
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-white page-shell">
-      <View className="flex-row items-center justify-between page-header">
-        <Text className="page-title">{showArchived ? 'Archived trips' : 'Your trips'}</Text>
+    <View
+      style={{
+        paddingTop: Math.max(insets.top, 16),
+        paddingBottom: Math.max(insets.bottom, 16),
+      }}
+      className="flex-1 bg-slate-50/60 px-4"
+    >
+      {/* Top Header */}
+      <View className="flex-row items-center justify-between py-2 mb-4">
+        <View>
+          <GradientText className="text-3xl font-black tracking-tight">
+            {showArchived ? 'Archived Trips' : 'Your Trips'}
+          </GradientText>
+          <Text className="text-xs font-semibold text-slate-500 mt-0.5">
+            {trips.length} {trips.length === 1 ? 'trip' : 'trips'} total
+          </Text>
+        </View>
+
         {!showArchived && (
-          <Pressable onPress={onCreateTrip} className="bg-slate-900 rounded-2xl px-4 py-2.5">
-            <Text className="text-white font-bold text-sm">+ New Trip</Text>
+          <Pressable
+            onPress={onCreateTrip}
+            className="flex-row items-center gap-1.5 bg-blue-600 rounded-2xl px-4 py-2.5 shadow-md shadow-blue-500/30 active:scale-95"
+          >
+            <Plus size={16} color="#ffffff" strokeWidth={3} />
+            <Text className="text-white font-black text-sm">New Trip</Text>
           </Pressable>
         )}
       </View>
 
       {pendingCount > 0 && (
         <View className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 mb-3">
-          <Text className="text-xs text-amber-700 font-medium">
-            {pendingCount} change{pendingCount === 1 ? '' : 's'} waiting to sync — pull to refresh once you're back online
+          <Text className="text-xs text-amber-800 font-bold">
+            {pendingCount} change{pendingCount === 1 ? '' : 's'} waiting to sync — pull down to refresh
           </Text>
         </View>
       )}
@@ -97,21 +132,57 @@ export default function TripsListScreen({
         data={trips}
         keyExtractor={(item) => item.id}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        contentContainerClassName="pb-8"
-        ListEmptyComponent={<Text className="text-slate-400 text-center mt-16">No archived trips.</Text>}
+        contentContainerStyle={{ paddingBottom: 24, paddingTop: 4 }}
+        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <View className="items-center py-16">
+            <Text className="text-sm font-semibold text-slate-400">No archived trips found.</Text>
+          </View>
+        }
         renderItem={({ item }) => (
-          <Pressable onPress={() => onOpenTrip(item.id, item.currency)} className="card-elevated p-4 flex-row items-center justify-between mb-3">
-            <Text className="font-bold text-slate-900 text-base flex-1" numberOfLines={1}>
-              {item.name}
-            </Text>
-            <Text className="text-xs font-bold text-slate-400 ml-3">{item.currency}</Text>
+          <Pressable
+            onPress={() => onOpenTrip(item.id, item.currency)}
+            className="bg-white rounded-3xl p-4.5 border border-slate-200/80 mb-3.5 shadow-sm active:bg-slate-50/80"
+          >
+            <View className="flex-row items-center justify-between">
+              <View className="flex-row items-center gap-3.5 flex-1 pr-2">
+                <View className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 items-center justify-center">
+                  <MapPin size={22} color="#2563eb" />
+                </View>
+                <View className="flex-1">
+                  <Text className="font-bold text-slate-900 text-lg" numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                  {item.start_date ? (
+                    <Text className="text-xs font-semibold text-slate-400 mt-0.5">
+                      {item.start_date} {item.end_date ? `to ${item.end_date}` : ''}
+                    </Text>
+                  ) : (
+                    <Text className="text-xs font-semibold text-slate-400 mt-0.5">
+                      Created {new Date(item.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                    </Text>
+                  )}
+                </View>
+              </View>
+
+              <View className="items-end">
+                <View className="px-2.5 py-1 bg-slate-100 rounded-xl">
+                  <Text className="text-xs font-black text-slate-700">{item.currency}</Text>
+                </View>
+                {item.total_budget != null && (
+                  <Text className="text-xs font-bold text-emerald-600 mt-1">
+                    {item.currency} {Number(item.total_budget).toFixed(0)}
+                  </Text>
+                )}
+              </View>
+            </View>
           </Pressable>
         )}
       />
 
-      <Pressable onPress={() => setShowArchived((v) => !v)} className="py-4">
-        <Text className="text-sm font-semibold text-slate-500 text-center">
-          {showArchived ? '‹ Back to your trips' : 'Show archived trips'}
+      <Pressable onPress={() => setShowArchived((v) => !v)} className="py-3 items-center">
+        <Text className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+          {showArchived ? '‹ Back to active trips' : 'Show archived trips'}
         </Text>
       </Pressable>
     </View>
