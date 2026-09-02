@@ -241,6 +241,7 @@ export default function TripSettingsScreen({
       )}
 
       {/* Budget & Dates */}
+      <View className="space-y-5">
       <View>
         <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 px-1">Budget & Dates</Text>
         <View className="card-elevated p-5 space-y-4">
@@ -312,6 +313,7 @@ export default function TripSettingsScreen({
           <View className="h-px bg-slate-50 mx-4" />
           <SettingsRow icon={<Trash2 size={16} color="#dc2626" />} iconBg="bg-red-50" title="Delete Trip" titleColor="text-red-600" onPress={confirmDelete} />
         </View>
+      </View>
       </View>
     </ScrollView>
   );
