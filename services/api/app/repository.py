@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from typing import Protocol
 
@@ -18,14 +19,27 @@ class PostgresBalanceRepository:
     def __init__(self, dsn: str | None = None) -> None:
         self._dsn = dsn or os.getenv("DATABASE_URL")
         self._pool = None
+        # Guards pool creation. Without this, two requests arriving before the pool
+        # exists could both pass the `self._pool is None` check, both start
+        # `asyncpg.create_pool(...)` (a real await point — control yields to the event
+        # loop there), and whichever finishes second would silently overwrite
+        # self._pool, leaking the first pool's connections since nothing ever calls
+        # .close() on it. Found by reading _get_pool as a concurrent-access pattern, not
+        # by it failing — the window is narrow (only during startup, before the first
+        # pool finishes creating) but real.
+        self._pool_lock = asyncio.Lock()
 
     async def _get_pool(self):
         if self._pool is None:
-            if not self._dsn:
-                raise RuntimeError("DATABASE_URL is not configured")
-            import asyncpg
+            async with self._pool_lock:
+                # Re-check inside the lock: another request may have already created
+                # the pool while this one was waiting to acquire it.
+                if self._pool is None:
+                    if not self._dsn:
+                        raise RuntimeError("DATABASE_URL is not configured")
+                    import asyncpg
 
-            self._pool = await asyncpg.create_pool(self._dsn, min_size=1, max_size=5)
+                    self._pool = await asyncpg.create_pool(self._dsn, min_size=1, max_size=5)
         return self._pool
 
     async def get_balances(self, trip_id: str, user_id: str) -> list[Balance]:
