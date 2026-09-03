@@ -158,7 +158,7 @@ export default function TripSettingsScreen({
           try {
             await callRpc(rpcName, { p_trip_id: tripId }, { idempotent: false });
           } catch (err) {
-            Alert.alert('Could not update trip', String(err));
+            Alert.alert('Could not update trip', formatError(err));
           }
         },
       },
@@ -179,7 +179,7 @@ export default function TripSettingsScreen({
               await callRpc('delete_trip', { p_trip_id: tripId }, { idempotent: false });
               onBack();
             } catch (err) {
-              Alert.alert('Could not delete trip', String(err));
+              Alert.alert('Could not delete trip', formatError(err));
             }
           },
         },
@@ -198,7 +198,7 @@ export default function TripSettingsScreen({
             await callRpc('leave_trip', { p_trip_id: tripId }, { idempotent: false });
             onBack();
           } catch (err) {
-            Alert.alert('Could not leave trip', String(err));
+            Alert.alert('Could not leave trip', formatError(err));
           }
         },
       },

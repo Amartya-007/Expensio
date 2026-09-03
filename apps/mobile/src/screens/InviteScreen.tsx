@@ -11,7 +11,17 @@ import GradientText from '../components/GradientText';
 type ActiveInvite = { id: string; code: string; expires_at: string; use_count: number; max_uses: number | null };
 
 function isVerificationError(error: unknown): boolean {
-  return String(error).toLowerCase().includes('verify your account');
+  // Don't rely on String(error) -- for a PostgrestError-shaped object that's
+  // "[object Object]" unless it happens to subclass Error, which silently made
+  // this always return false and broke the auto-redirect to phone verification
+  // below. Pull .message the same way formatError() does.
+  const message =
+    typeof error === 'string'
+      ? error
+      : typeof (error as { message?: unknown })?.message === 'string'
+        ? (error as { message: string }).message
+        : String(error);
+  return message.toLowerCase().includes('verify your account');
 }
 
 // Restyled with this port's design language -- TripSpend's own invite flow isn't a
