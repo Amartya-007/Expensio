@@ -375,12 +375,26 @@ export default function ExpenseDetailScreen({ expenseId, onBack }: { expenseId: 
         </>
       )}
 
+      {/* NOTE: no shadow-*/bg-color-opacity classNames here (see DatePicker.tsx
+          for why) -- inline styles instead avoid NativeWind's documented
+          "Couldn't find a navigation context" race condition on first mount. */}
       <Modal visible={showDeleteConfirm} transparent animationType="fade" onRequestClose={() => setShowDeleteConfirm(false)}>
         <Pressable
-          className="flex-1 bg-slate-900/40 items-center justify-center p-4"
+          className="flex-1 items-center justify-center p-4"
+          style={{ backgroundColor: 'rgba(15, 23, 42, 0.4)' }}
           onPress={() => !busy && setShowDeleteConfirm(false)}
         >
-          <Pressable className="w-full max-w-sm bg-white rounded-[2rem] border-2 border-rose-200 shadow-2xl p-6" onPress={(e) => e.stopPropagation()}>
+          <Pressable
+            className="w-full max-w-sm bg-white rounded-[2rem] border-2 border-rose-200 p-6"
+            style={{
+              shadowColor: '#0f172a',
+              shadowOffset: { width: 0, height: 20 },
+              shadowOpacity: 0.25,
+              shadowRadius: 40,
+              elevation: 12,
+            }}
+            onPress={(e) => e.stopPropagation()}
+          >
             <View className="flex-row items-start justify-between gap-3">
               <View className="w-10 h-10 rounded-2xl bg-rose-50 border border-rose-100 items-center justify-center">
                 <Trash2 size={20} color="#e11d48" />

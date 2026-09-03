@@ -240,12 +240,31 @@ export default function DatePicker({
         </View>
       </TouchableOpacity>
 
-      {/* Flyover Modal Calendar */}
-      <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
+      {/* Calendar dialog, centered.
+          NOTE: shadow-* and bg-color/opacity classNames (e.g. bg-black/40) are
+          deliberately NOT used anywhere in this Modal. NativeWind's CSS
+          interop has a documented race condition where parsing those exact
+          utility patterns for the first time -- which is exactly what
+          happens the moment this Modal's content mounts fresh -- can throw
+          "Couldn't find a navigation context"
+          (nativewind/nativewind#1536, #1711). Inline styles sidestep it. */}
+      <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={() => setModalVisible(false)}>
         <TouchableWithoutFeedback onPress={() => setModalVisible(false)}>
-          <View className="flex-1 bg-black/40 justify-end">
+          <View
+            className="flex-1 items-center justify-center px-6"
+            style={{ backgroundColor: 'rgba(15, 23, 42, 0.45)' }}
+          >
             <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
-              <View className="bg-white rounded-t-3xl pt-5 pb-8 px-5 shadow-2xl border-t border-slate-100 max-w-lg w-full self-center">
+              <View
+                className="bg-white rounded-3xl pt-6 pb-6 px-6 border border-slate-100 w-full max-w-sm"
+                style={{
+                  shadowColor: '#0f172a',
+                  shadowOffset: { width: 0, height: 20 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 40,
+                  elevation: 12,
+                }}
+              >
                 {/* Modal Header */}
                 <View className="flex-row items-center justify-between pb-3 border-b border-slate-100 mb-3">
                   <View>
@@ -329,7 +348,7 @@ export default function DatePicker({
                   {calendarGrid.map((item, idx) => {
                     if (!item.isCurrentMonth) {
                       return (
-                        <View key={idx} className="w-10 h-10 items-center justify-center my-0.5">
+                        <View key={idx} className="w-10 h-10 items-center justify-center my-1.5">
                           <Text className="text-xs text-slate-300 font-medium">{item.day}</Text>
                         </View>
                       );
@@ -337,7 +356,7 @@ export default function DatePicker({
 
                     if (item.isDisabled) {
                       return (
-                        <View key={idx} className="w-10 h-10 items-center justify-center my-0.5">
+                        <View key={idx} className="w-10 h-10 items-center justify-center my-1.5">
                           <Text className="text-xs text-slate-300 line-through font-medium">{item.day}</Text>
                         </View>
                       );
@@ -349,12 +368,23 @@ export default function DatePicker({
                         onPress={() => {
                           setSelectedIso(item.iso);
                         }}
-                        className={`w-10 h-10 rounded-2xl items-center justify-center my-0.5 ${item.isSelected
-                            ? 'bg-blue-600 shadow-sm shadow-blue-500/30'
+                        className={`w-10 h-10 rounded-2xl items-center justify-center my-1.5 ${item.isSelected
+                            ? 'bg-blue-600'
                             : item.isToday
                               ? 'bg-blue-50 border border-blue-200'
                               : 'active:bg-slate-100'
                           }`}
+                        style={
+                          item.isSelected
+                            ? {
+                              shadowColor: '#2563eb',
+                              shadowOffset: { width: 0, height: 2 },
+                              shadowOpacity: 0.3,
+                              shadowRadius: 4,
+                              elevation: 3,
+                            }
+                            : undefined
+                        }
                       >
                         <Text
                           className={`text-sm font-bold ${item.isSelected
@@ -381,7 +411,14 @@ export default function DatePicker({
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => confirmSelection()}
-                    className="flex-1 py-3.5 bg-blue-600 rounded-2xl items-center justify-center shadow-lg shadow-blue-500/20 active:bg-blue-700"
+                    className="flex-1 py-3.5 bg-blue-600 rounded-2xl items-center justify-center active:bg-blue-700"
+                    style={{
+                      shadowColor: '#2563eb',
+                      shadowOffset: { width: 0, height: 6 },
+                      shadowOpacity: 0.2,
+                      shadowRadius: 10,
+                      elevation: 4,
+                    }}
                   >
                     <View className="flex-row items-center gap-1.5">
                       <Check size={16} color="#ffffff" />
