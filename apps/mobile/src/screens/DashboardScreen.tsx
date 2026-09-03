@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { db } from '../powersync/db';
 import { calculateStats } from '../utils/calculations';
 import GradientText from '../components/GradientText';
+import SyncStatusBanner from '../components/SyncStatusBanner';
 
 type Trip = {
   id: string;
@@ -99,6 +100,8 @@ export default function DashboardScreen({ tripId, onBack }: { tripId: string; on
           </View>
         )}
       </View>
+
+      <SyncStatusBanner />
 
       {/* Trip Title & Subtitle */}
       <View className="mb-5">

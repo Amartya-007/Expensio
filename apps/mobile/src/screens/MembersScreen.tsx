@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { db } from '../powersync/db';
 import { colorFor } from '../utils/avatarColor';
 import GradientText from '../components/GradientText';
+import SyncStatusBanner from '../components/SyncStatusBanner';
 
 type Participant = { id: string; display_name: string; type: string };
 
@@ -48,6 +49,10 @@ export default function MembersScreen({
             </Text>
           </View>
         </View>
+      </View>
+
+      <View className="px-4 pt-3">
+        <SyncStatusBanner />
       </View>
 
       <FlatList

@@ -6,6 +6,7 @@ import { db } from '../powersync/db';
 import { flushPendingActions } from '../rpc';
 import GradientText from '../components/GradientText';
 import PrimaryButton from '../components/PrimaryButton';
+import SyncStatusBanner from '../components/SyncStatusBanner';
 
 type Trip = {
   id: string;
@@ -119,6 +120,8 @@ export default function TripsListScreen({
           </Pressable>
         )}
       </View>
+
+      <SyncStatusBanner />
 
       {pendingCount > 0 && (
         <View className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 mb-3">
