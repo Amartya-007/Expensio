@@ -1,4 +1,4 @@
-import { ActivityIndicator, Text, View } from 'react-native';
+import { StyleSheet, ActivityIndicator, View, Text } from 'react-native';
 import { createNativeStackNavigator, NativeStackScreenProps } from '@react-navigation/native-stack';
 import TripsListScreen from '../screens/TripsListScreen';
 import CreateTripScreen from '../screens/CreateTripScreen';
@@ -12,17 +12,19 @@ import RecurringScreen from '../screens/RecurringScreen';
 import MembersScreen from '../screens/MembersScreen';
 import ActivityLogScreen from '../screens/ActivityLogScreen';
 
-// Replaces App.tsx's old hand-rolled `Screen` state union (see git history) with real
-// React Navigation -- the comment that used to sit on that type said to swap it in
-// "whenever screen count or transition needs... outgrow it"; porting TripSpend's UI is
-// that moment, since TripSpend's own BottomNav.tsx assumes a real navigator underneath it.
+// ─── Why the loading screen lives here, not in App.tsx ───────────────────────
 //
-// TripDetail now renders the persistent Home/Expenses/Settle/Settings tab bar (see
-// TripDetailScreen.tsx's own header comment for the full history of why this was
-// blocked, then unblocked once the budget schema landed) rather than the old in-page
-// Expenses/Log/Members/Settle tab row. Members and Activity Log moved out of that in-page
-// row into their own routes here (reached from the new Settings tab), since TripSpend's
-// BottomNav.tsx has no tab for either of them.
+// NativeWind patches every RN primitive at module-load time (when global.css is
+// imported). After that, every View/Text/Pressable reads from NavigationStateContext
+// on render. So ANY component — even a plain StyleSheet View with no className —
+// will crash with "Couldn't find a navigation context" if it renders outside a
+// mounted NavigationContainer.
+//
+// The invariant: NavigationContainer must be mounted unconditionally and nothing
+// may render outside it. The loading/error states are therefore a Stack.Screen
+// inside this navigator, not a conditional branch in App.tsx.
+// ─────────────────────────────────────────────────────────────────────────────
+
 export type RootStackParamList = {
   Loading: undefined;
   Trips: undefined;
@@ -39,6 +41,102 @@ export type RootStackParamList = {
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+
+// ── Loading screen — no hooks that touch navigation context, no className ──
+function LoadingScreen({
+  status,
+  error,
+}: {
+  status: string;
+  error: string | null;
+}) {
+  return (
+    <View style={ls.shell}>
+      <View style={ls.card}>
+        <View style={ls.iconRing}>
+          <View style={ls.iconDot} />
+        </View>
+        <Text style={ls.title}>Expensio</Text>
+        {error ? (
+          <>
+            <Text style={ls.errorLabel}>Something went wrong</Text>
+            <View style={ls.errorBox}>
+              <Text style={ls.errorText}>{error}</Text>
+            </View>
+          </>
+        ) : (
+          <>
+            <ActivityIndicator size="small" color="#2563eb" style={ls.spinner} />
+            <Text style={ls.statusText}>{status}</Text>
+          </>
+        )}
+      </View>
+    </View>
+  );
+}
+
+const ls = StyleSheet.create({
+  shell: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  card: { alignItems: 'center', gap: 10 },
+  iconRing: {
+    width: 72,
+    height: 72,
+    borderRadius: 24,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  iconDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 10,
+    backgroundColor: '#2563eb',
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#0f172a',
+    letterSpacing: -0.5,
+  },
+  spinner: { marginTop: 4 },
+  statusText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#94a3b8',
+  },
+  errorLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#be123c',
+    marginTop: 4,
+  },
+  errorBox: {
+    backgroundColor: '#fff1f2',
+    borderWidth: 1,
+    borderColor: '#fecdd3',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    maxWidth: 280,
+  },
+  errorText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#be123c',
+    textAlign: 'center',
+  },
+});
+
+// ── Screen wrappers ──────────────────────────────────────────────────────────
 
 function TripsRoute({ navigation }: NativeStackScreenProps<RootStackParamList, 'Trips'>) {
   return (
@@ -93,12 +191,25 @@ function ActivityLogRoute({ navigation, route }: NativeStackScreenProps<RootStac
 
 function AddExpenseRoute({ navigation, route }: NativeStackScreenProps<RootStackParamList, 'AddExpense'>) {
   const { tripId, currency } = route.params;
-  return <AddExpenseScreen tripId={tripId} currency={currency} onDone={() => navigation.goBack()} onCancel={() => navigation.goBack()} />;
+  return (
+    <AddExpenseScreen
+      tripId={tripId}
+      currency={currency}
+      onDone={() => navigation.goBack()}
+      onCancel={() => navigation.goBack()}
+    />
+  );
 }
 
 function AddParticipantRoute({ navigation, route }: NativeStackScreenProps<RootStackParamList, 'AddParticipant'>) {
   const { tripId } = route.params;
-  return <AddParticipantScreen tripId={tripId} onDone={() => navigation.goBack()} onCancel={() => navigation.goBack()} />;
+  return (
+    <AddParticipantScreen
+      tripId={tripId}
+      onDone={() => navigation.goBack()}
+      onCancel={() => navigation.goBack()}
+    />
+  );
 }
 
 function ExpenseDetailRoute({ navigation, route }: NativeStackScreenProps<RootStackParamList, 'ExpenseDetail'>) {
@@ -106,7 +217,12 @@ function ExpenseDetailRoute({ navigation, route }: NativeStackScreenProps<RootSt
 }
 
 function VerifyPhoneRoute({ navigation }: NativeStackScreenProps<RootStackParamList, 'VerifyPhone'>) {
-  return <PhoneVerificationScreen onDone={() => navigation.goBack()} onCancel={() => navigation.goBack()} />;
+  return (
+    <PhoneVerificationScreen
+      onDone={() => navigation.goBack()}
+      onCancel={() => navigation.goBack()}
+    />
+  );
 }
 
 function InviteRoute({ navigation, route }: NativeStackScreenProps<RootStackParamList, 'Invite'>) {
@@ -121,11 +237,19 @@ function InviteRoute({ navigation, route }: NativeStackScreenProps<RootStackPara
 }
 
 function RecurringRoute({ navigation, route }: NativeStackScreenProps<RootStackParamList, 'Recurring'>) {
-  return <RecurringScreen tripId={route.params.tripId} currency={route.params.currency} onBack={() => navigation.goBack()} />;
+  return (
+    <RecurringScreen
+      tripId={route.params.tripId}
+      currency={route.params.currency}
+      onBack={() => navigation.goBack()}
+    />
+  );
 }
 
+// ── Navigator ────────────────────────────────────────────────────────────────
+
 export default function RootNavigator({
-  ready = true,
+  ready = false,
   status = 'loading…',
   error = null,
 }: {
@@ -134,20 +258,13 @@ export default function RootNavigator({
   error?: string | null;
 }) {
   if (!ready) {
+    // Still inside NavigationContainer — safe to render NativeWind-patched
+    // components. This Stack wraps a single loading screen so nothing tries
+    // to use navigation hooks while the app is booting.
     return (
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="Loading" options={{ headerShown: false }}>
-          {() => (
-            <View className="flex-1 bg-white items-center justify-center p-6">
-              <ActivityIndicator size="large" color="#2563eb" />
-              <Text className="text-sm font-semibold text-slate-500 mt-4">{status}</Text>
-              {error && (
-                <View className="mt-4 p-4 rounded-2xl bg-red-50 border border-red-200 max-w-xs">
-                  <Text className="text-xs font-bold text-red-700 text-center">{error}</Text>
-                </View>
-              )}
-            </View>
-          )}
+        <Stack.Screen name="Loading">
+          {() => <LoadingScreen status={status} error={error} />}
         </Stack.Screen>
       </Stack.Navigator>
     );

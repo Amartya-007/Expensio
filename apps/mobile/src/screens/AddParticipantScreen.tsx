@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ArrowLeft, UserCircle2 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { callRpc } from '../rpc';
@@ -7,19 +7,6 @@ import { formatError } from '../utils/errors';
 import PrimaryButton from '../components/PrimaryButton';
 import GradientText from '../components/GradientText';
 
-// Placeholder participants are how Expensio handles someone who doesn't have (or doesn't
-// want) the app -- see permissions-matrix.md: a placeholder has no auth.uid(), so any
-// active trip member manages expenses on their behalf. This is the ONLY way to add another
-// person to a trip right now -- real invites (generate_invite/join_trip_via_code) need
-// is_verified_user(), which nothing in this client satisfies yet (anonymous sign-in only).
-//
-// Visual language ported from tripspend/src/screens/GroupMemberManager.tsx's "add new
-// member" row + tripspend's shared page-shell/page-header/card-elevated/input-field
-// classes (global.css) -- see docs/architecture/expensio-ui-port-plan.md for the full
-// screen-by-screen mapping. The richer list-management view GroupMemberManager actually
-// is (inline rename, remove-with-settlement-check, restore inactive members) is scoped as
-// its own follow-up there, not attempted in this pass -- this screen ports the "add"
-// slice only, matching what exists on the Expensio side today.
 export default function AddParticipantScreen({
   tripId,
   onDone,
@@ -39,8 +26,7 @@ export default function AddParticipantScreen({
 
   async function submit() {
     if (!name.trim()) return;
-    setBusy(true);
-    setError(null);
+    setBusy(true); setError(null);
     try {
       const result = await callRpc('add_placeholder_participant', {
         p_trip_id: tripId,
@@ -48,15 +34,9 @@ export default function AddParticipantScreen({
         p_phone: phone.trim() || null,
       });
       if (result.status === 'ok') {
-        // RPC ran immediately — the new participant will sync back down via
-        // PowerSync within seconds and appear in MembersScreen's db.watch query.
         onDone();
       } else {
-        // Queued for later (offline). The participant won't appear on the
-        // members list until the connection returns and the RPC actually runs.
-        setError(
-          'You appear to be offline. The member will be added automatically when you reconnect.'
-        );
+        setError('You appear to be offline. The member will be added automatically when you reconnect.');
       }
     } catch (err) {
       setError(formatError(err));
@@ -65,65 +45,66 @@ export default function AddParticipantScreen({
     }
   }
 
+  const isOfflineError = error?.includes('offline');
+
   return (
     <View
-      style={{
-        paddingTop: Math.max(insets.top, 16),
-        paddingBottom: Math.max(insets.bottom, 16),
-        paddingHorizontal: 16,
-      }}
-      className="flex-1 bg-white justify-between"
+      style={[
+        s.root,
+        {
+          paddingTop: Math.max(insets.top, 16),
+          paddingBottom: Math.max(insets.bottom, 16),
+        },
+      ]}
     >
-      <View className="space-y-5">
-        {/* Header */}
-        <View className="flex-row items-center gap-3 mb-2">
-          <Pressable onPress={onCancel} disabled={busy} className="p-2 -ml-2 rounded-xl active:bg-slate-100">
-            <ArrowLeft size={20} color="#1e293b" />
-          </Pressable>
-          <View>
-            <GradientText className="text-2xl font-black">Add a Person</GradientText>
-            <Text className="text-xs font-semibold text-slate-500">For splitting expenses together</Text>
-          </View>
+      {/* Header */}
+      <View style={s.header}>
+        <Pressable
+          onPress={onCancel}
+          disabled={busy}
+          style={({ pressed }) => [s.backBtn, pressed && s.backBtnPressed]}
+          hitSlop={8}
+        >
+          <ArrowLeft size={18} color="#334155" />
+        </Pressable>
+        <View style={{ flex: 1 }}>
+          <GradientText className="text-2xl font-black">Add a Person</GradientText>
+          <Text style={s.headerSub}>For splitting expenses together</Text>
         </View>
+      </View>
 
-        {/* Hint card */}
-        <View className="card-elevated p-4">
-          <Text className="text-sm text-slate-500 leading-5">
-            For splitting expenses with someone who isn't using the app. Give them a phone
-            number now and if they ever join for real with that same number, this gets
-            linked to their account automatically.
-          </Text>
-        </View>
+      {/* Hint card */}
+      <View style={s.hintCard}>
+        <Text style={s.hintText}>
+          For splitting expenses with someone who isn&apos;t using the app. Give them a phone number
+          now and if they join later with that number, it links to their account automatically.
+        </Text>
+      </View>
 
-        {/* Form */}
-        <View className="space-y-4">
-          <View>
-            <Text className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 flex-row items-center gap-1.5">
-              Name
-            </Text>
-            <View
-              className={`flex-row items-center gap-2 input-field ${nameFocused ? 'input-field-focused' : ''}`}
-            >
-              <UserCircle2 size={18} color="#94a3b8" />
-              <TextInput
-                className="flex-1 text-base text-slate-900"
-                value={name}
-                onChangeText={setName}
-                onFocus={() => setNameFocused(true)}
-                onBlur={() => setNameFocused(false)}
-                placeholder="Rahul"
-                placeholderTextColor="#94a3b8"
-                autoFocus
-              />
-            </View>
-          </View>
-
-          <View>
-            <Text className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
-              Phone (optional)
-            </Text>
+      {/* Form */}
+      <View style={s.form}>
+        <View>
+          <Text style={s.fieldLabel}>Name</Text>
+          <View style={[s.inputRow, nameFocused && s.inputRowFocused]}>
+            <UserCircle2 size={18} color="#94a3b8" />
             <TextInput
-              className={`input-field text-base text-slate-900 ${phoneFocused ? 'input-field-focused' : ''}`}
+              style={s.input}
+              value={name}
+              onChangeText={setName}
+              onFocus={() => setNameFocused(true)}
+              onBlur={() => setNameFocused(false)}
+              placeholder="Rahul"
+              placeholderTextColor="#94a3b8"
+              autoFocus
+            />
+          </View>
+        </View>
+
+        <View>
+          <Text style={s.fieldLabel}>Phone (optional)</Text>
+          <View style={[s.inputRow, phoneFocused && s.inputRowFocused]}>
+            <TextInput
+              style={[s.input, { paddingLeft: 0 }]}
               value={phone}
               onChangeText={setPhone}
               onFocus={() => setPhoneFocused(true)}
@@ -133,32 +114,62 @@ export default function AddParticipantScreen({
               keyboardType="phone-pad"
             />
           </View>
-
-          {error && (
-            <View className={`rounded-2xl px-4 py-3 ${error.includes('offline') ? 'bg-amber-50 border border-amber-200' : 'bg-red-50 border border-red-200'}`}>
-              <Text className={`text-sm font-medium ${error.includes('offline') ? 'text-amber-800' : 'text-red-700'}`}>
-                {error.includes('offline') ? '📶 ' : '⚠ '}{error}
-              </Text>
-            </View>
-          )}
         </View>
 
-        {/* Actions */}
-        <View className="flex-row gap-3 mt-auto pt-4">
-          <Pressable
-            onPress={onCancel}
-            disabled={busy}
-            className="flex-1 py-3.5 rounded-2xl items-center justify-center border border-slate-300 active:bg-slate-100"
-          >
-            <Text className="text-slate-700 font-bold text-sm">Cancel</Text>
-          </Pressable>
-          <View className="flex-1">
-            <PrimaryButton onPress={submit} disabled={!name.trim()} loading={busy} className="w-full">
-              Add Member
-            </PrimaryButton>
+        {!!error && (
+          <View style={[s.errorBanner, isOfflineError ? s.errorBannerAmber : s.errorBannerRed]}>
+            <Text style={[s.errorText, isOfflineError ? s.errorTextAmber : s.errorTextRed]}>
+              {error}
+            </Text>
           </View>
+        )}
+      </View>
+
+      {/* Actions */}
+      <View style={s.actions}>
+        <Pressable
+          onPress={onCancel}
+          disabled={busy}
+          style={({ pressed }) => [s.cancelBtn, pressed && s.cancelBtnPressed]}
+        >
+          <Text style={s.cancelText}>Cancel</Text>
+        </Pressable>
+        <View style={{ flex: 1 }}>
+          <PrimaryButton onPress={submit} disabled={!name.trim()} loading={busy}>
+            Add Member
+          </PrimaryButton>
         </View>
       </View>
     </View>
   );
 }
+
+const s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#f8fafc', paddingHorizontal: 16, justifyContent: 'space-between' },
+
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
+  backBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  backBtnPressed: { backgroundColor: '#e2e8f0' },
+  headerSub: { fontSize: 12, fontWeight: '600', color: '#94a3b8', marginTop: 2 },
+
+  hintCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 24 },
+  hintText: { fontSize: 13, fontWeight: '500', color: '#64748b', lineHeight: 20 },
+
+  form: { gap: 16, flex: 1 },
+  fieldLabel: { fontSize: 11, fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
+  inputRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12 },
+  inputRowFocused: { borderColor: '#2563eb' },
+  input: { flex: 1, fontSize: 15, fontWeight: '600', color: '#0f172a' },
+
+  errorBanner: { borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1 },
+  errorBannerRed: { backgroundColor: '#fff1f2', borderColor: '#fecdd3' },
+  errorBannerAmber: { backgroundColor: '#fffbeb', borderColor: '#fde68a' },
+  errorText: { fontSize: 13, fontWeight: '600' },
+  errorTextRed: { color: '#be123c' },
+  errorTextAmber: { color: '#92400e' },
+
+  actions: { flexDirection: 'row', gap: 12, paddingTop: 20 },
+  cancelBtn: { flex: 1, paddingVertical: 14, borderRadius: 16, backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' },
+  cancelBtnPressed: { backgroundColor: '#e2e8f0' },
+  cancelText: { fontSize: 14, fontWeight: '700', color: '#334155' },
+});

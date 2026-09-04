@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import {
   Archive,
   ArrowLeft,
@@ -10,11 +10,11 @@ import {
   Trash2,
   Users,
 } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { db } from '../powersync/db';
 import { callRpc } from '../rpc';
 import { currencyIcon } from '../utils/currencyIcon';
 import { formatError } from '../utils/errors';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import PrimaryButton from '../components/PrimaryButton';
 import DatePicker from '../components/DatePicker';
 
@@ -37,26 +37,6 @@ function plusDaysIso(days: number) {
   return d.toISOString().slice(0, 10);
 }
 
-// Ported from tripspend/src/screens/TripDetails.tsx, reshaped for what Expensio's schema
-// actually stores. Two deliberate departures from the original, both already decided in
-// expensio-ui-port-plan.md's "budget concept" section:
-// - A single total-budget field, not TripSpend's per-person-budget-times-fixed-headcount
-//   (trips.total_budget is a plain total; Expensio's participant count is a live count,
-//   not a fixed peopleCount field set once at setup).
-// - No "lock past days" toggle -- deliberately not ported, nothing on this side reads it.
-//
-// The People & Categories section became a Members/Activity Log/Recurring row list --
-// Categories management has no screen yet on this side (custom_categories exists,
-// unused by mobile so far, per the plan doc's mapping table), so that row is dropped
-// rather than pointing somewhere that doesn't exist. Activity Log has no TripSpend
-// equivalent at all, given a home here since it needed one once it stopped being a
-// top-level tab. Invite/Join lives on MembersScreen instead of duplicated here.
-//
-// The trip action rows (archive/delete/leave) are new here, not in TripSpend's
-// TripDetails.tsx at all -- they're what used to be TripDetailScreen.tsx's hidden
-// Alert.alert options menu (openTripOptions), made into visible rows now that this is a
-// real settings screen rather than a three-dot menu. Same underlying RPC calls,
-// unchanged; only the trigger UI moved.
 export default function TripSettingsScreen({
   tripId,
   onBack,
@@ -82,30 +62,27 @@ export default function TripSettingsScreen({
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    const abortController = new AbortController();
+    const ac = new AbortController();
     db.watch(
       'SELECT id, name, currency, start_date, end_date, total_budget, is_archived FROM trips WHERE id = ?',
       [tripId],
-      { onResult: (result) => setTrip(result.rows?._array?.[0] ?? null) },
-      { signal: abortController.signal }
+      { onResult: (r) => setTrip(r.rows?._array?.[0] ?? null) },
+      { signal: ac.signal }
     );
-    return () => abortController.abort();
+    return () => ac.abort();
   }, [tripId]);
 
   useEffect(() => {
-    const abortController = new AbortController();
+    const ac = new AbortController();
     db.watch(
       'SELECT COUNT(*) as count FROM participants WHERE trip_id = ?',
       [tripId],
-      { onResult: (result) => setParticipantCount(result.rows?._array?.[0]?.count ?? 0) },
-      { signal: abortController.signal }
+      { onResult: (r) => setParticipantCount(r.rows?._array?.[0]?.count ?? 0) },
+      { signal: ac.signal }
     );
-    return () => abortController.abort();
+    return () => ac.abort();
   }, [tripId]);
 
-  // Seed the editable fields from the loaded trip exactly once -- not on every db.watch
-  // update, or the user's in-progress edits would get clobbered the moment their own
-  // save round-trips back through PowerSync.
   useEffect(() => {
     if (!trip || hydrated) return;
     setBudget(trip.total_budget != null ? String(trip.total_budget) : '');
@@ -115,8 +92,12 @@ export default function TripSettingsScreen({
   }, [trip, hydrated]);
 
   const budgetNum = Number(budget);
-  const budgetError = budget !== '' && (!Number.isFinite(budgetNum) || budgetNum <= 0) ? 'Enter a budget greater than 0.' : '';
-  const dateError = endDate < startDate ? "End date can't be before the start date." : '';
+  const budgetError =
+    budget !== '' && (!Number.isFinite(budgetNum) || budgetNum <= 0)
+      ? 'Enter a budget greater than 0.'
+      : '';
+  const dateError =
+    endDate < startDate ? "End date can't be before start date." : '';
   const BudgetIcon = currencyIcon(trip?.currency);
 
   async function handleSave() {
@@ -133,10 +114,9 @@ export default function TripSettingsScreen({
           p_trip_id: tripId,
           p_start_date: startDate,
           p_end_date: endDate,
-          // Omitting p_total_budget (rather than sending 0) when the field was cleared,
-          // since update_trip_details treats a null amount as "leave it as-is" -- clearing
-          // the budget on purpose needs the separate p_clear_budget flag instead.
-          ...(budget === '' ? { p_clear_budget: true } : { p_total_budget: budgetNum }),
+          ...(budget === ''
+            ? { p_clear_budget: true }
+            : { p_total_budget: budgetNum }),
         },
         { idempotent: false }
       );
@@ -149,26 +129,33 @@ export default function TripSettingsScreen({
 
   function confirmArchive() {
     const archiving = !trip?.is_archived;
-    const rpcName = archiving ? 'archive_trip' : 'unarchive_trip';
-    Alert.alert(archiving ? 'Archive this trip?' : 'Unarchive this trip?', undefined, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: archiving ? 'Archive' : 'Unarchive',
-        onPress: async () => {
-          try {
-            await callRpc(rpcName, { p_trip_id: tripId }, { idempotent: false });
-          } catch (err) {
-            Alert.alert('Could not update trip', formatError(err));
-          }
+    Alert.alert(
+      archiving ? 'Archive this trip?' : 'Unarchive this trip?',
+      undefined,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: archiving ? 'Archive' : 'Unarchive',
+          onPress: async () => {
+            try {
+              await callRpc(
+                archiving ? 'archive_trip' : 'unarchive_trip',
+                { p_trip_id: tripId },
+                { idempotent: false }
+              );
+            } catch (err) {
+              Alert.alert('Could not update trip', formatError(err));
+            }
+          },
         },
-      },
-    ]);
+      ]
+    );
   }
 
   function confirmDelete() {
     Alert.alert(
       'Delete this trip?',
-      'Only works while you\u2019re the only active member. This cannot be undone from here.',
+      "Only works while you\u2019re the only active member. This cannot be undone.",
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -188,132 +175,168 @@ export default function TripSettingsScreen({
   }
 
   function confirmLeave() {
-    Alert.alert('Leave this trip?', 'Your historical expenses stay in the trip, but you will lose access.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Leave',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await callRpc('leave_trip', { p_trip_id: tripId }, { idempotent: false });
-            onBack();
-          } catch (err) {
-            Alert.alert('Could not leave trip', formatError(err));
-          }
+    Alert.alert(
+      'Leave this trip?',
+      'Your historical expenses stay in the trip, but you will lose access.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Leave',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await callRpc('leave_trip', { p_trip_id: tripId }, { idempotent: false });
+              onBack();
+            } catch (err) {
+              Alert.alert('Could not leave trip', formatError(err));
+            }
+          },
         },
-      },
-    ]);
+      ]
+    );
   }
 
   return (
     <ScrollView
-      className="flex-1 bg-white"
+      style={styles.root}
       contentContainerStyle={{
         paddingTop: Math.max(insets.top, 16),
-        paddingBottom: Math.max(insets.bottom, 16) + 90,
+        paddingBottom: Math.max(insets.bottom, 16) + 100,
         paddingHorizontal: 16,
       }}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
     >
-      <View className="flex-row items-center gap-3 mb-4">
-        <Pressable onPress={onBack} className="p-2 -ml-2 rounded-xl active:bg-slate-100">
-          <ArrowLeft size={20} color="#1e293b" />
+      {/* ── Header ── */}
+      <View style={styles.header}>
+        <Pressable
+          onPress={onBack}
+          style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]}
+          hitSlop={8}
+        >
+          <ArrowLeft size={18} color="#334155" />
         </Pressable>
-        <View className="flex-1">
-          <Text className="text-2xl font-black text-slate-900">Trip Settings</Text>
-          <Text className="text-xs font-semibold text-slate-500">
-            {participantCount} people
-            {trip?.total_budget != null ? ` \u00b7 ${trip.currency} ${trip.total_budget.toFixed(2)} total` : ''}
+
+        <View style={styles.headerBody}>
+          <Text style={styles.headerTitle}>Trip Settings</Text>
+          <Text style={styles.headerSub}>
+            {participantCount} {participantCount === 1 ? 'member' : 'members'}
+            {trip?.total_budget != null
+              ? `  ·  ${trip.currency} ${trip.total_budget.toLocaleString(undefined, { maximumFractionDigits: 0 })} budget`
+              : ''}
           </Text>
         </View>
+
         {!!trip?.is_archived && (
-          <View className="bg-amber-100 border border-amber-200 px-3 py-1 rounded-full">
-            <Text className="text-xs font-bold text-amber-800">Archived</Text>
+          <View style={styles.archivedBadge}>
+            <Text style={styles.archivedText}>Archived</Text>
           </View>
         )}
       </View>
 
+      {/* ── Error banner ── */}
       {!!error && (
-        <View className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3">
-          <Text className="text-sm text-red-700 font-medium">{error}</Text>
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorText}>{error}</Text>
         </View>
       )}
 
-      {/* Budget & Dates */}
-      <View className="space-y-5">
-      <View>
-        <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 px-1">Budget & Dates</Text>
-        <View className="card-elevated p-5 space-y-4">
-          <View>
-            <Text className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
-              Total budget ({trip?.currency ?? '\u2026'})
-            </Text>
-            <View className={`flex-row items-center gap-2 input-field ${budgetFocused ? 'input-field-focused' : ''} ${budgetError ? 'border-red-300' : ''}`}>
-              <BudgetIcon size={16} color="#94a3b8" />
-              <TextInput
-                className="flex-1 text-2xl font-black text-slate-900"
-                value={budget}
-                onChangeText={setBudget}
-                onFocus={() => setBudgetFocused(true)}
-                onBlur={() => setBudgetFocused(false)}
-                placeholder="No budget set"
-                placeholderTextColor="#94a3b8"
-                keyboardType="decimal-pad"
-              />
-            </View>
-            {!!budgetError && <Text className="text-xs text-red-500 font-semibold mt-1.5">{budgetError}</Text>}
+      {/* ── Budget & Dates ── */}
+      <Text style={styles.sectionLabel}>Budget & Dates</Text>
+      <View style={styles.card}>
+        {/* Budget input */}
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Total budget ({trip?.currency ?? '…'})</Text>
+          <View style={[styles.inputRow, budgetFocused && styles.inputRowFocused, !!budgetError && styles.inputRowError]}>
+            <BudgetIcon size={16} color="#94a3b8" />
+            <TextInput
+              style={styles.budgetInput}
+              value={budget}
+              onChangeText={setBudget}
+              onFocus={() => setBudgetFocused(true)}
+              onBlur={() => setBudgetFocused(false)}
+              placeholder="No budget set"
+              placeholderTextColor="#94a3b8"
+              keyboardType="decimal-pad"
+            />
           </View>
+          {!!budgetError && <Text style={styles.fieldError}>{budgetError}</Text>}
+        </View>
 
-          <View className="h-px bg-slate-100" />
+        <View style={styles.divider} />
 
-          <View className="space-y-3">
-            <Text className="text-xs font-bold text-slate-500 uppercase tracking-widest">Dates</Text>
-            <View>
-              <Text className="text-xs text-slate-400 mb-1.5">Start</Text>
+        {/* Dates */}
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Trip dates</Text>
+          <View style={styles.dateRow}>
+            <View style={styles.dateBlock}>
+              <Text style={styles.dateSubLabel}>Start</Text>
               <DatePicker value={startDate} onChange={setStartDate} />
             </View>
-            <View>
-              <Text className="text-xs text-slate-400 mb-1.5">End</Text>
+            <View style={[styles.dateBlock, { marginTop: 0 }]}>
+              <Text style={styles.dateSubLabel}>End</Text>
               <DatePicker value={endDate} onChange={setEndDate} minDate={startDate} />
             </View>
-            {!!dateError && <Text className="text-xs text-red-500 font-semibold">{dateError}</Text>}
           </View>
+          {!!dateError && <Text style={styles.fieldError}>{dateError}</Text>}
         </View>
       </View>
 
-      <PrimaryButton onPress={handleSave} loading={saving} className="w-full">
+      <PrimaryButton onPress={handleSave} loading={saving} style={styles.saveBtn}>
         Save Changes
       </PrimaryButton>
 
-      {/* Trip */}
-      <View>
-        <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 px-1">Trip</Text>
-        <View className="card-elevated overflow-hidden p-0">
-          <SettingsRow icon={<Users size={16} color="#0d9488" />} iconBg="bg-teal-50" title="Manage Members" subtitle={`${participantCount} participant${participantCount !== 1 ? 's' : ''}`} onPress={onOpenMembers} />
-          <View className="h-px bg-slate-50 mx-4" />
-          <SettingsRow icon={<Clock size={16} color="#64748b" />} iconBg="bg-slate-100" title="Activity Log" onPress={onOpenActivityLog} />
-          <View className="h-px bg-slate-50 mx-4" />
-          <SettingsRow icon={<Repeat size={16} color="#7c3aed" />} iconBg="bg-violet-50" title="Recurring Expenses" onPress={onOpenRecurring} />
-        </View>
+      {/* ── Trip links ── */}
+      <Text style={styles.sectionLabel}>Trip</Text>
+      <View style={styles.rowGroup}>
+        <SettingsRow
+          icon={<Users size={16} color="#0d9488" />}
+          iconBg="#f0fdfa"
+          title="Manage Members"
+          subtitle={`${participantCount} participant${participantCount !== 1 ? 's' : ''}`}
+          onPress={onOpenMembers}
+        />
+        <View style={styles.rowDivider} />
+        <SettingsRow
+          icon={<Clock size={16} color="#64748b" />}
+          iconBg="#f8fafc"
+          title="Activity Log"
+          onPress={onOpenActivityLog}
+        />
+        <View style={styles.rowDivider} />
+        <SettingsRow
+          icon={<Repeat size={16} color="#7c3aed" />}
+          iconBg="#f5f3ff"
+          title="Recurring Expenses"
+          onPress={onOpenRecurring}
+        />
       </View>
 
-      {/* Trip actions */}
-      <View>
-        <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 px-1">Trip Actions</Text>
-        <View className="card-elevated overflow-hidden p-0">
-          <SettingsRow
-            icon={<Archive size={16} color="#d97706" />}
-            iconBg="bg-amber-50"
-            title={trip?.is_archived ? 'Unarchive Trip' : 'Archive Trip'}
-            onPress={confirmArchive}
-          />
-          <View className="h-px bg-slate-50 mx-4" />
-          <SettingsRow icon={<LogOut size={16} color="#dc2626" />} iconBg="bg-red-50" title="Leave Trip" titleColor="text-red-600" onPress={confirmLeave} />
-          <View className="h-px bg-slate-50 mx-4" />
-          <SettingsRow icon={<Trash2 size={16} color="#dc2626" />} iconBg="bg-red-50" title="Delete Trip" titleColor="text-red-600" onPress={confirmDelete} />
-        </View>
-      </View>
+      {/* ── Danger zone ── */}
+      <Text style={styles.sectionLabel}>Trip Actions</Text>
+      <View style={styles.rowGroup}>
+        <SettingsRow
+          icon={<Archive size={16} color="#d97706" />}
+          iconBg="#fffbeb"
+          title={trip?.is_archived ? 'Unarchive Trip' : 'Archive Trip'}
+          onPress={confirmArchive}
+        />
+        <View style={styles.rowDivider} />
+        <SettingsRow
+          icon={<LogOut size={16} color="#dc2626" />}
+          iconBg="#fff1f2"
+          title="Leave Trip"
+          titleColor="#dc2626"
+          onPress={confirmLeave}
+        />
+        <View style={styles.rowDivider} />
+        <SettingsRow
+          icon={<Trash2 size={16} color="#dc2626" />}
+          iconBg="#fff1f2"
+          title="Delete Trip"
+          titleColor="#dc2626"
+          onPress={confirmDelete}
+        />
       </View>
     </ScrollView>
   );
@@ -324,7 +347,7 @@ function SettingsRow({
   iconBg,
   title,
   subtitle,
-  titleColor = 'text-slate-900',
+  titleColor = '#0f172a',
   onPress,
 }: {
   icon: React.ReactNode;
@@ -335,13 +358,211 @@ function SettingsRow({
   onPress: () => void;
 }) {
   return (
-    <Pressable onPress={onPress} className="w-full px-4 py-3.5 flex-row items-center gap-3 active:bg-slate-50">
-      <View className={`w-9 h-9 rounded-xl items-center justify-center flex-shrink-0 ${iconBg}`}>{icon}</View>
-      <View className="flex-1 min-w-0">
-        <Text className={`font-semibold text-sm ${titleColor}`}>{title}</Text>
-        {!!subtitle && <Text className="text-xs text-slate-400 mt-0.5">{subtitle}</Text>}
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.settingsRow, pressed && styles.settingsRowPressed]}
+    >
+      <View style={[styles.settingsIcon, { backgroundColor: iconBg }]}>{icon}</View>
+      <View style={styles.settingsBody}>
+        <Text style={[styles.settingsTitle, { color: titleColor }]}>{title}</Text>
+        {!!subtitle && <Text style={styles.settingsSub}>{subtitle}</Text>}
       </View>
       <ChevronRight size={16} color="#cbd5e1" />
     </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+
+  // ── Header ──
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 20,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  backBtnPressed: { backgroundColor: '#e2e8f0' },
+  headerBody: { flex: 1 },
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0f172a',
+    letterSpacing: -0.3,
+  },
+  headerSub: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#94a3b8',
+    marginTop: 2,
+  },
+  archivedBadge: {
+    backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 20,
+  },
+  archivedText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#92400e',
+  },
+
+  // ── Error banner ──
+  errorBanner: {
+    backgroundColor: '#fff1f2',
+    borderWidth: 1,
+    borderColor: '#fecdd3',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 16,
+  },
+  errorText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#be123c',
+  },
+
+  // ── Section label ──
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94a3b8',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 8,
+    marginTop: 20,
+    paddingHorizontal: 2,
+  },
+
+  // ── Card ──
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 20,
+    shadowColor: '#94a3b8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+    gap: 16,
+  },
+  fieldGroup: { gap: 6 },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  inputRowFocused: { borderColor: '#2563eb' },
+  inputRowError: { borderColor: '#fca5a5' },
+  budgetInput: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  fieldError: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#dc2626',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#f1f5f9',
+  },
+  dateRow: {
+    gap: 12,
+  },
+  dateBlock: {
+    gap: 6,
+  },
+  dateSubLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94a3b8',
+  },
+
+  saveBtn: {
+    marginTop: 16,
+  },
+
+  // ── Row group ──
+  rowGroup: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    overflow: 'hidden',
+    shadowColor: '#94a3b8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  rowDivider: {
+    height: 1,
+    backgroundColor: '#f8fafc',
+    marginLeft: 60,
+  },
+
+  // ── Settings row ──
+  settingsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  settingsRowPressed: { backgroundColor: '#f8fafc' },
+  settingsIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  settingsBody: { flex: 1 },
+  settingsTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  settingsSub: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#94a3b8',
+    marginTop: 1,
+  },
+});

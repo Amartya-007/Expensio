@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { FlatList, Pressable, ScrollView, Text, View } from 'react-native';
-import { ArrowLeft } from 'lucide-react-native';
+import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ArrowLeft, PlusCircle } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { db } from '../powersync/db';
 import GradientText from '../components/GradientText';
@@ -17,6 +17,7 @@ type Expense = {
   currency: string;
   paid_by: string;
   category: string | null;
+  expense_date: string | null;
   created_at: string;
 };
 type Trip = { id: string; name: string; currency: string; is_archived: number };
@@ -24,31 +25,14 @@ type Participant = { id: string; display_name: string; type: string };
 type Split = { expense_id: string; participant_id: string; share_amount: number };
 
 function formatTimestamp(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  return new Date(iso).toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
 
-// This screen is now the persistent tab-bar shell -- Home/Expenses/Settle/Settings +
-// raised center FAB, ported from tripspend/src/components/BottomNav.tsx -- rather than
-// the old in-page Expenses/Log/Members/Settle tab row it used to render (see git history
-// / TASKS.md for that version). See docs/architecture/expensio-ui-port-plan.md's
-// "Navigation shape" section for the full history of why this was blocked, then
-// unblocked.
-//
-// Log and Members moved out to their own screens (ActivityLogScreen.tsx,
-// MembersScreen.tsx), reachable from the new Settings tab -- matching TripSpend's actual
-// structure more closely than the old flat tab row did (TripSpend's own member
-// management isn't a bottom tab either, it sits one level under Settings). The
-// FAB/Add-Expense button that used to float only over the Expenses tab is now the shared
-// center FAB in the tab bar, visible from every tab, same as TripSpend's BottomNav.tsx.
-// The old three-dot options menu (archive/delete/leave/recurring) moved into
-// TripSettingsScreen as visible rows.
-//
-// Each tab body is a self-contained screen with its own header (matching how TripSpend's
-// own routes each render full-screen with their own header, not one shared chrome) --
-// this component itself supplies almost no chrome beyond the fixed tab bar at the bottom.
-// Settle is the one exception: SettlementView is deliberately header-less (built to be
-// embedded, see its own file), so a small header is rendered here just for that tab.
 export default function TripDetailScreen({
   tripId,
   onBack,
@@ -71,132 +55,164 @@ export default function TripDetailScreen({
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [splits, setSplits] = useState<Split[]>([]);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
-    const abortController = new AbortController();
+    const ac = new AbortController();
     db.watch(
       'SELECT id, name, currency, is_archived FROM trips WHERE id = ?',
       [tripId],
-      { onResult: (result) => setTrip(result.rows?._array?.[0] ?? null) },
-      { signal: abortController.signal }
+      { onResult: (r) => setTrip(r.rows?._array?.[0] ?? null) },
+      { signal: ac.signal }
     );
-    return () => abortController.abort();
+    return () => ac.abort();
   }, [tripId]);
 
   useEffect(() => {
-    const abortController = new AbortController();
+    const ac = new AbortController();
     db.watch(
-      'SELECT id, description, amount, currency, paid_by, category, created_at FROM expenses WHERE trip_id = ? AND deleted_at IS NULL ORDER BY created_at DESC',
+      'SELECT id, description, amount, currency, paid_by, category, expense_date, created_at FROM expenses WHERE trip_id = ? AND deleted_at IS NULL ORDER BY COALESCE(expense_date, created_at) DESC',
       [tripId],
-      { onResult: (result) => setExpenses(result.rows?._array ?? []) },
-      { signal: abortController.signal }
+      { onResult: (r) => setExpenses(r.rows?._array ?? []) },
+      { signal: ac.signal }
     );
-    return () => abortController.abort();
+    return () => ac.abort();
   }, [tripId]);
 
   useEffect(() => {
-    const abortController = new AbortController();
+    const ac = new AbortController();
     db.watch(
       'SELECT id, display_name, type FROM participants WHERE trip_id = ?',
       [tripId],
-      { onResult: (result) => setParticipants(result.rows?._array ?? []) },
-      { signal: abortController.signal }
+      { onResult: (r) => setParticipants(r.rows?._array ?? []) },
+      { signal: ac.signal }
     );
-    return () => abortController.abort();
+    return () => ac.abort();
   }, [tripId]);
 
   useEffect(() => {
-    // expense_splits syncs via its own bucket keyed by expense_id, not trip_id (see
-    // sync-rules.yaml's header comment for why) -- but it's still just a normal local
-    // table once synced, so a plain join against this trip's expenses works exactly like
-    // any other query.
-    const abortController = new AbortController();
+    const ac = new AbortController();
     db.watch(
-      `SELECT s.expense_id, s.participant_id, s.share_amount FROM expense_splits s
-       JOIN expenses e ON e.id = s.expense_id WHERE e.trip_id = ?`,
+      `SELECT s.expense_id, s.participant_id, s.share_amount
+       FROM expense_splits s
+       JOIN expenses e ON e.id = s.expense_id
+       WHERE e.trip_id = ?`,
       [tripId],
-      { onResult: (result) => setSplits(result.rows?._array ?? []) },
-      { signal: abortController.signal }
+      { onResult: (r) => setSplits(r.rows?._array ?? []) },
+      { signal: ac.signal }
     );
-    return () => abortController.abort();
+    return () => ac.abort();
   }, [tripId]);
 
-  const nameFor = (participantId: string) =>
-    participants.find((p) => p.id === participantId)?.display_name ?? '\u2026';
+  const nameFor = (id: string) =>
+    participants.find((p) => p.id === id)?.display_name ?? '…';
 
-  const splitSummary = (expenseId: string, currency: string) =>
+  const splitSummary = (expenseId: string, cur: string) =>
     splits
       .filter((s) => s.expense_id === expenseId)
-      .map((s) => `${nameFor(s.participant_id)} owes ${currency} ${s.share_amount.toFixed(2)}`)
-      .join(' \u00b7 ');
+      .map((s) => `${nameFor(s.participant_id)} · ${cur} ${s.share_amount.toFixed(2)}`)
+      .join('   ');
 
-  const insets = useSafeAreaInsets();
+  // ── Shared screen header (expenses + settle tabs) ──────────────────────────
+  function TabHeader({ subtitle }: { subtitle: string }) {
+    return (
+      <View
+        style={[
+          styles.tabHeader,
+          { paddingTop: Math.max(insets.top, 16) },
+        ]}
+      >
+        <Pressable
+          onPress={onBack}
+          style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]}
+          hitSlop={8}
+        >
+          <ArrowLeft size={18} color="#334155" />
+        </Pressable>
+
+        <View style={styles.tabHeaderCenter}>
+          <GradientText className="text-xl font-black" numberOfLines={1}>
+            {trip?.name ?? '…'}
+          </GradientText>
+          <Text style={styles.tabHeaderSub}>{subtitle}</Text>
+        </View>
+
+        {!!trip?.is_archived && (
+          <View style={styles.archivedBadge}>
+            <Text style={styles.archivedText}>Archived</Text>
+          </View>
+        )}
+      </View>
+    );
+  }
 
   return (
-    <View className="flex-1 bg-white">
-      {activeTab === 'home' && <DashboardScreen tripId={tripId} onBack={onBack} />}
+    <View style={styles.shell}>
+      {/* ── Home tab ── */}
+      {activeTab === 'home' && (
+        <DashboardScreen tripId={tripId} onBack={onBack} />
+      )}
 
+      {/* ── Expenses tab ── */}
       {activeTab === 'expenses' && (
-        <View className="flex-1">
-          <View style={{ paddingTop: Math.max(insets.top, 16) }} className="px-4 pb-2 bg-white border-b border-slate-100">
-            <View className="flex-row items-center gap-3 py-1">
-              <Pressable onPress={onBack} className="p-2 -ml-2 rounded-xl active:bg-slate-100">
-                <ArrowLeft size={20} color="#1e293b" />
-              </Pressable>
-              <View className="flex-1">
-                <GradientText className="text-2xl font-black" numberOfLines={1}>
-                  {trip?.name ?? '\u2026'}
-                </GradientText>
-                <Text className="text-xs font-semibold text-slate-500">Expenses</Text>
-              </View>
-              {!!trip?.is_archived && (
-                <View className="bg-amber-100 border border-amber-200 px-3 py-1 rounded-full">
-                  <Text className="text-xs font-bold text-amber-800">Archived</Text>
-                </View>
-              )}
-            </View>
-          </View>
+        <View style={styles.tabShell}>
+          <TabHeader subtitle="All Expenses" />
+
           <FlatList
             data={expenses}
             keyExtractor={(item) => item.id}
-            contentContainerStyle={{
-              paddingHorizontal: 16,
-              paddingTop: 12,
-              paddingBottom: Math.max(insets.bottom, 16) + 90,
-            }}
+            contentContainerStyle={[
+              styles.expenseList,
+              { paddingBottom: Math.max(insets.bottom, 16) + 100 },
+            ]}
+            showsVerticalScrollIndicator={false}
             ListEmptyComponent={
-              <View className="items-center py-16">
-                <Text className="text-sm font-semibold text-slate-400 text-center">No expenses yet.</Text>
-                <Text className="text-xs text-slate-400 text-center mt-1">Tap the + button below to add your first expense.</Text>
+              <View style={styles.emptyState}>
+                <PlusCircle size={36} color="#cbd5e1" />
+                <Text style={styles.emptyTitle}>No expenses yet</Text>
+                <Text style={styles.emptyBody}>
+                  Tap the + button below to record your first expense.
+                </Text>
               </View>
             }
             renderItem={({ item }) => {
               const color = colorFor(item.paid_by);
+              const dateStr = item.expense_date
+                ? new Date(item.expense_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+                : formatTimestamp(item.created_at);
               return (
                 <Pressable
                   onPress={() => onOpenExpense(item.id)}
-                  className="bg-white rounded-2xl border border-slate-200/80 p-4 flex-row items-center gap-3 mb-3 shadow-sm active:bg-slate-50"
+                  style={({ pressed }) => [styles.expenseCard, pressed && styles.expenseCardPressed]}
                 >
-                  <View className={`w-12 h-12 rounded-2xl items-center justify-center ${color.bg} border ${color.border}`}>
-                    <Text className={`text-base font-black ${color.text}`}>{item.description[0]?.toUpperCase() ?? '?'}</Text>
+                  {/* Avatar */}
+                  <View style={[styles.expenseAvatar, { backgroundColor: color.rawBg, borderColor: color.rawBorder }]}>
+                    <Text style={[styles.expenseAvatarText, { color: color.rawText }]}>
+                      {item.description[0]?.toUpperCase() ?? '?'}
+                    </Text>
                   </View>
-                  <View className="flex-1">
-                    <View className="flex-row items-start justify-between gap-2">
-                      <Text className="font-bold text-slate-900 text-base flex-1" numberOfLines={1}>
+
+                  {/* Info */}
+                  <View style={styles.expenseInfo}>
+                    <View style={styles.expenseTopRow}>
+                      <Text style={styles.expenseDesc} numberOfLines={1}>
                         {item.description}
                       </Text>
-                      <Text className="font-black text-slate-900 text-base">
+                      <Text style={styles.expenseAmt}>
                         {item.currency} {item.amount.toFixed(2)}
                       </Text>
                     </View>
-                    <Text className="text-xs text-slate-500 mt-0.5" numberOfLines={1}>
-                      paid by {nameFor(item.paid_by)}
-                      {item.category ? ` \u00b7 ${item.category}` : ''}
+                    <Text style={styles.expenseMeta} numberOfLines={1}>
+                      Paid by {nameFor(item.paid_by)}
+                      {item.category ? `  ·  ${item.category}` : ''}
+                      {'  ·  '}
+                      {dateStr}
                     </Text>
-                    <Text className="text-xs text-slate-400 mt-0.5" numberOfLines={1}>
-                      {splitSummary(item.id, item.currency)}
-                    </Text>
-                    <Text className="text-[11px] text-slate-400 mt-1">{formatTimestamp(item.created_at)}</Text>
+                    {splitSummary(item.id, item.currency) !== '' && (
+                      <Text style={styles.expenseSplits} numberOfLines={1}>
+                        {splitSummary(item.id, item.currency)}
+                      </Text>
+                    )}
                   </View>
                 </Pressable>
               );
@@ -205,33 +221,24 @@ export default function TripDetailScreen({
         </View>
       )}
 
+      {/* ── Settle tab ── */}
       {activeTab === 'settle' && (
-        <View className="flex-1">
-          <View style={{ paddingTop: Math.max(insets.top, 16) }} className="px-4 pb-2 bg-white border-b border-slate-100">
-            <View className="flex-row items-center gap-3 py-1">
-              <Pressable onPress={onBack} className="p-2 -ml-2 rounded-xl active:bg-slate-100">
-                <ArrowLeft size={20} color="#1e293b" />
-              </Pressable>
-              <View>
-                <GradientText className="text-2xl font-black" numberOfLines={1}>
-                  {trip?.name ?? '\u2026'}
-                </GradientText>
-                <Text className="text-xs font-semibold text-slate-500">Settle Up & Balances</Text>
-              </View>
-            </View>
-          </View>
+        <View style={styles.tabShell}>
+          <TabHeader subtitle="Settle Up & Balances" />
+
           <ScrollView
-            contentContainerStyle={{
-              paddingHorizontal: 16,
-              paddingTop: 12,
-              paddingBottom: Math.max(insets.bottom, 16) + 90,
-            }}
+            contentContainerStyle={[
+              styles.settleContent,
+              { paddingBottom: Math.max(insets.bottom, 16) + 100 },
+            ]}
+            showsVerticalScrollIndicator={false}
           >
             <SettlementView tripId={tripId} />
           </ScrollView>
         </View>
       )}
 
+      {/* ── Settings tab ── */}
       {activeTab === 'settings' && (
         <TripSettingsScreen
           tripId={tripId}
@@ -246,3 +253,162 @@ export default function TripDetailScreen({
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  shell: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+
+  // ── Tab header ──
+  tabShell: {
+    flex: 1,
+  },
+  tabHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingBottom: 14,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  backBtnPressed: {
+    backgroundColor: '#e2e8f0',
+  },
+  tabHeaderCenter: {
+    flex: 1,
+  },
+  tabHeaderSub: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#94a3b8',
+    marginTop: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  archivedBadge: {
+    backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 20,
+  },
+  archivedText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#92400e',
+  },
+
+  // ── Expense list ──
+  expenseList: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    gap: 10,
+  },
+  expenseCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    shadowColor: '#94a3b8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  expenseCardPressed: {
+    backgroundColor: '#f8fafc',
+    transform: [{ scale: 0.99 }],
+  },
+  expenseAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  expenseAvatarText: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  expenseInfo: {
+    flex: 1,
+    gap: 3,
+  },
+  expenseTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  expenseDesc: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0f172a',
+    flex: 1,
+    letterSpacing: -0.1,
+  },
+  expenseAmt: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0f172a',
+    letterSpacing: -0.2,
+    flexShrink: 0,
+  },
+  expenseMeta: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#64748b',
+  },
+  expenseSplits: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#94a3b8',
+  },
+
+  // ── Empty state ──
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 72,
+    paddingHorizontal: 32,
+    gap: 10,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#334155',
+  },
+  emptyBody: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#94a3b8',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+
+  // ── Settle ──
+  settleContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
+});

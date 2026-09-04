@@ -4,13 +4,22 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
-import { ArrowLeft, Calendar, Compass, DollarSign, Sparkles, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react-native';
+import {
+  AlertCircle,
+  ArrowLeft,
+  Calendar,
+  ChevronDown,
+  ChevronUp,
+  Compass,
+  Sparkles,
+} from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { callRpc } from '../rpc';
 import { detectCurrency } from '../utils/detectCurrency';
 import { currencyIcon } from '../utils/currencyIcon';
@@ -20,31 +29,23 @@ import PrimaryButton from '../components/PrimaryButton';
 import DatePicker from '../components/DatePicker';
 
 const CURRENCIES = [
-  { code: 'INR', symbol: '₹', name: 'Indian Rupee' },
-  { code: 'USD', symbol: '$', name: 'US Dollar' },
-  { code: 'EUR', symbol: '€', name: 'Euro' },
-  { code: 'GBP', symbol: '£', name: 'British Pound' },
-  { code: 'AUD', symbol: 'A$', name: 'Australian Dollar' },
-  { code: 'CAD', symbol: 'C$', name: 'Canadian Dollar' },
-  { code: 'JPY', symbol: '¥', name: 'Japanese Yen' },
-  { code: 'SGD', symbol: 'S$', name: 'Singapore Dollar' },
+  { code: 'INR', symbol: '₹' },
+  { code: 'USD', symbol: '$' },
+  { code: 'EUR', symbol: '€' },
+  { code: 'GBP', symbol: '£' },
+  { code: 'AUD', symbol: 'A$' },
+  { code: 'CAD', symbol: 'C$' },
+  { code: 'JPY', symbol: '¥' },
+  { code: 'SGD', symbol: 'S$' },
 ];
 
 function todayIso() {
   const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-
 function plusDaysIso(days: number) {
-  const d = new Date();
-  d.setDate(d.getDate() + days);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  const d = new Date(); d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
 
 export default function CreateTripScreen({
@@ -70,8 +71,7 @@ export default function CreateTripScreen({
 
   async function submit() {
     if (!name.trim() || !budgetValid) return;
-    setBusy(true);
-    setError(null);
+    setBusy(true); setError(null);
     try {
       const result = await callRpc<string>('create_trip', {
         p_name: name.trim(),
@@ -79,14 +79,7 @@ export default function CreateTripScreen({
         ...(showMore && { p_start_date: startDate, p_end_date: endDate }),
         ...(showMore && budget !== '' && { p_total_budget: budgetNum }),
       });
-      if (result.status === 'ok') {
-        onCreated(result.data, currency);
-      } else {
-        // Queued for later — there's no local trip row to open yet (it doesn't exist
-        // locally until the RPC actually runs and syncs back down), so go back to the
-        // list instead of trying to navigate into it.
-        onCreated(null, currency);
-      }
+      onCreated(result.status === 'ok' ? result.data : null, currency);
     } catch (err) {
       setError(formatError(err));
     } finally {
@@ -97,10 +90,10 @@ export default function CreateTripScreen({
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      className="flex-1 bg-slate-50"
+      style={s.root}
     >
       <ScrollView
-        className="flex-1"
+        style={s.scroll}
         contentContainerStyle={{
           paddingTop: Math.max(insets.top, 16),
           paddingBottom: Math.max(insets.bottom, 24) + 24,
@@ -109,41 +102,34 @@ export default function CreateTripScreen({
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Navigation / Header */}
-        <View className="flex-row items-center justify-between mb-4">
-          <TouchableOpacity
+        {/* Top bar */}
+        <View style={s.topBar}>
+          <Pressable
             onPress={onCancel}
-            activeOpacity={0.7}
-            className="w-10 h-10 -ml-1 rounded-2xl bg-white border border-slate-200/80 items-center justify-center shadow-sm"
+            style={({ pressed }) => [s.backBtn, pressed && s.backBtnPressed]}
+            hitSlop={8}
           >
-            <ArrowLeft size={20} color="#334155" />
-          </TouchableOpacity>
-
-          <View className="flex-row items-center gap-1.5 px-3 py-1 bg-blue-50/80 border border-blue-100 rounded-full">
-            <Sparkles size={12} color="#2563eb" />
-            <Text className="text-xs font-bold text-blue-700">New Journey</Text>
+            <ArrowLeft size={18} color="#334155" />
+          </Pressable>
+          <View style={s.newBadge}>
+            <Sparkles size={11} color="#2563eb" />
+            <Text style={s.newBadgeText}>New Journey</Text>
           </View>
         </View>
 
         {/* Title */}
-        <View className="mb-6">
-          <GradientText className="text-3xl font-black tracking-tight mb-1">
-            Where to?
-          </GradientText>
-          <Text className="text-sm font-medium text-slate-500">
-            Name your trip, set your currency, and start splitting effortlessly.
-          </Text>
+        <View style={s.titleBlock}>
+          <GradientText className="text-3xl font-black tracking-tight">Where to?</GradientText>
+          <Text style={s.subtitle}>Name your trip, set a currency, and start splitting.</Text>
         </View>
 
-        {/* Hero Trip Name Input Card */}
-        <View className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm mb-6">
-          <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2.5">
-            Trip Name
-          </Text>
-          <View className="flex-row items-center gap-3 bg-slate-50 border border-slate-200/80 rounded-2xl px-4 py-3 focus:border-blue-500">
-            <Compass size={22} color="#2563eb" />
+        {/* Trip name card */}
+        <View style={s.card}>
+          <Text style={s.fieldLabel}>Trip Name</Text>
+          <View style={s.nameInputRow}>
+            <Compass size={20} color="#2563eb" />
             <TextInput
-              className="flex-1 text-xl font-bold text-slate-900"
+              style={s.nameInput}
               value={name}
               onChangeText={setName}
               placeholder="e.g. Goa Trip, Euro Summer"
@@ -154,150 +140,100 @@ export default function CreateTripScreen({
           </View>
         </View>
 
-        {/* Currency Selection Card */}
-        <View className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm mb-6">
-          <View className="flex-row items-center justify-between mb-3">
-            <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              Primary Currency
-            </Text>
-            <Text className="text-[11px] font-semibold text-slate-400">
-              Auto-detected
-            </Text>
+        {/* Currency card */}
+        <View style={s.card}>
+          <View style={s.cardHeaderRow}>
+            <Text style={s.fieldLabel}>Primary Currency</Text>
+            <Text style={s.autoLabel}>Auto-detected</Text>
           </View>
-
-          <View className="flex-row flex-wrap gap-2">
+          <View style={s.currencyGrid}>
             {CURRENCIES.map((c) => {
-              const isSelected = currency === c.code;
+              const selected = currency === c.code;
               return (
-                <TouchableOpacity
+                <Pressable
                   key={c.code}
-                  activeOpacity={0.7}
                   onPress={() => setCurrency(c.code)}
-                  className={`flex-row items-center gap-1.5 px-3.5 py-2.5 rounded-2xl border ${isSelected
-                      ? 'bg-blue-600 border-blue-600 shadow-sm shadow-blue-500/20'
-                      : 'bg-slate-50 border-slate-200 active:bg-slate-100'
-                    }`}
+                  style={({ pressed }) => [
+                    s.currencyChip,
+                    selected ? s.currencyChipSelected : s.currencyChipUnselected,
+                    pressed && !selected && s.currencyChipPressed,
+                  ]}
                 >
-                  <Text
-                    className={`text-xs font-bold ${isSelected ? 'text-blue-100' : 'text-slate-400'
-                      }`}
-                  >
+                  <Text style={[s.currencySymbol, selected ? s.currencySymbolSelected : s.currencySymbolUnselected]}>
                     {c.symbol}
                   </Text>
-                  <Text
-                    className={`text-xs font-bold ${isSelected ? 'text-white' : 'text-slate-700'
-                      }`}
-                  >
+                  <Text style={[s.currencyCode, selected ? s.currencyCodeSelected : s.currencyCodeUnselected]}>
                     {c.code}
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               );
             })}
           </View>
         </View>
 
-        {/* Dates & Budget Card */}
-        <View className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm mb-6">
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => setShowMore((prev) => !prev)}
-            className="flex-row items-center justify-between"
+        {/* Dates & budget card */}
+        <View style={s.card}>
+          <Pressable
+            onPress={() => setShowMore(v => !v)}
+            style={s.collapsibleHeader}
           >
-            <View className="flex-row items-center gap-2">
-              <Calendar size={18} color="#2563eb" />
-              <Text className="text-sm font-bold text-slate-800">
-                Dates & Budget (Optional)
-              </Text>
+            <View style={s.collapsibleHeaderLeft}>
+              <Calendar size={17} color="#2563eb" />
+              <Text style={s.collapsibleTitle}>Dates &amp; Budget (Optional)</Text>
             </View>
-            <View className="w-7 h-7 rounded-xl bg-slate-100 items-center justify-center">
-              {showMore ? (
-                <ChevronUp size={16} color="#64748b" />
-              ) : (
-                <ChevronDown size={16} color="#64748b" />
-              )}
+            <View style={s.chevronWrap}>
+              {showMore ? <ChevronUp size={16} color="#64748b" /> : <ChevronDown size={16} color="#64748b" />}
             </View>
-          </TouchableOpacity>
+          </Pressable>
 
           {showMore && (
-            <View className="mt-4 pt-4 border-t border-slate-100 space-y-4">
-              {/* Dates */}
-              <View className="space-y-3">
-                <View>
-                  <Text className="text-xs font-bold text-slate-500 mb-1.5">
-                    Start Date
-                  </Text>
-                  <DatePicker
-                    value={startDate}
-                    onChange={(d) => {
-                      setStartDate(d);
-                      if (endDate < d) {
-                        setEndDate(d);
-                      }
-                    }}
-                    label="Trip Start Date"
-                  />
-                </View>
+            <View style={s.collapsibleBody}>
+              <View style={s.divider} />
 
-                <View className="mt-3">
-                  <Text className="text-xs font-bold text-slate-500 mb-1.5">
-                    End Date
-                  </Text>
-                  <DatePicker
-                    value={endDate}
-                    onChange={setEndDate}
-                    minDate={startDate}
-                    label="Trip End Date"
-                  />
-                </View>
-              </View>
+              <Text style={s.subLabel}>Start Date</Text>
+              <DatePicker
+                value={startDate}
+                onChange={(d) => { setStartDate(d); if (endDate < d) setEndDate(d); }}
+                label="Trip Start Date"
+              />
 
-              {/* Total Budget */}
-              <View className="pt-2">
-                <Text className="text-xs font-bold text-slate-500 mb-1.5">
-                  Total Budget ({currency})
-                </Text>
-                <View className="flex-row items-center gap-2.5 px-4 py-3 bg-slate-50 border border-slate-200/80 rounded-2xl">
-                  <BudgetIcon size={18} color="#64748b" />
-                  <TextInput
-                    className="flex-1 text-base font-bold text-slate-900"
-                    value={budget}
-                    onChangeText={setBudget}
-                    placeholder="No limit"
-                    placeholderTextColor="#94a3b8"
-                    keyboardType="decimal-pad"
-                  />
-                </View>
-                {!budgetValid && (
-                  <Text className="text-xs text-red-500 font-semibold mt-1.5">
-                    Enter a valid budget greater than 0.
-                  </Text>
-                )}
+              <Text style={[s.subLabel, { marginTop: 12 }]}>End Date</Text>
+              <DatePicker value={endDate} onChange={setEndDate} minDate={startDate} label="Trip End Date" />
+
+              <Text style={[s.subLabel, { marginTop: 12 }]}>Total Budget ({currency})</Text>
+              <View style={s.budgetRow}>
+                <BudgetIcon size={17} color="#64748b" />
+                <TextInput
+                  style={s.budgetInput}
+                  value={budget}
+                  onChangeText={setBudget}
+                  placeholder="No limit"
+                  placeholderTextColor="#94a3b8"
+                  keyboardType="decimal-pad"
+                />
               </View>
+              {!budgetValid && (
+                <Text style={s.fieldError}>Enter a valid budget greater than 0.</Text>
+              )}
             </View>
           )}
         </View>
 
-        {/* Error Banner */}
+        {/* Error banner */}
         {!!error && (
-          <View className="flex-row items-start gap-2.5 p-4 rounded-2xl bg-red-50 border border-red-200 mb-6">
-            <AlertCircle size={18} color="#dc2626" className="mt-0.5 shrink-0" />
-            <View className="flex-1">
-              <Text className="text-xs font-bold text-red-800">
-                Could not create trip
-              </Text>
-              <Text className="text-xs text-red-600 mt-0.5 leading-relaxed font-medium">
-                {error}
-              </Text>
+          <View style={s.errorBanner}>
+            <AlertCircle size={16} color="#dc2626" />
+            <View style={{ flex: 1 }}>
+              <Text style={s.errorTitle}>Could not create trip</Text>
+              <Text style={s.errorBody}>{error}</Text>
             </View>
           </View>
         )}
 
-        {/* Submit Button */}
         <PrimaryButton
           onPress={submit}
           loading={busy}
           disabled={!name.trim() || !budgetValid}
-          className="w-full shadow-lg shadow-blue-600/25"
         >
           Start Planning
         </PrimaryButton>
@@ -305,3 +241,53 @@ export default function CreateTripScreen({
     </KeyboardAvoidingView>
   );
 }
+
+const s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#f8fafc' },
+  scroll: { flex: 1 },
+
+  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
+  backBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' },
+  backBtnPressed: { backgroundColor: '#e2e8f0' },
+  newBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 5, backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 20 },
+  newBadgeText: { fontSize: 11, fontWeight: '700', color: '#2563eb' },
+
+  titleBlock: { marginBottom: 24, gap: 6 },
+  subtitle: { fontSize: 13, fontWeight: '500', color: '#64748b', lineHeight: 20 },
+
+  card: { backgroundColor: '#fff', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 16, shadowColor: '#94a3b8', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2, gap: 12 },
+  cardHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  fieldLabel: { fontSize: 11, fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.6 },
+  autoLabel: { fontSize: 11, fontWeight: '600', color: '#94a3b8' },
+  subLabel: { fontSize: 11, fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  nameInputRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12 },
+  nameInput: { flex: 1, fontSize: 18, fontWeight: '700', color: '#0f172a' },
+
+  currencyGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  currencyChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 14, borderWidth: 1 },
+  currencyChipSelected: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
+  currencyChipUnselected: { backgroundColor: '#f8fafc', borderColor: '#e2e8f0' },
+  currencyChipPressed: { backgroundColor: '#f1f5f9' },
+  currencySymbol: { fontSize: 12, fontWeight: '700' },
+  currencySymbolSelected: { color: '#bfdbfe' },
+  currencySymbolUnselected: { color: '#94a3b8' },
+  currencyCode: { fontSize: 12, fontWeight: '800' },
+  currencyCodeSelected: { color: '#fff' },
+  currencyCodeUnselected: { color: '#334155' },
+
+  collapsibleHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  collapsibleHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  collapsibleTitle: { fontSize: 13, fontWeight: '700', color: '#1e293b' },
+  chevronWrap: { width: 28, height: 28, borderRadius: 9, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' },
+  collapsibleBody: { gap: 6 },
+  divider: { height: 1, backgroundColor: '#f1f5f9' },
+
+  budgetRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12 },
+  budgetInput: { flex: 1, fontSize: 16, fontWeight: '700', color: '#0f172a' },
+  fieldError: { fontSize: 11, fontWeight: '600', color: '#dc2626' },
+
+  errorBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 14, borderRadius: 16, backgroundColor: '#fff1f2', borderWidth: 1, borderColor: '#fecdd3', marginBottom: 16 },
+  errorTitle: { fontSize: 12, fontWeight: '800', color: '#991b1b' },
+  errorBody: { fontSize: 12, fontWeight: '500', color: '#b91c1c', marginTop: 2, lineHeight: 18 },
+});
