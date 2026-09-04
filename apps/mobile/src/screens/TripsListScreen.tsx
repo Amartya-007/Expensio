@@ -73,7 +73,7 @@ export default function TripsListScreen({
   useEffect(() => {
     const ac = new AbortController();
     db.watch(
-      'SELECT id, name, currency, start_date, end_date, total_budget, created_at, is_archived FROM trips WHERE is_archived = ? ORDER BY created_at DESC',
+      'SELECT id, name, currency, start_date, end_date, total_budget, created_at, is_archived FROM trips WHERE is_archived = ? AND deleted_at IS NULL ORDER BY created_at DESC',
       [showArchived ? 1 : 0],
       { onResult: (r) => setTrips(r.rows?._array ?? []) },
       { signal: ac.signal }

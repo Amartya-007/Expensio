@@ -20,6 +20,11 @@ export const AppSchema = new Schema({
     total_budget: column.real,
     is_archived: column.integer,
     created_at: column.text,
+    // Soft-delete marker (0002_core_schema.sql). The user_trips stream already selects
+    // trips.* so this was syncing down as an untyped column; declaring it here is what
+    // makes "WHERE deleted_at IS NULL" queries against the local table actually work
+    // instead of throwing "no such column: deleted_at".
+    deleted_at: column.text,
   }),
 
   participants: new Table({
