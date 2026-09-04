@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { ArrowLeft, Repeat, X } from 'lucide-react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ArrowLeft, Calendar, Repeat, Trash2 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { db } from '../powersync/db';
 import { callRpc } from '../rpc';
@@ -10,16 +10,32 @@ import GradientText from '../components/GradientText';
 import Chip from '../components/Chip';
 
 type Participant = { id: string; display_name: string };
-type Template = { id: string; description: string; amount: number; currency: string; recurrence_rule: string; next_run_date: string };
+type Template = {
+  id: string;
+  description: string;
+  amount: number;
+  currency: string;
+  recurrence_rule: string;
+  next_run_date: string;
+};
 
 const RULES = ['weekly', 'monthly', 'yearly'] as const;
 
-// Restyled with this port's design language -- no TripSpend screen to port from (that
-// codebase doesn't have recurring expenses at all). All logic (both RPC calls, the
-// participant/template watch queries) unchanged from before this pass -- only the JSX
-// changed, plus the paid-by/repeats selectors now use the same shared Chip component
-// AddExpenseScreen.tsx uses, extracted there once it was needed in a second place.
-export default function RecurringScreen({ tripId, currency, onBack }: { tripId: string; currency: string; onBack: () => void }) {
+const RULE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  weekly:  { bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe' },
+  monthly: { bg: '#f5f3ff', text: '#6d28d9', border: '#ddd6fe' },
+  yearly:  { bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0' },
+};
+
+export default function RecurringScreen({
+  tripId,
+  currency,
+  onBack,
+}: {
+  tripId: string;
+  currency: string;
+  onBack: () => void;
+}) {
   const insets = useSafeAreaInsets();
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -32,21 +48,26 @@ export default function RecurringScreen({ tripId, currency, onBack }: { tripId: 
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const controller = new AbortController();
-    db.watch('SELECT id, display_name FROM participants WHERE trip_id = ?', [tripId], {
-      onResult: (result) => {
-        const rows = result.rows?._array ?? [];
-        setParticipants(rows);
-        setPaidBy((current) => current ?? rows[0]?.id ?? null);
+    const ac = new AbortController();
+    db.watch(
+      'SELECT id, display_name FROM participants WHERE trip_id = ?',
+      [tripId],
+      {
+        onResult: (r) => {
+          const rows = r.rows?._array ?? [];
+          setParticipants(rows);
+          setPaidBy((c) => c ?? rows[0]?.id ?? null);
+        },
       },
-    }, { signal: controller.signal });
+      { signal: ac.signal }
+    );
     db.watch(
       'SELECT id, description, amount, currency, recurrence_rule, next_run_date FROM expense_templates WHERE trip_id = ? AND is_active = 1 ORDER BY next_run_date',
       [tripId],
-      { onResult: (result) => setTemplates(result.rows?._array ?? []) },
-      { signal: controller.signal }
+      { onResult: (r) => setTemplates(r.rows?._array ?? []) },
+      { signal: ac.signal }
     );
-    return () => controller.abort();
+    return () => ac.abort();
   }, [tripId]);
 
   async function createTemplate() {
@@ -86,88 +107,441 @@ export default function RecurringScreen({ tripId, currency, onBack }: { tripId: 
 
   return (
     <ScrollView
-      className="flex-1 bg-white"
+      style={styles.root}
       contentContainerStyle={{
         paddingTop: Math.max(insets.top, 16),
         paddingBottom: Math.max(insets.bottom, 16) + 32,
         paddingHorizontal: 16,
       }}
+      keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
     >
-      <View className="flex-row items-center gap-3 mb-5">
-        <Pressable onPress={onBack} disabled={busy} className="p-2 -ml-2 rounded-xl active:bg-slate-100">
-          <ArrowLeft size={20} color="#1e293b" />
+      {/* ── Header ── */}
+      <View style={styles.header}>
+        <Pressable
+          onPress={onBack}
+          disabled={busy}
+          style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]}
+          hitSlop={8}
+        >
+          <ArrowLeft size={18} color="#334155" />
         </Pressable>
-        <View>
-          <GradientText className="text-2xl font-black">Recurring Expenses</GradientText>
-          <Text className="text-xs font-semibold text-slate-500">Auto-repeating expenses and templates</Text>
+        <View style={styles.headerBody}>
+          <GradientText className="text-2xl font-black">Recurring</GradientText>
+          <Text style={styles.headerSub}>Auto-repeating expense templates</Text>
+        </View>
+        <View style={styles.countBadge}>
+          <Repeat size={12} color="#7c3aed" />
+          <Text style={styles.countBadgeText}>{templates.length} active</Text>
         </View>
       </View>
 
-      <View className="card-elevated p-4 space-y-4">
-        <View>
-          <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Description</Text>
-          <TextInput className="input-field text-base text-slate-900" value={description} onChangeText={setDescription} placeholder="Rent" placeholderTextColor="#94a3b8" />
+      {/* ── Create form ── */}
+      <Text style={styles.sectionLabel}>New Template</Text>
+      <View style={styles.card}>
+        {/* Description */}
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Description</Text>
+          <TextInput
+            style={styles.textInput}
+            value={description}
+            onChangeText={setDescription}
+            placeholder="e.g. Rent, Subscription"
+            placeholderTextColor="#94a3b8"
+          />
         </View>
-        <View>
-          <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Amount ({currency})</Text>
-          <TextInput className="input-field text-base text-slate-900" value={amount} onChangeText={setAmount} placeholder="0.00" placeholderTextColor="#94a3b8" keyboardType="decimal-pad" />
+
+        <View style={styles.divider} />
+
+        {/* Amount */}
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Amount ({currency})</Text>
+          <View style={styles.amountRow}>
+            <View style={styles.currencyChip}>
+              <Text style={styles.currencyChipText}>{currency}</Text>
+            </View>
+            <TextInput
+              style={styles.amountInput}
+              value={amount}
+              onChangeText={setAmount}
+              placeholder="0.00"
+              placeholderTextColor="#94a3b8"
+              keyboardType="decimal-pad"
+            />
+          </View>
         </View>
-        <View>
-          <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Paid by</Text>
-          <View className="flex-row flex-wrap gap-2">
-            {participants.map((participant) => (
-              <Chip key={participant.id} selected={paidBy === participant.id} label={participant.display_name} onPress={() => setPaidBy(participant.id)} />
+
+        <View style={styles.divider} />
+
+        {/* Paid by */}
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Paid by</Text>
+          <View style={styles.chipRow}>
+            {participants.map((p) => (
+              <Chip
+                key={p.id}
+                selected={paidBy === p.id}
+                label={p.display_name}
+                onPress={() => setPaidBy(p.id)}
+              />
             ))}
           </View>
         </View>
-        <View>
-          <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Repeats</Text>
-          <View className="flex-row gap-2">
-            {RULES.map((option) => (
-              <Chip key={option} selected={rule === option} label={option} onPress={() => setRule(option)} />
+
+        <View style={styles.divider} />
+
+        {/* Repeats */}
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Repeats</Text>
+          <View style={styles.chipRow}>
+            {RULES.map((r) => (
+              <Chip
+                key={r}
+                selected={rule === r}
+                label={r.charAt(0).toUpperCase() + r.slice(1)}
+                onPress={() => setRule(r)}
+              />
             ))}
           </View>
         </View>
-        <View>
-          <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Next run date (YYYY-MM-DD)</Text>
-          <TextInput className="input-field text-base text-slate-900" value={nextRunDate} onChangeText={setNextRunDate} placeholder="2026-09-01" placeholderTextColor="#94a3b8" />
+
+        <View style={styles.divider} />
+
+        {/* Next run date */}
+        <View style={styles.fieldGroup}>
+          <Text style={styles.fieldLabel}>Next run date</Text>
+          <View style={styles.dateInputRow}>
+            <Calendar size={15} color="#94a3b8" />
+            <TextInput
+              style={styles.dateInput}
+              value={nextRunDate}
+              onChangeText={setNextRunDate}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor="#94a3b8"
+            />
+          </View>
         </View>
+
+        {/* Error */}
+        {!!error && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
+
         <PrimaryButton
           onPress={createTemplate}
-          disabled={busy || !description.trim() || !amount || !paidBy}
           loading={busy}
-          icon={<Repeat size={16} color="#fff" />}
-          className="w-full"
+          disabled={busy || !description.trim() || !amount || !paidBy}
+          style={styles.createBtn}
         >
-          Add recurring expense
+          Add Recurring Expense
         </PrimaryButton>
       </View>
 
-      <View>
-        <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Active templates</Text>
-        {templates.length === 0 && <Text className="text-slate-400 text-sm">No recurring expenses set up yet.</Text>}
-        {templates.map((template) => (
-          <View className="flex-row items-center justify-between gap-3 bg-slate-50 rounded-2xl px-4 py-3 mb-2" key={template.id}>
-            <View className="flex-1">
-              <Text className="text-sm font-bold text-slate-900">{template.description}</Text>
-              <Text className="text-xs text-slate-500 mt-0.5">
-                {template.currency} {template.amount.toFixed(2)} · {template.recurrence_rule} · next {template.next_run_date}
-              </Text>
-            </View>
-            <Pressable onPress={() => deleteTemplate(template.id)} className="flex-row items-center gap-1">
-              <X size={12} color="#e11d48" />
-              <Text className="text-xs font-bold text-rose-600">Stop</Text>
-            </Pressable>
-          </View>
-        ))}
-      </View>
+      {/* ── Active templates ── */}
+      <Text style={styles.sectionLabel}>
+        Active Templates ({templates.length})
+      </Text>
 
-      {!!error && (
-        <View className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3">
-          <Text className="text-sm text-red-700 font-medium">{error}</Text>
+      {templates.length === 0 ? (
+        <View style={styles.emptyTemplates}>
+          <Repeat size={28} color="#cbd5e1" />
+          <Text style={styles.emptyText}>No recurring expenses set up yet.</Text>
+        </View>
+      ) : (
+        <View style={styles.templateList}>
+          {templates.map((t) => {
+            const ruleColor = RULE_COLORS[t.recurrence_rule] ?? RULE_COLORS.monthly;
+            return (
+              <View key={t.id} style={styles.templateCard}>
+                {/* Icon */}
+                <View style={styles.templateIcon}>
+                  <Repeat size={16} color="#7c3aed" />
+                </View>
+
+                {/* Info */}
+                <View style={styles.templateBody}>
+                  <Text style={styles.templateName} numberOfLines={1}>
+                    {t.description}
+                  </Text>
+                  <View style={styles.templateMeta}>
+                    <View style={[styles.ruleChip, { backgroundColor: ruleColor.bg, borderColor: ruleColor.border }]}>
+                      <Text style={[styles.ruleChipText, { color: ruleColor.text }]}>
+                        {t.recurrence_rule}
+                      </Text>
+                    </View>
+                    <Text style={styles.templateMetaText}>
+                      {t.currency} {t.amount.toFixed(2)}  ·  next {t.next_run_date}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Delete */}
+                <Pressable
+                  onPress={() => deleteTemplate(t.id)}
+                  style={({ pressed }) => [styles.deleteBtn, pressed && styles.deleteBtnPressed]}
+                  hitSlop={8}
+                >
+                  <Trash2 size={15} color="#e11d48" />
+                </Pressable>
+              </View>
+            );
+          })}
         </View>
       )}
     </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+
+  // ── Header ──
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 20,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  backBtnPressed: { backgroundColor: '#e2e8f0' },
+  headerBody: { flex: 1 },
+  headerSub: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#94a3b8',
+    marginTop: 2,
+  },
+  countBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#f5f3ff',
+    borderWidth: 1,
+    borderColor: '#ddd6fe',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  countBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#7c3aed',
+  },
+
+  // ── Section label ──
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94a3b8',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 8,
+    paddingHorizontal: 2,
+  },
+
+  // ── Card ──
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 20,
+    gap: 16,
+    shadowColor: '#94a3b8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+    marginBottom: 20,
+  },
+  fieldGroup: { gap: 8 },
+  fieldLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  textInput: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  amountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  currencyChip: {
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  currencyChipText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#1d4ed8',
+  },
+  amountInput: {
+    flex: 1,
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  dateInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  dateInput: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#f1f5f9',
+  },
+  errorBanner: {
+    backgroundColor: '#fff1f2',
+    borderWidth: 1,
+    borderColor: '#fecdd3',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  errorText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#be123c',
+  },
+  createBtn: { marginTop: 4 },
+
+  // ── Empty templates ──
+  emptyTemplates: {
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 40,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  emptyText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#94a3b8',
+  },
+
+  // ── Template list ──
+  templateList: {
+    gap: 8,
+  },
+  templateCard: {
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    shadowColor: '#94a3b8',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  templateIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#f5f3ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  templateBody: {
+    flex: 1,
+    gap: 6,
+  },
+  templateName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  templateMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  ruleChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  ruleChipText: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'capitalize',
+  },
+  templateMetaText: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#64748b',
+  },
+  deleteBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#fff1f2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  deleteBtnPressed: { backgroundColor: '#ffe4e6' },
+});

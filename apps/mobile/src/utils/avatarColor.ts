@@ -10,8 +10,19 @@ export const AVATAR_COLORS = [
   { bg: 'bg-violet-50', border: 'border-violet-100', text: 'text-violet-700' },
 ];
 
+// Raw hex equivalents for use in StyleSheet.create (NativeWind className strings can't
+// be used inside StyleSheet objects).
+const AVATAR_COLORS_HEX = [
+  { rawBg: '#eff6ff', rawBorder: '#dbeafe', rawText: '#1d4ed8' }, // blue
+  { rawBg: '#ecfdf5', rawBorder: '#d1fae5', rawText: '#065f46' }, // emerald
+  { rawBg: '#fffbeb', rawBorder: '#fef3c7', rawText: '#b45309' }, // amber
+  { rawBg: '#fff1f2', rawBorder: '#ffe4e6', rawText: '#be123c' }, // rose
+  { rawBg: '#f5f3ff', rawBorder: '#ede9fe', rawText: '#6d28d9' }, // violet
+];
+
 export function colorFor(id: string) {
   let hash = 0;
   for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
-  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+  const idx = hash % AVATAR_COLORS.length;
+  return { ...AVATAR_COLORS[idx], ...AVATAR_COLORS_HEX[idx] };
 }

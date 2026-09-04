@@ -12,388 +12,187 @@ import {
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Check, X } from 'lucide-react-native';
 
 const MONTH_NAMES = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
+  'January','February','March','April','May','June',
+  'July','August','September','October','November','December',
 ];
-
 const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
-function pad2(n: number): string {
-  return n < 10 ? `0${n}` : `${n}`;
+function pad2(n: number): string { return n < 10 ? `0${n}` : `${n}`; }
+function toIsoString(y: number, m: number, d: number) { return `${y}-${pad2(m)}-${pad2(d)}`; }
+function parseIso(iso: string) {
+  if (!iso) { const n = new Date(); return { year: n.getFullYear(), month: n.getMonth()+1, day: n.getDate() }; }
+  const p = iso.split('-').map(Number);
+  if (p.length === 3 && !p.some(Number.isNaN)) return { year: p[0], month: p[1], day: p[2] };
+  const n = new Date(); return { year: n.getFullYear(), month: n.getMonth()+1, day: n.getDate() };
 }
-
-function toIsoString(year: number, month: number, day: number): string {
-  return `${year}-${pad2(month)}-${pad2(day)}`;
-}
-
-function parseIso(iso: string): { year: number; month: number; day: number } {
-  if (!iso || typeof iso !== 'string') {
-    const now = new Date();
-    return { year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate() };
-  }
-  const parts = iso.split('-').map(Number);
-  if (parts.length === 3 && !parts.some(Number.isNaN)) {
-    return { year: parts[0], month: parts[1], day: parts[2] };
-  }
-  const now = new Date();
-  return { year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate() };
-}
-
-function formatDisplayDate(iso: string): string {
+function formatDisplay(iso: string) {
   if (!iso) return 'Select date';
   const { year, month, day } = parseIso(iso);
-  const dateObj = new Date(year, month - 1, day);
-  const weekdayShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dateObj.getDay()];
-  const monthShort = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ][month - 1];
-  return `${weekdayShort}, ${monthShort} ${day}, ${year}`;
+  const d = new Date(year, month-1, day);
+  const wd = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+  const mn = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][month-1];
+  return `${wd}, ${mn} ${day}, ${year}`;
 }
-
-function getTodayIso(): string {
-  const now = new Date();
-  return toIsoString(now.getFullYear(), now.getMonth() + 1, now.getDate());
+function getTodayIso() {
+  const n = new Date(); return toIsoString(n.getFullYear(), n.getMonth()+1, n.getDate());
 }
-
-function getDaysInMonth(year: number, month: number): number {
-  return new Date(year, month, 0).getDate();
-}
+function getDaysInMonth(y: number, m: number) { return new Date(y, m, 0).getDate(); }
 
 export default function DatePicker({
-  value,
-  onChange,
-  minDate,
-  label,
+  value, onChange, minDate, label,
 }: {
-  value: string;
-  onChange: (value: string) => void;
-  minDate?: string;
-  label?: string;
+  value: string; onChange: (v: string) => void; minDate?: string; label?: string;
 }) {
-  const [modalVisible, setModalVisible] = useState(false);
+  const [open, setOpen] = useState(false);
   const [selectedIso, setSelectedIso] = useState(value || getTodayIso());
-
   const initial = useMemo(() => parseIso(selectedIso), [selectedIso]);
   const [viewYear, setViewYear] = useState(initial.year);
   const [viewMonth, setViewMonth] = useState(initial.month);
 
   function openModal() {
-    const current = parseIso(value || getTodayIso());
+    const c = parseIso(value || getTodayIso());
     setSelectedIso(value || getTodayIso());
-    setViewYear(current.year);
-    setViewMonth(current.month);
-    setModalVisible(true);
+    setViewYear(c.year); setViewMonth(c.month); setOpen(true);
   }
-
   function prevMonth() {
-    if (viewMonth === 1) {
-      setViewMonth(12);
-      setViewYear((y) => y - 1);
-    } else {
-      setViewMonth((m) => m - 1);
-    }
+    if (viewMonth === 1) { setViewMonth(12); setViewYear(y => y-1); }
+    else setViewMonth(m => m-1);
   }
-
   function nextMonth() {
-    if (viewMonth === 12) {
-      setViewMonth(1);
-      setViewYear((y) => y + 1);
-    } else {
-      setViewMonth((m) => m + 1);
-    }
+    if (viewMonth === 12) { setViewMonth(1); setViewYear(y => y+1); }
+    else setViewMonth(m => m+1);
   }
-
-  function applyPreset(daysFromToday: number) {
-    const target = new Date();
-    target.setDate(target.getDate() + daysFromToday);
-    const iso = toIsoString(target.getFullYear(), target.getMonth() + 1, target.getDate());
-    if (!minDate || iso >= minDate) {
-      setSelectedIso(iso);
-      setViewYear(target.getFullYear());
-      setViewMonth(target.getMonth() + 1);
-    }
+  function applyPreset(days: number) {
+    const t = new Date(); t.setDate(t.getDate() + days);
+    const iso = toIsoString(t.getFullYear(), t.getMonth()+1, t.getDate());
+    if (!minDate || iso >= minDate) { setSelectedIso(iso); setViewYear(t.getFullYear()); setViewMonth(t.getMonth()+1); }
   }
+  function confirm(iso?: string) { onChange(iso || selectedIso); setOpen(false); }
 
-  function confirmSelection(isoToConfirm?: string) {
-    const finalIso = isoToConfirm || selectedIso;
-    onChange(finalIso);
-    setModalVisible(false);
-  }
-
-  // Generate calendar grid
-  const daysInCurrentMonth = getDaysInMonth(viewYear, viewMonth);
-  const firstDayOfWeek = new Date(viewYear, viewMonth - 1, 1).getDay(); // 0 = Sun, 1 = Mon ...
-  const prevMonthDays = getDaysInMonth(
-    viewMonth === 1 ? viewYear - 1 : viewYear,
-    viewMonth === 1 ? 12 : viewMonth - 1
-  );
-
+  const daysInMonth = getDaysInMonth(viewYear, viewMonth);
+  const firstDow = new Date(viewYear, viewMonth-1, 1).getDay();
+  const prevMonthDays = getDaysInMonth(viewMonth===1 ? viewYear-1 : viewYear, viewMonth===1 ? 12 : viewMonth-1);
   const todayIso = getTodayIso();
 
-  const calendarGrid = useMemo(() => {
-    const cells: Array<{
-      day: number;
-      month: number;
-      year: number;
-      iso: string;
-      isCurrentMonth: boolean;
-      isDisabled: boolean;
-      isSelected: boolean;
-      isToday: boolean;
-    }> = [];
-
-    // Leading days from previous month
-    for (let i = firstDayOfWeek - 1; i >= 0; i--) {
+  const grid = useMemo(() => {
+    const cells: Array<{ day:number; iso:string; isCurrentMonth:boolean; isDisabled:boolean; isSelected:boolean; isToday:boolean; }> = [];
+    for (let i = firstDow-1; i >= 0; i--) {
       const day = prevMonthDays - i;
-      const month = viewMonth === 1 ? 12 : viewMonth - 1;
-      const year = viewMonth === 1 ? viewYear - 1 : viewYear;
-      const iso = toIsoString(year, month, day);
-      cells.push({
-        day,
-        month,
-        year,
-        iso,
-        isCurrentMonth: false,
-        isDisabled: true,
-        isSelected: selectedIso === iso,
-        isToday: todayIso === iso,
-      });
+      const m = viewMonth===1 ? 12 : viewMonth-1;
+      const y = viewMonth===1 ? viewYear-1 : viewYear;
+      cells.push({ day, iso: toIsoString(y,m,day), isCurrentMonth:false, isDisabled:true, isSelected:false, isToday:false });
     }
-
-    // Days in current month
-    for (let day = 1; day <= daysInCurrentMonth; day++) {
+    for (let day = 1; day <= daysInMonth; day++) {
       const iso = toIsoString(viewYear, viewMonth, day);
-      const isPastMin = minDate ? iso < minDate : false;
-      cells.push({
-        day,
-        month: viewMonth,
-        year: viewYear,
-        iso,
-        isCurrentMonth: true,
-        isDisabled: isPastMin,
-        isSelected: selectedIso === iso,
-        isToday: todayIso === iso,
-      });
+      cells.push({ day, iso, isCurrentMonth:true, isDisabled: !!minDate && iso < minDate, isSelected: selectedIso===iso, isToday: todayIso===iso });
     }
-
-    // Trailing days from next month to fill grid
-    const remaining = (7 - (cells.length % 7)) % 7;
-    for (let day = 1; day <= remaining; day++) {
-      const month = viewMonth === 12 ? 1 : viewMonth + 1;
-      const year = viewMonth === 12 ? viewYear + 1 : viewYear;
-      const iso = toIsoString(year, month, day);
-      cells.push({
-        day,
-        month,
-        year,
-        iso,
-        isCurrentMonth: false,
-        isDisabled: true,
-        isSelected: selectedIso === iso,
-        isToday: todayIso === iso,
-      });
+    const rem = (7 - (cells.length % 7)) % 7;
+    for (let day = 1; day <= rem; day++) {
+      const m = viewMonth===12 ? 1 : viewMonth+1;
+      const y = viewMonth===12 ? viewYear+1 : viewYear;
+      cells.push({ day, iso: toIsoString(y,m,day), isCurrentMonth:false, isDisabled:true, isSelected:false, isToday:false });
     }
-
     return cells;
-  }, [viewYear, viewMonth, selectedIso, minDate, daysInCurrentMonth, firstDayOfWeek, prevMonthDays, todayIso]);
+  }, [viewYear, viewMonth, selectedIso, minDate, daysInMonth, firstDow, prevMonthDays, todayIso]);
 
   return (
     <View>
-      {/* Trigger Button Field */}
-      <TouchableOpacity
-        activeOpacity={0.7}
+      {/* Trigger */}
+      <Pressable
         onPress={openModal}
-        className="flex-row items-center justify-between px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl active:bg-slate-100"
+        style={({ pressed }) => [s.trigger, pressed && s.triggerPressed]}
       >
-        <View className="flex-row items-center gap-3">
-          <View className="w-8 h-8 rounded-xl bg-blue-50 items-center justify-center">
+        <View style={s.triggerLeft}>
+          <View style={s.triggerIcon}>
             <CalendarIcon size={16} color="#2563eb" />
           </View>
           <View>
-            {!!label && <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</Text>}
-            <Text className="text-sm font-semibold text-slate-800">{formatDisplayDate(value)}</Text>
+            {!!label && <Text style={s.triggerLabel}>{label}</Text>}
+            <Text style={s.triggerValue}>{formatDisplay(value)}</Text>
           </View>
         </View>
-        <View className="px-2.5 py-1 bg-white rounded-lg border border-slate-200">
-          <Text className="text-xs font-bold text-blue-600">Change</Text>
+        <View style={s.changePill}>
+          <Text style={s.changePillText}>Change</Text>
         </View>
-      </TouchableOpacity>
+      </Pressable>
 
-      {/* Calendar dialog, centered.
-          NOTE: shadow-* and bg-color/opacity classNames (e.g. bg-black/40) are
-          deliberately NOT used anywhere in this Modal. NativeWind's CSS
-          interop has a documented race condition where parsing those exact
-          utility patterns for the first time -- which is exactly what
-          happens the moment this Modal's content mounts fresh -- can throw
-          "Couldn't find a navigation context"
-          (nativewind/nativewind#1536, #1711). Inline styles sidestep it. */}
-      <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={() => setModalVisible(false)}>
-        <TouchableWithoutFeedback onPress={() => setModalVisible(false)}>
-          <View
-            className="flex-1 items-center justify-center px-6"
-            style={{ backgroundColor: 'rgba(15, 23, 42, 0.45)' }}
-          >
-            <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
-              <View
-                className="bg-white rounded-3xl pt-6 pb-6 px-6 border border-slate-100 w-full max-w-sm"
-                style={{
-                  shadowColor: '#0f172a',
-                  shadowOffset: { width: 0, height: 20 },
-                  shadowOpacity: 0.25,
-                  shadowRadius: 40,
-                  elevation: 12,
-                }}
-              >
-                {/* Modal Header */}
-                <View className="flex-row items-center justify-between pb-3 border-b border-slate-100 mb-3">
+      {/* Modal — all inline styles to avoid NativeWind first-parse race (#1536) */}
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <TouchableWithoutFeedback onPress={() => setOpen(false)}>
+          <View style={{ flex:1, alignItems:'center', justifyContent:'center', paddingHorizontal:24, backgroundColor:'rgba(15,23,42,0.45)' }}>
+            <TouchableWithoutFeedback onPress={e => e.stopPropagation()}>
+              <View style={s.modal}>
+
+                {/* Header */}
+                <View style={s.modalHeader}>
                   <View>
-                    <Text className="text-base font-black text-slate-900">{label || 'Select Date'}</Text>
-                    <Text className="text-xs font-medium text-blue-600 mt-0.5">{formatDisplayDate(selectedIso)}</Text>
+                    <Text style={s.modalTitle}>{label || 'Select Date'}</Text>
+                    <Text style={s.modalSelected}>{formatDisplay(selectedIso)}</Text>
                   </View>
-                  <TouchableOpacity
-                    onPress={() => setModalVisible(false)}
-                    className="w-8 h-8 rounded-full bg-slate-100 items-center justify-center"
-                  >
+                  <TouchableOpacity onPress={() => setOpen(false)} style={s.closeBtn}>
                     <X size={16} color="#64748b" />
                   </TouchableOpacity>
                 </View>
 
-                {/* Quick Presets */}
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row mb-4 py-1">
-                  <TouchableOpacity
-                    onPress={() => applyPreset(0)}
-                    disabled={!!minDate && getTodayIso() < minDate}
-                    className="mr-2 px-3 py-1.5 rounded-xl bg-slate-100 active:bg-slate-200 border border-slate-200"
-                  >
-                    <Text className="text-xs font-semibold text-slate-700">Today</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => applyPreset(3)}
-                    className="mr-2 px-3 py-1.5 rounded-xl bg-slate-100 active:bg-slate-200 border border-slate-200"
-                  >
-                    <Text className="text-xs font-semibold text-slate-700">+3 Days</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => applyPreset(7)}
-                    className="mr-2 px-3 py-1.5 rounded-xl bg-slate-100 active:bg-slate-200 border border-slate-200"
-                  >
-                    <Text className="text-xs font-semibold text-slate-700">+1 Week</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => applyPreset(14)}
-                    className="mr-2 px-3 py-1.5 rounded-xl bg-slate-100 active:bg-slate-200 border border-slate-200"
-                  >
-                    <Text className="text-xs font-semibold text-slate-700">+2 Weeks</Text>
-                  </TouchableOpacity>
+                {/* Presets */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:16 }}>
+                  {[['Today',0],['+3 Days',3],['+1 Week',7],['+2 Weeks',14]].map(([lbl, d]) => (
+                    <TouchableOpacity
+                      key={String(lbl)}
+                      onPress={() => applyPreset(Number(d))}
+                      disabled={!!minDate && Number(d)===0 && getTodayIso() < minDate}
+                      style={s.preset}
+                    >
+                      <Text style={s.presetText}>{lbl}</Text>
+                    </TouchableOpacity>
+                  ))}
                 </ScrollView>
 
-                {/* Month Navigation */}
-                <View className="flex-row items-center justify-between mb-3 px-1">
-                  <Text className="text-base font-black text-slate-800">
-                    {MONTH_NAMES[viewMonth - 1]} {viewYear}
-                  </Text>
-                  <View className="flex-row items-center gap-1">
-                    <TouchableOpacity
-                      onPress={prevMonth}
-                      className="w-8 h-8 rounded-xl bg-slate-100 items-center justify-center active:bg-slate-200"
-                    >
+                {/* Month nav */}
+                <View style={s.monthNav}>
+                  <Text style={s.monthTitle}>{MONTH_NAMES[viewMonth-1]} {viewYear}</Text>
+                  <View style={s.monthNavBtns}>
+                    <TouchableOpacity onPress={prevMonth} style={s.navBtn}>
                       <ChevronLeft size={18} color="#334155" />
                     </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={nextMonth}
-                      className="w-8 h-8 rounded-xl bg-slate-100 items-center justify-center active:bg-slate-200"
-                    >
+                    <TouchableOpacity onPress={nextMonth} style={s.navBtn}>
                       <ChevronRight size={18} color="#334155" />
                     </TouchableOpacity>
                   </View>
                 </View>
 
-                {/* Weekday Labels */}
-                <View className="flex-row justify-between mb-2 px-1">
-                  {WEEKDAYS.map((w, index) => (
-                    <View key={w} className="w-10 items-center">
-                      <Text
-                        className={`text-xs font-bold ${index === 0 || index === 6 ? 'text-blue-500' : 'text-slate-400'
-                          }`}
-                      >
-                        {w}
-                      </Text>
+                {/* Weekdays */}
+                <View style={s.weekRow}>
+                  {WEEKDAYS.map((w, i) => (
+                    <View key={w} style={s.weekCell}>
+                      <Text style={[s.weekLabel, (i===0||i===6) && s.weekLabelWknd]}>{w}</Text>
                     </View>
                   ))}
                 </View>
 
-                {/* Day Grid */}
-                <View className="flex-row flex-wrap justify-between mb-5">
-                  {calendarGrid.map((item, idx) => {
-                    if (!item.isCurrentMonth) {
+                {/* Day grid */}
+                <View style={s.dayGrid}>
+                  {grid.map((item, idx) => {
+                    if (!item.isCurrentMonth || item.isDisabled) {
                       return (
-                        <View key={idx} className="w-10 h-10 items-center justify-center my-1.5">
-                          <Text className="text-xs text-slate-300 font-medium">{item.day}</Text>
+                        <View key={idx} style={s.dayCell}>
+                          <Text style={[s.dayText, s.dayTextDisabled]}>{item.day}</Text>
                         </View>
                       );
                     }
-
-                    if (item.isDisabled) {
-                      return (
-                        <View key={idx} className="w-10 h-10 items-center justify-center my-1.5">
-                          <Text className="text-xs text-slate-300 line-through font-medium">{item.day}</Text>
-                        </View>
-                      );
-                    }
-
                     return (
                       <TouchableOpacity
                         key={idx}
-                        onPress={() => {
-                          setSelectedIso(item.iso);
-                        }}
-                        className={`w-10 h-10 rounded-2xl items-center justify-center my-1.5 ${item.isSelected
-                            ? 'bg-blue-600'
-                            : item.isToday
-                              ? 'bg-blue-50 border border-blue-200'
-                              : 'active:bg-slate-100'
-                          }`}
-                        style={
-                          item.isSelected
-                            ? {
-                              shadowColor: '#2563eb',
-                              shadowOffset: { width: 0, height: 2 },
-                              shadowOpacity: 0.3,
-                              shadowRadius: 4,
-                              elevation: 3,
-                            }
-                            : undefined
-                        }
+                        onPress={() => setSelectedIso(item.iso)}
+                        style={[
+                          s.dayCell,
+                          item.isSelected ? s.dayCellSelected : item.isToday ? s.dayCellToday : null,
+                        ]}
                       >
-                        <Text
-                          className={`text-sm font-bold ${item.isSelected
-                              ? 'text-white'
-                              : item.isToday
-                                ? 'text-blue-600'
-                                : 'text-slate-800'
-                            }`}
-                        >
+                        <Text style={[
+                          s.dayText,
+                          item.isSelected ? s.dayTextSelected : item.isToday ? s.dayTextToday : s.dayTextNormal,
+                        ]}>
                           {item.day}
                         </Text>
                       </TouchableOpacity>
@@ -401,31 +200,19 @@ export default function DatePicker({
                   })}
                 </View>
 
-                {/* Action Buttons */}
-                <View className="flex-row gap-3">
-                  <TouchableOpacity
-                    onPress={() => setModalVisible(false)}
-                    className="flex-1 py-3.5 bg-slate-100 rounded-2xl items-center justify-center active:bg-slate-200"
-                  >
-                    <Text className="text-sm font-bold text-slate-600">Cancel</Text>
+                {/* Actions */}
+                <View style={s.actions}>
+                  <TouchableOpacity onPress={() => setOpen(false)} style={s.cancelBtn}>
+                    <Text style={s.cancelText}>Cancel</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => confirmSelection()}
-                    className="flex-1 py-3.5 bg-blue-600 rounded-2xl items-center justify-center active:bg-blue-700"
-                    style={{
-                      shadowColor: '#2563eb',
-                      shadowOffset: { width: 0, height: 6 },
-                      shadowOpacity: 0.2,
-                      shadowRadius: 10,
-                      elevation: 4,
-                    }}
-                  >
-                    <View className="flex-row items-center gap-1.5">
-                      <Check size={16} color="#ffffff" />
-                      <Text className="text-sm font-bold text-white">Select Date</Text>
+                  <TouchableOpacity onPress={() => confirm()} style={s.confirmBtn}>
+                    <View style={s.confirmInner}>
+                      <Check size={16} color="#fff" />
+                      <Text style={s.confirmText}>Select Date</Text>
                     </View>
                   </TouchableOpacity>
                 </View>
+
               </View>
             </TouchableWithoutFeedback>
           </View>
@@ -434,3 +221,59 @@ export default function DatePicker({
     </View>
   );
 }
+
+const s = StyleSheet.create({
+  // Trigger
+  trigger: { flexDirection:'row', alignItems:'center', justifyContent:'space-between', paddingHorizontal:16, paddingVertical:14, backgroundColor:'#f8fafc', borderWidth:1, borderColor:'#e2e8f0', borderRadius:16 },
+  triggerPressed: { backgroundColor:'#f1f5f9' },
+  triggerLeft: { flexDirection:'row', alignItems:'center', gap:12 },
+  triggerIcon: { width:32, height:32, borderRadius:10, backgroundColor:'#eff6ff', alignItems:'center', justifyContent:'center' },
+  triggerLabel: { fontSize:10, fontWeight:'700', color:'#94a3b8', textTransform:'uppercase', letterSpacing:0.5 },
+  triggerValue: { fontSize:13, fontWeight:'600', color:'#1e293b' },
+  changePill: { backgroundColor:'#fff', borderWidth:1, borderColor:'#e2e8f0', borderRadius:10, paddingHorizontal:10, paddingVertical:4 },
+  changePillText: { fontSize:11, fontWeight:'700', color:'#2563eb' },
+
+  // Modal card
+  modal: { backgroundColor:'#fff', borderRadius:24, paddingTop:24, paddingBottom:24, paddingHorizontal:24, borderWidth:1, borderColor:'#f1f5f9', width:'100%', maxWidth:360, shadowColor:'#0f172a', shadowOffset:{width:0,height:20}, shadowOpacity:0.25, shadowRadius:40, elevation:12 },
+
+  // Modal header
+  modalHeader: { flexDirection:'row', alignItems:'flex-start', justifyContent:'space-between', paddingBottom:12, borderBottomWidth:1, borderBottomColor:'#f1f5f9', marginBottom:12 },
+  modalTitle: { fontSize:15, fontWeight:'800', color:'#0f172a' },
+  modalSelected: { fontSize:12, fontWeight:'600', color:'#2563eb', marginTop:2 },
+  closeBtn: { width:32, height:32, borderRadius:16, backgroundColor:'#f1f5f9', alignItems:'center', justifyContent:'center' },
+
+  // Presets
+  preset: { marginRight:8, paddingHorizontal:12, paddingVertical:6, borderRadius:10, backgroundColor:'#f1f5f9', borderWidth:1, borderColor:'#e2e8f0' },
+  presetText: { fontSize:12, fontWeight:'600', color:'#475569' },
+
+  // Month nav
+  monthNav: { flexDirection:'row', alignItems:'center', justifyContent:'space-between', marginBottom:12 },
+  monthTitle: { fontSize:15, fontWeight:'800', color:'#0f172a' },
+  monthNavBtns: { flexDirection:'row', gap:6 },
+  navBtn: { width:32, height:32, borderRadius:10, backgroundColor:'#f1f5f9', alignItems:'center', justifyContent:'center' },
+
+  // Weekdays
+  weekRow: { flexDirection:'row', justifyContent:'space-between', marginBottom:8 },
+  weekCell: { width:40, alignItems:'center' },
+  weekLabel: { fontSize:11, fontWeight:'700', color:'#94a3b8' },
+  weekLabelWknd: { color:'#60a5fa' },
+
+  // Day grid
+  dayGrid: { flexDirection:'row', flexWrap:'wrap', justifyContent:'space-between', marginBottom:20 },
+  dayCell: { width:40, height:40, borderRadius:12, alignItems:'center', justifyContent:'center', marginVertical:4 },
+  dayCellSelected: { backgroundColor:'#2563eb', shadowColor:'#2563eb', shadowOffset:{width:0,height:2}, shadowOpacity:0.3, shadowRadius:4, elevation:3 },
+  dayCellToday: { backgroundColor:'#eff6ff', borderWidth:1, borderColor:'#bfdbfe' },
+  dayText: { fontSize:13, fontWeight:'700' },
+  dayTextNormal: { color:'#1e293b' },
+  dayTextSelected: { color:'#fff' },
+  dayTextToday: { color:'#2563eb' },
+  dayTextDisabled: { color:'#cbd5e1' },
+
+  // Actions
+  actions: { flexDirection:'row', gap:12 },
+  cancelBtn: { flex:1, paddingVertical:14, backgroundColor:'#f1f5f9', borderRadius:16, alignItems:'center', justifyContent:'center' },
+  cancelText: { fontSize:13, fontWeight:'700', color:'#475569' },
+  confirmBtn: { flex:1, paddingVertical:14, backgroundColor:'#2563eb', borderRadius:16, alignItems:'center', justifyContent:'center', shadowColor:'#2563eb', shadowOffset:{width:0,height:4}, shadowOpacity:0.25, shadowRadius:8, elevation:4 },
+  confirmInner: { flexDirection:'row', alignItems:'center', gap:6 },
+  confirmText: { fontSize:13, fontWeight:'700', color:'#fff' },
+});

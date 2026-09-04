@@ -1,15 +1,56 @@
-import { Pressable, Text } from 'react-native';
+import { Pressable, StyleSheet, Text } from 'react-native';
 
-// Shared selectable-chip pattern (paid-by/category/split-type/recurrence pickers) --
-// pulled out once it was needed in a second screen (RecurringScreen.tsx) rather than
-// staying duplicated from where it started (AddExpenseScreen.tsx).
-export default function Chip({ selected, label, onPress }: { selected: boolean; label: string; onPress: () => void }) {
+export default function Chip({
+  selected,
+  label,
+  onPress,
+}: {
+  selected: boolean;
+  label: string;
+  onPress: () => void;
+}) {
   return (
     <Pressable
       onPress={onPress}
-      className={`px-4 py-2 rounded-full border ${selected ? 'bg-blue-600 border-blue-600' : 'bg-white border-slate-200'}`}
+      style={({ pressed }) => [
+        styles.base,
+        selected ? styles.selected : styles.unselected,
+        pressed && !selected && styles.pressed,
+      ]}
     >
-      <Text className={`text-sm font-semibold ${selected ? 'text-white' : 'text-slate-600'}`}>{label}</Text>
+      <Text style={[styles.label, selected ? styles.labelSelected : styles.labelUnselected]}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
+
+const styles = StyleSheet.create({
+  base: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  selected: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  unselected: {
+    backgroundColor: '#fff',
+    borderColor: '#e2e8f0',
+  },
+  pressed: {
+    backgroundColor: '#f1f5f9',
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  labelSelected: {
+    color: '#fff',
+  },
+  labelUnselected: {
+    color: '#475569',
+  },
+});

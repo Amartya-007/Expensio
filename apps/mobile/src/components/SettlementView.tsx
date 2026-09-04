@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { CheckCircle2, HandCoins, ThumbsUp } from 'lucide-react-native';
 import { supabase } from '../supabaseClient';
 import { db } from '../powersync/db';
@@ -184,21 +184,21 @@ export default function SettlementView({ tripId }: { tripId: string }) {
   const settled = !loading && !error && suggestions.length === 0 && pendingReceipts.length === 0;
 
   return (
-    <View className="space-y-4">
-      {loading && <ActivityIndicator className="mt-10" color="#2563eb" />}
+    <View style={sv.root}>
+      {loading && <ActivityIndicator style={sv.spinner} color="#2563eb" />}
 
       {!!error && (
-        <View className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3">
-          <Text className="text-sm text-red-700 font-medium">{error}</Text>
+        <View style={sv.errorBanner}>
+          <Text style={sv.errorText}>{error}</Text>
         </View>
       )}
 
       {settled && (
-        <View className="card-elevated p-8 items-center mt-6">
-          <View className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 items-center justify-center mb-3">
+        <View style={sv.settledCard}>
+          <View style={sv.settledIcon}>
             <CheckCircle2 size={22} color="#059669" />
           </View>
-          <Text className="text-sm font-semibold text-slate-600">Everyone is settled up.</Text>
+          <Text style={sv.settledText}>Everyone is settled up.</Text>
         </View>
       )}
 
@@ -208,16 +208,16 @@ export default function SettlementView({ tripId }: { tripId: string }) {
           const key = `${suggestion.from_participant}-${suggestion.to_participant}-${suggestion.currency}-${index}`;
           const canRecord = myParticipantId !== null && suggestion.from_participant === myParticipantId;
           return (
-            <View className="card-elevated p-4 flex-row items-center gap-3" key={key}>
-              <View className="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-100 items-center justify-center">
+            <View style={sv.suggestionCard} key={key}>
+              <View style={sv.amberIcon}>
                 <HandCoins size={18} color="#d97706" />
               </View>
-              <View className="flex-1">
-                <Text className="text-sm font-semibold text-slate-700">
+              <View style={sv.cardBody}>
+                <Text style={sv.cardTitle}>
                   {names[suggestion.from_participant] ?? suggestion.from_participant} pays{' '}
                   {names[suggestion.to_participant] ?? suggestion.to_participant}
                 </Text>
-                <Text className="text-lg font-black text-slate-900 mt-0.5">
+                <Text style={sv.cardAmount}>
                   {suggestion.currency} {suggestion.amount}
                 </Text>
               </View>
@@ -225,12 +225,12 @@ export default function SettlementView({ tripId }: { tripId: string }) {
                 <Pressable
                   onPress={() => recordPayment(suggestion, key)}
                   disabled={recordingKey === key}
-                  className="px-3 py-2 rounded-xl bg-blue-600 items-center justify-center"
+                  style={sv.paidBtn}
                 >
                   {recordingKey === key ? (
                     <ActivityIndicator size="small" color="#fff" />
                   ) : (
-                    <Text className="text-xs font-bold text-white">I paid this</Text>
+                    <Text style={sv.paidBtnText}>I paid this</Text>
                   )}
                 </Pressable>
               )}
@@ -240,32 +240,32 @@ export default function SettlementView({ tripId }: { tripId: string }) {
 
       {/* Pending receipts to confirm — recipient side */}
       {!loading && pendingReceipts.length > 0 && (
-        <View className="space-y-2">
-          <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mt-2">
+        <View style={sv.receiptsSection}>
+          <Text style={sv.receiptsSectionLabel}>
             Payments awaiting your confirmation
           </Text>
           {pendingReceipts.map((receipt) => (
-            <View className="card-elevated p-4 flex-row items-center gap-3" key={receipt.id}>
-              <View className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-100 items-center justify-center">
+            <View style={sv.suggestionCard} key={receipt.id}>
+              <View style={sv.emeraldIcon}>
                 <ThumbsUp size={18} color="#059669" />
               </View>
-              <View className="flex-1">
-                <Text className="text-sm font-semibold text-slate-700">
+              <View style={sv.cardBody}>
+                <Text style={sv.cardTitle}>
                   {names[receipt.from_participant] ?? receipt.from_participant} paid you
                 </Text>
-                <Text className="text-lg font-black text-slate-900 mt-0.5">
+                <Text style={sv.cardAmount}>
                   {receipt.currency} {receipt.amount}
                 </Text>
               </View>
               <Pressable
                 onPress={() => confirmPayment(receipt.id)}
                 disabled={confirmingId === receipt.id}
-                className="px-3 py-2 rounded-xl bg-emerald-600 items-center justify-center"
+                style={sv.confirmBtn}
               >
                 {confirmingId === receipt.id ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text className="text-xs font-bold text-white">Confirm</Text>
+                  <Text style={sv.confirmBtnText}>Confirm</Text>
                 )}
               </Pressable>
             </View>
@@ -275,3 +275,30 @@ export default function SettlementView({ tripId }: { tripId: string }) {
     </View>
   );
 }
+
+const sv = StyleSheet.create({
+  root: { gap: 12 },
+  spinner: { marginTop: 40, alignSelf: 'center' },
+
+  errorBanner: { backgroundColor: '#fff1f2', borderWidth: 1, borderColor: '#fecdd3', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12 },
+  errorText: { fontSize: 13, fontWeight: '600', color: '#be123c' },
+
+  settledCard: { backgroundColor: '#fff', borderRadius: 20, padding: 32, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', gap: 10, marginTop: 8 },
+  settledIcon: { width: 48, height: 48, borderRadius: 16, backgroundColor: '#ecfdf5', borderWidth: 1, borderColor: '#d1fae5', alignItems: 'center', justifyContent: 'center' },
+  settledText: { fontSize: 14, fontWeight: '600', color: '#475569' },
+
+  suggestionCard: { backgroundColor: '#fff', borderRadius: 18, padding: 16, borderWidth: 1, borderColor: '#e2e8f0', flexDirection: 'row', alignItems: 'center', gap: 12, shadowColor: '#94a3b8', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 },
+  amberIcon: { width: 40, height: 40, borderRadius: 13, backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fde68a', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  emeraldIcon: { width: 40, height: 40, borderRadius: 13, backgroundColor: '#ecfdf5', borderWidth: 1, borderColor: '#d1fae5', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  cardBody: { flex: 1 },
+  cardTitle: { fontSize: 13, fontWeight: '600', color: '#334155' },
+  cardAmount: { fontSize: 17, fontWeight: '800', color: '#0f172a', marginTop: 2, letterSpacing: -0.3 },
+
+  paidBtn: { backgroundColor: '#2563eb', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, alignItems: 'center', justifyContent: 'center', minWidth: 72 },
+  paidBtnText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+  confirmBtn: { backgroundColor: '#059669', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, alignItems: 'center', justifyContent: 'center', minWidth: 72 },
+  confirmBtnText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+
+  receiptsSection: { gap: 8 },
+  receiptsSectionLabel: { fontSize: 11, fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.8, marginTop: 4 },
+});
