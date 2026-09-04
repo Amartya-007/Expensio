@@ -253,7 +253,16 @@ export default function ExpenseDetailScreen({ expenseId, onBack }: { expenseId: 
         </View>
       ) : (
         <>
-          <View className="bg-white p-6 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-4">
+          <View
+            className="bg-white p-6 rounded-[2.5rem] border border-slate-100 space-y-4"
+            style={{
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.05,
+              shadowRadius: 2,
+              elevation: 1,
+            }}
+          >
             <View className="flex-row items-start justify-between gap-3">
               <View>
                 <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider">Amount</Text>

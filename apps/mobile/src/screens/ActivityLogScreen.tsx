@@ -56,7 +56,10 @@ export default function ActivityLogScreen({ tripId, onBack }: { tripId: string; 
           </View>
         }
         renderItem={({ item }) => (
-          <View className="flex-row items-start gap-3.5 py-3.5 px-3 mb-2 rounded-2xl bg-slate-50 border border-slate-200/60">
+          <View
+            className="flex-row items-start gap-3.5 py-3.5 px-3 mb-2 rounded-2xl bg-slate-50"
+            style={{ borderWidth: 1, borderColor: 'rgba(226, 232, 240, 0.6)' }}
+          >
             <View className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-100 items-center justify-center mt-0.5">
               <Clock size={16} color="#2563eb" />
             </View>

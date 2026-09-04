@@ -175,7 +175,16 @@ export default function TripDetailScreen({
               return (
                 <Pressable
                   onPress={() => onOpenExpense(item.id)}
-                  className="bg-white rounded-2xl border border-slate-200/80 p-4 flex-row items-center gap-3 mb-3 shadow-sm active:bg-slate-50"
+                  className="bg-white rounded-2xl p-4 flex-row items-center gap-3 mb-3 active:bg-slate-50"
+                  style={{
+                    borderWidth: 1,
+                    borderColor: 'rgba(226, 232, 240, 0.8)',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 1 },
+                    shadowOpacity: 0.05,
+                    shadowRadius: 2,
+                    elevation: 1,
+                  }}
                 >
                   <View className={`w-12 h-12 rounded-2xl items-center justify-center ${color.bg} border ${color.border}`}>
                     <Text className={`text-base font-black ${color.text}`}>{item.description[0]?.toUpperCase() ?? '?'}</Text>

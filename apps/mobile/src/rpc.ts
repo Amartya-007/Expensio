@@ -1,3 +1,4 @@
+import NetInfo from '@react-native-community/netinfo';
 import { supabase } from './supabaseClient';
 import { db } from './powersync/db';
 import { randomUUID } from './utils/uuid';
@@ -27,13 +28,31 @@ import { randomUUID } from './utils/uuid';
 // duplicate activity-log entry on a rare replay) — a formal idempotency key just isn't
 // available for them.
 
-function isNetworkError(err: unknown): boolean {
-  // Heuristic, not a certainty -- react-native has no built-in reliable way to
-  // distinguish "no internet" from "server returned an unusual error". A Postgres-side
-  // error (validation failure, permission denied) always comes
-  // back with a real error message from the database; a network failure's message is
-  // almost always one of a handful of fetch-layer strings. Good enough to route correctly
-  // in practice; add NetInfo if this ever misroutes a real error into the retry queue.
+// Whether a failed RPC call should be queued for later (genuinely offline) or surfaced
+// immediately as a real error (online, but something else is actually wrong -- auth,
+// permissions, a validation failure). This used to be a message-string guess ('does the
+// error text contain "network"/"fetch"/"timeout"?'), which this file's own comment already
+// flagged as "not a certainty" -- and in practice it was misrouting real errors into the
+// queue: a single, already-online user adding a placeholder participant would see "will be
+// added after syncing" instead of the actual problem, because some non-network failure's
+// message happened to match one of those substrings. NetInfo (already used for the
+// reconnect listener in App.tsx) gives an actual answer instead of a guess.
+async function isOffline(err: unknown): Promise<boolean> {
+  try {
+    const state = await NetInfo.fetch();
+    if (state.isConnected === false || state.isInternetReachable === false) return true;
+    if (state.isConnected === true && state.isInternetReachable !== false) return false;
+    // isInternetReachable can be null right after a state change on some Android devices,
+    // before NetInfo has finished probing -- fall back to the old message heuristic only
+    // for this narrow "genuinely don't know yet" case rather than trusting it generally.
+    return isNetworkErrorMessage(err);
+  } catch {
+    // NetInfo itself failed to answer -- fall back rather than assuming either way.
+    return isNetworkErrorMessage(err);
+  }
+}
+
+function isNetworkErrorMessage(err: unknown): boolean {
   const message = String((err as { message?: unknown })?.message ?? err ?? '').toLowerCase();
   return (
     message.includes('network') ||
@@ -80,7 +99,7 @@ export async function callRpc<T = unknown>(
   try {
     const { data, error } = await supabase.rpc(rpcName, finalParams);
     if (error) {
-      if (isNetworkError(error)) {
+      if (await isOffline(error)) {
         await queueForLater(rpcName, finalParams, localTrackingId);
         return { status: 'queued' };
       }
@@ -88,7 +107,7 @@ export async function callRpc<T = unknown>(
     }
     return { status: 'ok', data: data as T };
   } catch (err) {
-    if (isNetworkError(err)) {
+    if (await isOffline(err)) {
       await queueForLater(rpcName, finalParams, localTrackingId);
       return { status: 'queued' };
     }
@@ -107,7 +126,7 @@ export async function flushPendingActions(): Promise<void> {
     const params = JSON.parse(action.params_json) as Record<string, unknown>;
     const { error } = await supabase.rpc(action.rpc_name, params);
 
-    if (!error || !isNetworkError(error)) {
+    if (!error || !(await isOffline(error))) {
       // Either it succeeded, or it failed for a real (non-network) reason -- either way
       // it's done being pending. A real failure here would mean an action that was valid
       // enough to queue is now invalid on replay (e.g. the trip was deleted meanwhile) --

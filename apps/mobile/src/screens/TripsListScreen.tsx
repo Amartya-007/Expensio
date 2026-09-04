@@ -69,7 +69,16 @@ export default function TripsListScreen({
         }}
         className="flex-1 bg-white px-6 items-center justify-center"
       >
-        <View className="w-20 h-20 rounded-3xl bg-blue-50 border border-blue-100 items-center justify-center mb-6 shadow-sm">
+        <View
+          className="w-20 h-20 rounded-3xl bg-blue-50 border border-blue-100 items-center justify-center mb-6"
+          style={{
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.05,
+            shadowRadius: 2,
+            elevation: 1,
+          }}
+        >
           <Compass size={40} color="#2563eb" strokeWidth={2} />
         </View>
 
@@ -83,7 +92,14 @@ export default function TripsListScreen({
         <PrimaryButton
           onPress={onCreateTrip}
           icon={<ArrowRight size={18} color="#fff" strokeWidth={2.5} />}
-          className="w-full max-w-xs shadow-lg shadow-blue-500/25"
+          className="w-full max-w-xs"
+          style={{
+            shadowColor: '#3b82f6',
+            shadowOffset: { width: 0, height: 10 },
+            shadowOpacity: 0.25,
+            shadowRadius: 15,
+            elevation: 6,
+          }}
         >
           Create Trip
         </PrimaryButton>
@@ -96,8 +112,9 @@ export default function TripsListScreen({
       style={{
         paddingTop: Math.max(insets.top, 16),
         paddingBottom: Math.max(insets.bottom, 16),
+        backgroundColor: 'rgba(248, 250, 252, 0.6)',
       }}
-      className="flex-1 bg-slate-50/60 px-4"
+      className="flex-1 px-4"
     >
       {/* Top Header */}
       <View className="flex-row items-center justify-between py-2 mb-4">
@@ -113,7 +130,14 @@ export default function TripsListScreen({
         {!showArchived && (
           <Pressable
             onPress={onCreateTrip}
-            className="flex-row items-center gap-1.5 bg-blue-600 rounded-2xl px-4 py-2.5 shadow-md shadow-blue-500/30 active:scale-95"
+            className="flex-row items-center gap-1.5 bg-blue-600 rounded-2xl px-4 py-2.5 active:scale-95"
+            style={{
+              shadowColor: '#3b82f6',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 6,
+              elevation: 3,
+            }}
           >
             <Plus size={16} color="#ffffff" strokeWidth={3} />
             <Text className="text-white font-black text-sm">New Trip</Text>
@@ -145,7 +169,16 @@ export default function TripsListScreen({
         renderItem={({ item }) => (
           <Pressable
             onPress={() => onOpenTrip(item.id, item.currency)}
-            className="bg-white rounded-3xl p-4.5 border border-slate-200/80 mb-3.5 shadow-sm active:bg-slate-50/80"
+            className="bg-white rounded-3xl p-4.5 mb-3.5 active:bg-slate-50"
+            style={{
+              borderWidth: 1,
+              borderColor: 'rgba(226, 232, 240, 0.8)',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.05,
+              shadowRadius: 2,
+              elevation: 1,
+            }}
           >
             <View className="flex-row items-center justify-between">
               <View className="flex-row items-center gap-3.5 flex-1 pr-2">

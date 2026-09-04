@@ -25,8 +25,17 @@ export default function TripTabBar({
 
   return (
     <View
-      style={{ paddingBottom: bottomPadding }}
-      className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-200/80 shadow-2xl z-40"
+      style={{
+        paddingBottom: bottomPadding,
+        borderTopColor: 'rgba(226, 232, 240, 0.8)',
+        borderTopWidth: 1,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 25 },
+        shadowOpacity: 0.25,
+        shadowRadius: 50,
+        elevation: 16,
+      }}
+      className="absolute bottom-0 left-0 right-0 bg-white z-40"
     >
       <View className="flex-row items-center justify-around px-3 h-16">
         <NavItem item={NAV_ITEMS[0]} active={active === NAV_ITEMS[0].key} onPress={() => onChange(NAV_ITEMS[0].key)} />
@@ -36,8 +45,14 @@ export default function TripTabBar({
         <View className="items-center justify-center -mt-6">
           <Pressable
             onPress={onAddExpense}
-            className="w-14 h-14 bg-blue-600 rounded-full shadow-lg shadow-blue-500/40 items-center justify-center border-4 border-white active:scale-95"
-            style={{ elevation: 8 }}
+            className="w-14 h-14 bg-blue-600 rounded-full items-center justify-center border-4 border-white active:scale-95"
+            style={{
+              shadowColor: '#3b82f6',
+              shadowOffset: { width: 0, height: 10 },
+              shadowOpacity: 0.4,
+              shadowRadius: 15,
+              elevation: 8,
+            }}
           >
             <Plus size={26} color="#ffffff" strokeWidth={2.5} />
           </Pressable>

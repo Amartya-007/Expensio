@@ -114,12 +114,24 @@ export default function CreateTripScreen({
           <TouchableOpacity
             onPress={onCancel}
             activeOpacity={0.7}
-            className="w-10 h-10 -ml-1 rounded-2xl bg-white border border-slate-200/80 items-center justify-center shadow-sm"
+            className="w-10 h-10 -ml-1 rounded-2xl bg-white items-center justify-center"
+            style={{
+              borderWidth: 1,
+              borderColor: 'rgba(226, 232, 240, 0.8)',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.05,
+              shadowRadius: 2,
+              elevation: 1,
+            }}
           >
             <ArrowLeft size={20} color="#334155" />
           </TouchableOpacity>
 
-          <View className="flex-row items-center gap-1.5 px-3 py-1 bg-blue-50/80 border border-blue-100 rounded-full">
+          <View
+            className="flex-row items-center gap-1.5 px-3 py-1 border border-blue-100 rounded-full"
+            style={{ backgroundColor: 'rgba(239, 246, 255, 0.8)' }}
+          >
             <Sparkles size={12} color="#2563eb" />
             <Text className="text-xs font-bold text-blue-700">New Journey</Text>
           </View>
@@ -136,11 +148,25 @@ export default function CreateTripScreen({
         </View>
 
         {/* Hero Trip Name Input Card */}
-        <View className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm mb-6">
+        <View
+          className="bg-white rounded-3xl p-5 mb-6"
+          style={{
+            borderWidth: 1,
+            borderColor: 'rgba(226, 232, 240, 0.8)',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.05,
+            shadowRadius: 2,
+            elevation: 1,
+          }}
+        >
           <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2.5">
             Trip Name
           </Text>
-          <View className="flex-row items-center gap-3 bg-slate-50 border border-slate-200/80 rounded-2xl px-4 py-3 focus:border-blue-500">
+          <View
+            className="flex-row items-center gap-3 bg-slate-50 rounded-2xl px-4 py-3 focus:border-blue-500"
+            style={{ borderWidth: 1, borderColor: 'rgba(226, 232, 240, 0.8)' }}
+          >
             <Compass size={22} color="#2563eb" />
             <TextInput
               className="flex-1 text-xl font-bold text-slate-900"
@@ -155,10 +181,16 @@ export default function CreateTripScreen({
         </View>
 
         {/* Currency Selection Card */}
-        <View className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm mb-6">
-          <View className="flex-row items-center justify-between mb-3">
-            <Text className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              Primary Currency
+        <View
+          className="bg-white rounded-3xl p-5 border border-slate-200 mb-6"
+          style={{
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.05,
+            shadowRadius: 2,
+            elevation: 1,
+          }}
+        >
             </Text>
             <Text className="text-[11px] font-semibold text-slate-400">
               Auto-detected
@@ -174,9 +206,20 @@ export default function CreateTripScreen({
                   activeOpacity={0.7}
                   onPress={() => setCurrency(c.code)}
                   className={`flex-row items-center gap-1.5 px-3.5 py-2.5 rounded-2xl border ${isSelected
-                      ? 'bg-blue-600 border-blue-600 shadow-sm shadow-blue-500/20'
+                      ? 'bg-blue-600 border-blue-600'
                       : 'bg-slate-50 border-slate-200 active:bg-slate-100'
                     }`}
+                  style={
+                    isSelected
+                      ? {
+                        shadowColor: '#3b82f6',
+                        shadowOffset: { width: 0, height: 1 },
+                        shadowOpacity: 0.2,
+                        shadowRadius: 2,
+                        elevation: 2,
+                      }
+                      : undefined
+                  }
                 >
                   <Text
                     className={`text-xs font-bold ${isSelected ? 'text-blue-100' : 'text-slate-400'
@@ -197,7 +240,16 @@ export default function CreateTripScreen({
         </View>
 
         {/* Dates & Budget Card */}
-        <View className="bg-white rounded-3xl p-5 border border-slate-200/80 shadow-sm mb-6">
+        <View
+          className="bg-white rounded-3xl p-5 border border-slate-200 mb-6"
+          style={{
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.05,
+            shadowRadius: 2,
+            elevation: 1,
+          }}
+        >
           <TouchableOpacity
             activeOpacity={0.7}
             onPress={() => setShowMore((prev) => !prev)}
@@ -256,7 +308,7 @@ export default function CreateTripScreen({
                 <Text className="text-xs font-bold text-slate-500 mb-1.5">
                   Total Budget ({currency})
                 </Text>
-                <View className="flex-row items-center gap-2.5 px-4 py-3 bg-slate-50 border border-slate-200/80 rounded-2xl">
+                <View className="flex-row items-center gap-2.5 px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl">
                   <BudgetIcon size={18} color="#64748b" />
                   <TextInput
                     className="flex-1 text-base font-bold text-slate-900"
@@ -297,7 +349,14 @@ export default function CreateTripScreen({
           onPress={submit}
           loading={busy}
           disabled={!name.trim() || !budgetValid}
-          className="w-full shadow-lg shadow-blue-600/25"
+          className="w-full"
+          style={{
+            shadowColor: '#2563eb',
+            shadowOffset: { width: 0, height: 10 },
+            shadowOpacity: 0.25,
+            shadowRadius: 15,
+            elevation: 6,
+          }}
         >
           Start Planning
         </PrimaryButton>

@@ -71,7 +71,10 @@ export default function MembersScreen({
         renderItem={({ item }) => {
           const color = colorFor(item.id);
           return (
-            <View className="flex-row items-center gap-3.5 py-3.5 px-3 mb-2 rounded-2xl bg-slate-50 border border-slate-200/60">
+            <View
+              className="flex-row items-center gap-3.5 py-3.5 px-3 mb-2 rounded-2xl bg-slate-50"
+              style={{ borderWidth: 1, borderColor: 'rgba(226, 232, 240, 0.6)' }}
+            >
               <View className={`w-11 h-11 rounded-2xl items-center justify-center ${color.bg} border ${color.border}`}>
                 <Text className={`text-base font-black ${color.text}`}>{item.display_name[0]?.toUpperCase() ?? '?'}</Text>
               </View>
@@ -88,8 +91,15 @@ export default function MembersScreen({
 
       {/* Pinned Bottom Action Bar */}
       <View
-        style={{ paddingBottom: Math.max(insets.bottom, 12) }}
-        className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 pt-3 flex-row gap-3 shadow-xl"
+        style={{
+          paddingBottom: Math.max(insets.bottom, 12),
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.1,
+          shadowRadius: 12,
+          elevation: 10,
+        }}
+        className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 pt-3 flex-row gap-3"
       >
         <Pressable
           onPress={onAddParticipant}
@@ -101,7 +111,14 @@ export default function MembersScreen({
 
         <Pressable
           onPress={onOpenInvite}
-          className="flex-1 py-3.5 rounded-2xl bg-blue-600 flex-row items-center justify-center gap-2 shadow-md shadow-blue-500/30 active:bg-blue-700"
+          className="flex-1 py-3.5 rounded-2xl bg-blue-600 flex-row items-center justify-center gap-2 active:bg-blue-700"
+          style={{
+            shadowColor: '#3b82f6',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 6,
+            elevation: 3,
+          }}
         >
           <Users size={16} color="#ffffff" />
           <Text className="text-white font-bold text-sm">Invite / Join</Text>

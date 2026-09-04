@@ -317,10 +317,10 @@ export default function AddExpenseScreen({
     placeholder: string
   ) {
     return (
-      <View className="bg-slate-50 p-4 rounded-3xl border border-slate-200/80 space-y-3">
+      <View className="bg-slate-50 p-4 rounded-3xl border border-slate-200 space-y-3">
         <Text className="text-xs font-bold text-slate-700 uppercase tracking-wider">{title}</Text>
         {participants.map((participant) => (
-          <View key={participant.id} className="flex-row items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200/60">
+          <View key={participant.id} className="flex-row items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200">
             <Text className="text-sm font-bold text-slate-800 flex-1" numberOfLines={1}>
               {participant.display_name}
             </Text>
@@ -366,7 +366,7 @@ export default function AddExpenseScreen({
 
         <View className="space-y-4">
           {/* Main Card: Description & Amount */}
-          <View className="bg-slate-50 p-4 rounded-3xl border border-slate-200/80 space-y-3">
+          <View className="bg-slate-50 p-4 rounded-3xl border border-slate-200 space-y-3">
             <View>
               <Text className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                 What was it for?
@@ -402,7 +402,7 @@ export default function AddExpenseScreen({
           </View>
 
           {/* Paid By Section */}
-          <View className="bg-slate-50 p-4 rounded-3xl border border-slate-200/80">
+          <View className="bg-slate-50 p-4 rounded-3xl border border-slate-200">
             <Text className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2.5">
               Who Paid?
             </Text>
@@ -413,7 +413,18 @@ export default function AddExpenseScreen({
                   <Pressable
                     key={participant.id}
                     onPress={() => setPaidBy(participant.id)}
-                    className={`flex-row items-center gap-1.5 px-3.5 py-2 rounded-2xl border ${selected ? 'bg-blue-600 border-blue-600 shadow-sm' : 'bg-white border-slate-200'}`}
+                    className={`flex-row items-center gap-1.5 px-3.5 py-2 rounded-2xl border ${selected ? 'bg-blue-600 border-blue-600' : 'bg-white border-slate-200'}`}
+                    style={
+                      selected
+                        ? {
+                          shadowColor: '#000',
+                          shadowOffset: { width: 0, height: 1 },
+                          shadowOpacity: 0.05,
+                          shadowRadius: 2,
+                          elevation: 1,
+                        }
+                        : undefined
+                    }
                   >
                     {selected && <Check size={14} color="#ffffff" strokeWidth={3} />}
                     <Text className={`text-xs font-bold ${selected ? 'text-white' : 'text-slate-700'}`}>
@@ -426,7 +437,7 @@ export default function AddExpenseScreen({
           </View>
 
           {/* Category Section */}
-          <View className="bg-slate-50 p-4 rounded-3xl border border-slate-200/80">
+          <View className="bg-slate-50 p-4 rounded-3xl border border-slate-200">
             <View className="flex-row items-center justify-between mb-2.5">
               <Text className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                 Category
@@ -486,7 +497,7 @@ export default function AddExpenseScreen({
           </View>
 
           {/* Split Type Selector */}
-          <View className="bg-slate-50 p-4 rounded-3xl border border-slate-200/80">
+          <View className="bg-slate-50 p-4 rounded-3xl border border-slate-200">
             <Text className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2.5">
               Split Method
             </Text>
@@ -510,7 +521,14 @@ export default function AddExpenseScreen({
 
           {/* Dynamic Split Details */}
           {splitType === 'equal' && (
-            <View className="bg-blue-50/70 border border-blue-200/80 p-4 rounded-3xl">
+            <View
+              className="p-4 rounded-3xl"
+              style={{
+                backgroundColor: 'rgba(239, 246, 255, 0.7)',
+                borderWidth: 1,
+                borderColor: 'rgba(191, 219, 254, 0.8)',
+              }}
+            >
               <Text className="text-xs font-bold text-blue-900 mb-0.5">Equally Shared</Text>
               <Text className="text-xs text-blue-700">
                 Split evenly among all {participants.length} member{participants.length !== 1 ? 's' : ''} in this trip.
@@ -521,7 +539,14 @@ export default function AddExpenseScreen({
           {splitType === 'exact' && renderParticipantValues(exactShares, setExactShares, 'Exact Amount per Person', '0.00')}
           {splitType === 'reimbursement' && (
             <>
-              <View className="bg-blue-50/70 border border-blue-200/80 p-4 rounded-3xl">
+              <View
+                className="p-4 rounded-3xl"
+                style={{
+                  backgroundColor: 'rgba(239, 246, 255, 0.7)',
+                  borderWidth: 1,
+                  borderColor: 'rgba(191, 219, 254, 0.8)',
+                }}
+              >
                 <Text className="text-xs font-bold text-blue-900 mb-0.5">Reimbursement</Text>
                 <Text className="text-xs text-blue-700">Amounts are owed directly back to the payer.</Text>
               </View>
@@ -541,8 +566,15 @@ export default function AddExpenseScreen({
 
       {/* Floating Bottom Action Bar */}
       <View
-        style={{ paddingBottom: Math.max(insets.bottom, 12) }}
-        className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 pt-3 flex-row gap-3 shadow-xl"
+        style={{
+          paddingBottom: Math.max(insets.bottom, 12),
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.1,
+          shadowRadius: 12,
+          elevation: 10,
+        }}
+        className="absolute bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 pt-3 flex-row gap-3"
       >
         <Pressable
           onPress={onCancel}
@@ -557,7 +589,14 @@ export default function AddExpenseScreen({
             onPress={submit}
             disabled={busy || !description.trim() || !amount || !paidBy}
             loading={busy}
-            className="w-full shadow-md"
+            className="w-full"
+            style={{
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.1,
+              shadowRadius: 6,
+              elevation: 3,
+            }}
           >
             Save Expense
           </PrimaryButton>

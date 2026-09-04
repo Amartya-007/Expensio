@@ -76,7 +76,8 @@ export default function DashboardScreen({ tripId, onBack }: { tripId: string; on
 
   return (
     <ScrollView
-      className="flex-1 bg-slate-50/50"
+      className="flex-1"
+      style={{ backgroundColor: 'rgba(248, 250, 252, 0.5)' }}
       contentContainerStyle={{
         paddingTop: Math.max(insets.top, 16),
         paddingBottom: Math.max(insets.bottom, 16) + 90,
@@ -88,7 +89,7 @@ export default function DashboardScreen({ tripId, onBack }: { tripId: string; on
       <View className="flex-row items-center justify-between mb-4">
         <Pressable
           onPress={onBack}
-          className="flex-row items-center gap-2 py-2 px-3 -ml-2 rounded-xl active:bg-slate-200/60"
+          className="flex-row items-center gap-2 py-2 px-3 -ml-2 rounded-xl active:bg-slate-200"
         >
           <ArrowLeft size={20} color="#1e293b" />
           <Text className="text-sm font-bold text-slate-800">Trips</Text>
@@ -114,7 +115,18 @@ export default function DashboardScreen({ tripId, onBack }: { tripId: string; on
       </View>
 
       {!stats && trip && (
-        <View className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-sm items-center my-4">
+        <View
+          className="bg-white rounded-3xl p-6 items-center my-4"
+          style={{
+            borderWidth: 1,
+            borderColor: 'rgba(226, 232, 240, 0.8)',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 1 },
+            shadowOpacity: 0.05,
+            shadowRadius: 2,
+            elevation: 1,
+          }}
+        >
           <View className="w-14 h-14 rounded-2xl bg-blue-50 items-center justify-center mb-3">
             <Wallet size={28} color="#2563eb" />
           </View>
@@ -147,7 +159,14 @@ export default function DashboardScreen({ tripId, onBack }: { tripId: string; on
             <View className="flex-row items-center justify-between mb-4">
               <Text className="text-blue-100 text-xs font-bold uppercase tracking-wider">Current Trip</Text>
               {isPreTrip && (
-                <View className="px-3 py-1 rounded-full bg-white/20 border border-white/25">
+                <View
+                  className="px-3 py-1 rounded-full"
+                  style={{
+                    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(255, 255, 255, 0.25)',
+                  }}
+                >
                   <Text className="text-[11px] font-bold text-white">
                     Starts in {daysUntilStart} day{daysUntilStart > 1 ? 's' : ''}
                   </Text>
@@ -157,28 +176,28 @@ export default function DashboardScreen({ tripId, onBack }: { tripId: string; on
 
             <View className="flex-row flex-wrap">
               <View className="w-1/2 mb-4 pr-2">
-                <Text className="text-blue-100/80 text-[11px] font-semibold mb-0.5">Budget</Text>
+                <Text className="text-[11px] font-semibold mb-0.5" style={{ color: 'rgba(219, 234, 254, 0.8)' }}>Budget</Text>
                 <Text className="font-black text-xl text-white tracking-tight" numberOfLines={1}>
                   {fmt(trip!.total_budget ?? 0)}
                 </Text>
               </View>
 
               <View className="w-1/2 mb-4 pl-2">
-                <Text className="text-blue-100/80 text-[11px] font-semibold mb-0.5">Total Spent</Text>
+                <Text className="text-[11px] font-semibold mb-0.5" style={{ color: 'rgba(219, 234, 254, 0.8)' }}>Total Spent</Text>
                 <Text className="font-black text-xl text-white tracking-tight" numberOfLines={1}>
                   {fmt(stats.totalSpent)}
                 </Text>
               </View>
 
               <View className="w-1/2 pr-2">
-                <Text className="text-blue-100/80 text-[11px] font-semibold mb-0.5">Participants</Text>
+                <Text className="text-[11px] font-semibold mb-0.5" style={{ color: 'rgba(219, 234, 254, 0.8)' }}>Participants</Text>
                 <Text className="font-black text-xl text-white tracking-tight">
                   {participantCount}
                 </Text>
               </View>
 
               <View className="w-1/2 pl-2">
-                <Text className="text-blue-100/80 text-[11px] font-semibold mb-0.5">Total Expenses</Text>
+                <Text className="text-[11px] font-semibold mb-0.5" style={{ color: 'rgba(219, 234, 254, 0.8)' }}>Total Expenses</Text>
                 <Text className="font-black text-xl text-white tracking-tight">
                   {expenses.length}
                 </Text>
@@ -202,7 +221,18 @@ export default function DashboardScreen({ tripId, onBack }: { tripId: string; on
           )}
 
           {/* Card 2: Remaining Balance Card */}
-          <View className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm">
+          <View
+            className="bg-white p-5 rounded-3xl"
+            style={{
+              borderWidth: 1,
+              borderColor: 'rgba(226, 232, 240, 0.8)',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.05,
+              shadowRadius: 2,
+              elevation: 1,
+            }}
+          >
             <View className="flex-row items-center justify-between mb-2">
               <Text className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                 Remaining Balance
@@ -276,13 +306,35 @@ export default function DashboardScreen({ tripId, onBack }: { tripId: string; on
           {/* Quick Stats: Today vs Yesterday */}
           {expenses.length > 0 && (
             <View className="flex-row gap-3">
-              <View className="flex-1 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+              <View
+                className="flex-1 bg-white p-4 rounded-2xl"
+                style={{
+                  borderWidth: 1,
+                  borderColor: 'rgba(226, 232, 240, 0.8)',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.05,
+                  shadowRadius: 2,
+                  elevation: 1,
+                }}
+              >
                 <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Today</Text>
                 <Text className="text-lg font-black text-slate-900" numberOfLines={1}>
                   {fmt(stats.todaySpent)}
                 </Text>
               </View>
-              <View className="flex-1 bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
+              <View
+                className="flex-1 bg-white p-4 rounded-2xl"
+                style={{
+                  borderWidth: 1,
+                  borderColor: 'rgba(226, 232, 240, 0.8)',
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 1 },
+                  shadowOpacity: 0.05,
+                  shadowRadius: 2,
+                  elevation: 1,
+                }}
+              >
                 <Text className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Yesterday</Text>
                 <Text className="text-lg font-black text-slate-600" numberOfLines={1}>
                   {fmt(stats.yesterdaySpent)}
