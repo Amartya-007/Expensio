@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { ArrowLeft, Clock, Layers } from 'lucide-react-native';
+import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { Clock, Layers } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { db } from '../powersync/db';
-import GradientText from '../components/GradientText';
+import ScreenHeader from '../components/ScreenHeader';
+import { formatTimestamp } from '../utils/formatDate';
 
 type ActivityEntry = {
   id: string;
@@ -24,15 +25,6 @@ const EVENT_ACCENTS: Record<string, { bg: string; icon: string }> = {
 };
 function accentFor(eventType: string) {
   return EVENT_ACCENTS[eventType] ?? { bg: '#f8fafc', icon: '#64748b' };
-}
-
-function formatTimestamp(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
 }
 
 export default function ActivityLogScreen({
@@ -58,27 +50,19 @@ export default function ActivityLogScreen({
 
   return (
     <View style={styles.shell}>
-      {/* ── Header ── */}
-      <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) }]}>
-        <Pressable
-          onPress={onBack}
-          style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]}
-          hitSlop={8}
-        >
-          <ArrowLeft size={18} color="#334155" />
-        </Pressable>
-
-        <View style={styles.headerBody}>
-          <GradientText className="text-2xl font-black">Activity Log</GradientText>
-          <Text style={styles.headerSub}>History of changes and events</Text>
-        </View>
-
-        {log.length > 0 && (
-          <View style={styles.countBadge}>
-            <Text style={styles.countBadgeText}>{log.length}</Text>
-          </View>
-        )}
-      </View>
+      <ScreenHeader
+        onBack={onBack}
+        title="Activity Log"
+        subtitle="History of changes and events"
+        paddingTop={Math.max(insets.top, 16)}
+        right={
+          log.length > 0 ? (
+            <View style={styles.countBadge}>
+              <Text style={styles.countBadgeText}>{log.length}</Text>
+            </View>
+          ) : undefined
+        }
+      />
 
       {/* ── Log list ── */}
       <FlatList
@@ -134,35 +118,6 @@ const styles = StyleSheet.create({
   },
 
   // ── Header ──
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingBottom: 14,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  backBtnPressed: { backgroundColor: '#e2e8f0' },
-  headerBody: { flex: 1 },
-  headerSub: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#94a3b8',
-    marginTop: 2,
-  },
   countBadge: {
     backgroundColor: '#eff6ff',
     borderWidth: 1,

@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { ArrowLeft, Link2, UserPlus } from 'lucide-react-native';
+import { Link2, UserPlus } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { db } from '../powersync/db';
 import { colorFor } from '../utils/avatarColor';
-import GradientText from '../components/GradientText';
+import ScreenHeader from '../components/ScreenHeader';
 import SyncStatusBanner from '../components/SyncStatusBanner';
 
 type Participant = { id: string; display_name: string; type: string };
@@ -36,23 +36,12 @@ export default function MembersScreen({
 
   return (
     <View style={styles.shell}>
-      {/* ── Header ── */}
-      <View style={[styles.header, { paddingTop: Math.max(insets.top, 16) }]}>
-        <Pressable
-          onPress={onBack}
-          style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]}
-          hitSlop={8}
-        >
-          <ArrowLeft size={18} color="#334155" />
-        </Pressable>
-
-        <View style={styles.headerBody}>
-          <GradientText className="text-2xl font-black">Members</GradientText>
-          <Text style={styles.headerSub}>
-            {participants.length} participant{participants.length !== 1 ? 's' : ''}
-          </Text>
-        </View>
-      </View>
+      <ScreenHeader
+        onBack={onBack}
+        title="Members"
+        subtitle={`${participants.length} participant${participants.length !== 1 ? 's' : ''}`}
+        paddingTop={Math.max(insets.top, 16)}
+      />
 
       {/* ── Sync banner ── */}
       <View style={styles.bannerArea}>
@@ -75,7 +64,11 @@ export default function MembersScreen({
         }
         renderItem={({ item }) => {
           const color = colorFor(item.id);
-          const initials = item.display_name.slice(0, 2).toUpperCase();
+          // Word-split initials: "Alice Bob" → "AB", "Rahul" → "RA"
+          const words = item.display_name.trim().split(/\s+/);
+          const initials = words.length >= 2
+            ? (words[0][0] + words[words.length - 1][0]).toUpperCase()
+            : item.display_name.slice(0, 2).toUpperCase();
           return (
             <View style={styles.memberCard}>
               {/* Avatar */}
@@ -134,37 +127,6 @@ const styles = StyleSheet.create({
   shell: {
     flex: 1,
     backgroundColor: '#f8fafc',
-  },
-
-  // ── Header ──
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingBottom: 14,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  backBtnPressed: { backgroundColor: '#e2e8f0' },
-  headerBody: { flex: 1 },
-  headerSub: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#94a3b8',
-    marginTop: 2,
   },
 
   // ── Banner ──

@@ -2,7 +2,7 @@
 // colored-initial-badge device it already used for participant avatars there (and
 // ExpenseDetailScreen/TripDetailScreen use it for paid-by avatars) -- same pattern as
 // Chip.tsx being pulled out once a second screen needed it.
-export const AVATAR_COLORS = [
+const AVATAR_COLORS = [
   { bg: 'bg-blue-50', border: 'border-blue-100', text: 'text-blue-700' },
   { bg: 'bg-emerald-50', border: 'border-emerald-100', text: 'text-emerald-700' },
   { bg: 'bg-amber-50', border: 'border-amber-100', text: 'text-amber-700' },

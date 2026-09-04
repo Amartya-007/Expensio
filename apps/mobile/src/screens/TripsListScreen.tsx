@@ -38,14 +38,22 @@ function formatDateRange(start: string | null, end: string | null, created: stri
   if (start) {
     const s = new Date(start).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
     const e = end
-      ? new Date(end).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+      ? new Date(end).toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        })
       : null;
     return e ? `${s} – ${e}` : `From ${s}`;
   }
-  return `Created ${new Date(created).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  return `Created ${new Date(created).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })}`;
 }
 
-// Cycle through a small palette so each trip card gets a distinct accent
+// Stable colour palette for card icons
 const CARD_ACCENTS = [
   { icon: '#2563eb', bg: '#eff6ff', border: '#bfdbfe' },
   { icon: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe' },
@@ -53,8 +61,15 @@ const CARD_ACCENTS = [
   { icon: '#d97706', bg: '#fffbeb', border: '#fde68a' },
   { icon: '#e11d48', bg: '#fff1f2', border: '#fecdd3' },
 ];
-function accentFor(index: number) {
-  return CARD_ACCENTS[index % CARD_ACCENTS.length];
+
+function hashId(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+function accentFor(id: string) {
+  return CARD_ACCENTS[hashId(id) % CARD_ACCENTS.length];
 }
 
 export default function TripsListScreen({
@@ -66,6 +81,7 @@ export default function TripsListScreen({
 }) {
   const insets = useSafeAreaInsets();
   const [trips, setTrips] = useState<Trip[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -75,7 +91,12 @@ export default function TripsListScreen({
     db.watch(
       'SELECT id, name, currency, start_date, end_date, total_budget, created_at, is_archived FROM trips WHERE is_archived = ? AND deleted_at IS NULL ORDER BY created_at DESC',
       [showArchived ? 1 : 0],
-      { onResult: (r) => setTrips(r.rows?._array ?? []) },
+      {
+        onResult: (r) => {
+          setTrips(r.rows?._array ?? []);
+          setLoaded(true);
+        },
+      },
       { signal: ac.signal }
     );
     return () => ac.abort();
@@ -98,8 +119,8 @@ export default function TripsListScreen({
     setRefreshing(false);
   }
 
-  // ── Empty state ──────────────────────────────────────────────────────────────
-  if (!showArchived && trips.length === 0) {
+  // ── Empty state (only after first query completes, non-archive mode) ─────────
+  if (loaded && !showArchived && trips.length === 0) {
     return (
       <View
         style={[
@@ -111,17 +132,19 @@ export default function TripsListScreen({
         ]}
       >
         {/* Hero illustration */}
-        <LinearGradient
-          colors={['#eff6ff', '#dbeafe']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.emptyIconRing}
-        >
-          <Compass size={44} color="#2563eb" strokeWidth={1.8} />
-        </LinearGradient>
+        <View style={styles.emptyIconOuter}>
+          <LinearGradient
+            colors={['#2563eb', '#1d4ed8']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.emptyIconGradient}
+          >
+            <Compass size={40} color="#fff" strokeWidth={1.8} />
+          </LinearGradient>
+        </View>
 
         <GradientText className="text-3xl font-black tracking-tight text-center">
-          Plan Your Next Adventure
+          Plan Your First Adventure
         </GradientText>
         <Text style={styles.emptySubtitle}>
           Track shared expenses, set budgets, and split bills effortlessly with your travel group.
@@ -129,7 +152,7 @@ export default function TripsListScreen({
 
         <Pressable
           onPress={onCreateTrip}
-          style={({ pressed }) => [styles.emptyBtn, pressed && styles.emptyBtnPressed]}
+          style={({ pressed }) => [styles.emptyBtnWrap, pressed && styles.emptyBtnPressed]}
         >
           <LinearGradient
             colors={['#2563eb', '#1d4ed8']}
@@ -147,16 +170,11 @@ export default function TripsListScreen({
 
   // ── Main list ────────────────────────────────────────────────────────────────
   return (
-    <View
-      style={[
-        styles.shell,
-        { paddingTop: Math.max(insets.top, 16) },
-      ]}
-    >
-      {/* Header */}
+    <View style={[styles.shell, { paddingTop: Math.max(insets.top, 16) }]}>
+      {/* ── Header ── */}
       <View style={styles.header}>
-        <View>
-          <GradientText className="text-3xl font-black tracking-tight">
+        <View style={styles.headerLeft}>
+          <GradientText className="text-3xl font-black">
             {showArchived ? 'Archived' : 'My Trips'}
           </GradientText>
           <Text style={styles.headerSub}>
@@ -168,15 +186,22 @@ export default function TripsListScreen({
         {!showArchived && (
           <Pressable
             onPress={onCreateTrip}
-            style={({ pressed }) => [styles.newBtn, pressed && styles.newBtnPressed]}
+            style={({ pressed }) => [styles.newBtnWrap, pressed && styles.newBtnPressed]}
           >
-            <Plus size={16} color="#fff" strokeWidth={2.5} />
-            <Text style={styles.newBtnText}>New Trip</Text>
+            <LinearGradient
+              colors={['#2563eb', '#1d4ed8']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.newBtnGradient}
+            >
+              <Plus size={16} color="#fff" strokeWidth={2.5} />
+              <Text style={styles.newBtnText}>New Trip</Text>
+            </LinearGradient>
           </Pressable>
         )}
       </View>
 
-      {/* Banners */}
+      {/* ── Sync / pending banners ── */}
       <View style={styles.bannerArea}>
         <SyncStatusBanner />
         {pendingCount > 0 && (
@@ -188,11 +213,13 @@ export default function TripsListScreen({
         )}
       </View>
 
-      {/* List */}
+      {/* ── Trip list ── */}
       <FlatList
         data={trips}
         keyExtractor={(item) => item.id}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563eb" />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563eb" />
+        }
         contentContainerStyle={[
           styles.listContent,
           { paddingBottom: Math.max(insets.bottom, 16) + 24 },
@@ -204,26 +231,31 @@ export default function TripsListScreen({
             <Text style={styles.listEmptyText}>No archived trips found.</Text>
           </View>
         }
-        renderItem={({ item, index }) => {
-          const accent = accentFor(index);
+        renderItem={({ item }) => {
+          const accent = accentFor(item.id);
           const dateLabel = formatDateRange(item.start_date, item.end_date, item.created_at);
           return (
             <Pressable
               onPress={() => onOpenTrip(item.id, item.currency)}
               style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
             >
-              {/* Left icon */}
-              <View style={[styles.cardIcon, { backgroundColor: accent.bg, borderColor: accent.border }]}>
-                <MapPin size={20} color={accent.icon} strokeWidth={2} />
+              {/* Left: coloured icon circle */}
+              <View
+                style={[
+                  styles.cardIconCircle,
+                  { backgroundColor: accent.bg, borderColor: accent.border },
+                ]}
+              >
+                <MapPin size={22} color={accent.icon} strokeWidth={2} />
               </View>
 
-              {/* Middle content */}
+              {/* Body */}
               <View style={styles.cardBody}>
                 <Text style={styles.cardName} numberOfLines={1}>
                   {item.name}
                 </Text>
 
-                <View style={styles.cardMeta}>
+                <View style={styles.cardMetaRow}>
                   <Calendar size={11} color="#94a3b8" />
                   <Text style={styles.cardMetaText} numberOfLines={1}>
                     {dateLabel}
@@ -232,9 +264,13 @@ export default function TripsListScreen({
 
                 {item.total_budget != null && (
                   <View style={styles.cardBudgetRow}>
-                    <Wallet size={11} color="#16a34a" />
+                    <Wallet size={11} color="#059669" />
                     <Text style={styles.cardBudgetText}>
-                      {item.currency} {Number(item.total_budget).toLocaleString(undefined, { maximumFractionDigits: 0 })} budget
+                      {item.currency}{' '}
+                      {Number(item.total_budget).toLocaleString(undefined, {
+                        maximumFractionDigits: 0,
+                      })}{' '}
+                      budget
                     </Text>
                   </View>
                 )}
@@ -245,14 +281,14 @@ export default function TripsListScreen({
                 <View style={styles.currencyChip}>
                   <Text style={styles.currencyChipText}>{item.currency}</Text>
                 </View>
-                <ChevronRight size={16} color="#cbd5e1" style={{ marginTop: 8 }} />
+                <ChevronRight size={16} color="#cbd5e1" />
               </View>
             </Pressable>
           );
         }}
       />
 
-      {/* Archive toggle */}
+      {/* ── Archive toggle ── */}
       <Pressable
         onPress={() => setShowArchived((v) => !v)}
         style={({ pressed }) => [styles.archiveToggle, pressed && styles.archiveTogglePressed]}
@@ -276,13 +312,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 16,
   },
-  emptyIconRing: {
-    width: 96,
-    height: 96,
-    borderRadius: 32,
+  emptyIconOuter: {
+    borderRadius: 36,
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 18,
+    elevation: 10,
+    marginBottom: 8,
+  },
+  emptyIconGradient: {
+    width: 88,
+    height: 88,
+    borderRadius: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
   },
   emptySubtitle: {
     fontSize: 14,
@@ -292,8 +336,8 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     maxWidth: 300,
   },
-  emptyBtn: {
-    borderRadius: 18,
+  emptyBtnWrap: {
+    borderRadius: 16,
     marginTop: 8,
     shadowColor: '#2563eb',
     shadowOffset: { width: 0, height: 6 },
@@ -311,7 +355,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 32,
     paddingVertical: 16,
-    borderRadius: 18,
+    borderRadius: 16,
   },
   emptyBtnText: {
     color: '#fff',
@@ -334,20 +378,18 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginBottom: 8,
   },
+  headerLeft: {
+    flex: 1,
+    gap: 2,
+  },
   headerSub: {
     fontSize: 12,
     fontWeight: '600',
     color: '#94a3b8',
     marginTop: 2,
   },
-  newBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#2563eb',
+  newBtnWrap: {
     borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
     shadowColor: '#2563eb',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
@@ -357,6 +399,14 @@ const styles = StyleSheet.create({
   newBtnPressed: {
     opacity: 0.88,
     transform: [{ scale: 0.96 }],
+  },
+  newBtnGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 16,
   },
   newBtnText: {
     color: '#fff',
@@ -402,27 +452,25 @@ const styles = StyleSheet.create({
   // ── Trip card ──
   card: {
     backgroundColor: '#fff',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderRadius: 24,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
     shadowColor: '#94a3b8',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
   },
   cardPressed: {
     backgroundColor: '#f8fafc',
     transform: [{ scale: 0.99 }],
   },
-  cardIcon: {
+  cardIconCircle: {
     width: 48,
     height: 48,
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -433,12 +481,12 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   cardName: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '800',
     color: '#0f172a',
-    letterSpacing: -0.2,
+    letterSpacing: -0.3,
   },
-  cardMeta: {
+  cardMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -456,11 +504,12 @@ const styles = StyleSheet.create({
   cardBudgetText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#16a34a',
+    color: '#059669',
   },
   cardRight: {
     alignItems: 'center',
-    gap: 2,
+    gap: 4,
+    flexShrink: 0,
   },
   currencyChip: {
     backgroundColor: '#f1f5f9',

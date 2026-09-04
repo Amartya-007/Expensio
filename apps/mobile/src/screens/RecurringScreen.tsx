@@ -1,13 +1,23 @@
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { ArrowLeft, Calendar, Repeat, Trash2 } from 'lucide-react-native';
+import { Repeat, Trash2 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { db } from '../powersync/db';
 import { callRpc } from '../rpc';
 import { formatError } from '../utils/errors';
 import PrimaryButton from '../components/PrimaryButton';
-import GradientText from '../components/GradientText';
+import ScreenHeader from '../components/ScreenHeader';
 import Chip from '../components/Chip';
+import DatePicker from '../components/DatePicker';
+
+// Local-time today ISO — avoids giving yesterday's date to users west of UTC
+function localTodayIso(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
 
 type Participant = { id: string; display_name: string };
 type Template = {
@@ -43,7 +53,7 @@ export default function RecurringScreen({
   const [amount, setAmount] = useState('');
   const [paidBy, setPaidBy] = useState<string | null>(null);
   const [rule, setRule] = useState<(typeof RULES)[number]>('monthly');
-  const [nextRunDate, setNextRunDate] = useState(new Date().toISOString().slice(0, 10));
+  const [nextRunDate, setNextRunDate] = useState(localTodayIso());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -106,35 +116,30 @@ export default function RecurringScreen({
   }
 
   return (
-    <ScrollView
-      style={styles.root}
-      contentContainerStyle={{
-        paddingTop: Math.max(insets.top, 16),
-        paddingBottom: Math.max(insets.bottom, 16) + 32,
-        paddingHorizontal: 16,
-      }}
-      keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator={false}
-    >
-      {/* ── Header ── */}
-      <View style={styles.header}>
-        <Pressable
-          onPress={onBack}
-          disabled={busy}
-          style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]}
-          hitSlop={8}
-        >
-          <ArrowLeft size={18} color="#334155" />
-        </Pressable>
-        <View style={styles.headerBody}>
-          <GradientText className="text-2xl font-black">Recurring</GradientText>
-          <Text style={styles.headerSub}>Auto-repeating expense templates</Text>
-        </View>
-        <View style={styles.countBadge}>
-          <Repeat size={12} color="#7c3aed" />
-          <Text style={styles.countBadgeText}>{templates.length} active</Text>
-        </View>
-      </View>
+    <View style={styles.root}>
+      <ScreenHeader
+        onBack={onBack}
+        title="Recurring"
+        subtitle="Auto-repeating expense templates"
+        paddingTop={Math.max(insets.top, 16)}
+        backDisabled={busy}
+        right={
+          <View style={styles.countBadge}>
+            <Repeat size={12} color="#7c3aed" />
+            <Text style={styles.countBadgeText}>{templates.length} active</Text>
+          </View>
+        }
+      />
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={{
+          paddingBottom: Math.max(insets.bottom, 16) + 32,
+          paddingHorizontal: 16,
+          paddingTop: 16,
+        }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
 
       {/* ── Create form ── */}
       <Text style={styles.sectionLabel}>New Template</Text>
@@ -210,16 +215,7 @@ export default function RecurringScreen({
         {/* Next run date */}
         <View style={styles.fieldGroup}>
           <Text style={styles.fieldLabel}>Next run date</Text>
-          <View style={styles.dateInputRow}>
-            <Calendar size={15} color="#94a3b8" />
-            <TextInput
-              style={styles.dateInput}
-              value={nextRunDate}
-              onChangeText={setNextRunDate}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor="#94a3b8"
-            />
-          </View>
+          <DatePicker value={nextRunDate} onChange={setNextRunDate} label="First occurrence" />
         </View>
 
         {/* Error */}
@@ -291,6 +287,7 @@ export default function RecurringScreen({
         </View>
       )}
     </ScrollView>
+    </View>
   );
 }
 
@@ -299,33 +296,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
+  scroll: { flex: 1 },
 
-  // ── Header ──
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 20,
-  },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  backBtnPressed: { backgroundColor: '#e2e8f0' },
-  headerBody: { flex: 1 },
-  headerSub: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#94a3b8',
-    marginTop: 2,
-  },
+  // ── Count badge ──
   countBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -422,23 +395,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-  },
-  dateInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  dateInput: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#0f172a',
   },
   divider: {
     height: 1,

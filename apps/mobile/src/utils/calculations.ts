@@ -8,8 +8,6 @@ export type TripBudgetInput = {
   expenses: Array<{ amount: number; date: string }>;
 };
 
-export type TripStats = ReturnType<typeof calculateStats>;
-
 export function calculateStats(input: TripBudgetInput) {
   const { totalBudget, startDate, endDate, peopleCount, expenses } = input;
   if (totalBudget == null || !startDate || !endDate) return null;

@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { ArrowLeft, PlusCircle } from 'lucide-react-native';
-import { EdgeInsets, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { PlusCircle } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { db } from '../powersync/db';
-import GradientText from '../components/GradientText';
+import ScreenHeader from '../components/ScreenHeader';
 import SettlementView from '../components/SettlementView';
 import TripTabBar, { TripTab } from '../components/TripTabBar';
 import DashboardScreen from './DashboardScreen';
 import TripSettingsScreen from './TripSettingsScreen';
 import { colorFor } from '../utils/avatarColor';
+import { formatTimestamp } from '../utils/formatDate';
 
 type Expense = {
   id: string;
@@ -23,56 +24,6 @@ type Expense = {
 type Trip = { id: string; name: string; currency: string; is_archived: number };
 type Participant = { id: string; display_name: string; type: string };
 type Split = { expense_id: string; participant_id: string; share_amount: number };
-
-function formatTimestamp(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
-
-// ── TabHeader is defined OUTSIDE TripDetailScreen so React never unmounts/remounts
-// it when TripDetailScreen's state changes. Defining it inside the parent creates a
-// new function reference on every render, which React treats as a different component
-// type and fully unmounts + remounts the subtree on every state update.
-function TabHeader({
-  trip,
-  subtitle,
-  insets,
-  onBack,
-}: {
-  trip: Trip | null;
-  subtitle: string;
-  insets: EdgeInsets;
-  onBack: () => void;
-}) {
-  return (
-    <View style={[styles.tabHeader, { paddingTop: Math.max(insets.top, 16) }]}>
-      <Pressable
-        onPress={onBack}
-        style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]}
-        hitSlop={8}
-      >
-        <ArrowLeft size={18} color="#334155" />
-      </Pressable>
-
-      <View style={styles.tabHeaderCenter}>
-        <GradientText className="text-xl font-black" numberOfLines={1}>
-          {trip?.name ?? '…'}
-        </GradientText>
-        <Text style={styles.tabHeaderSub}>{subtitle}</Text>
-      </View>
-
-      {!!trip?.is_archived && (
-        <View style={styles.archivedBadge}>
-          <Text style={styles.archivedText}>Archived</Text>
-        </View>
-      )}
-    </View>
-  );
-}
 
 export default function TripDetailScreen({
   tripId,
@@ -123,7 +74,7 @@ export default function TripDetailScreen({
   useEffect(() => {
     const ac = new AbortController();
     db.watch(
-      'SELECT id, display_name, type FROM participants WHERE trip_id = ? AND deleted_at IS NULL',
+      'SELECT id, display_name, type FROM participants WHERE trip_id = ?',
       [tripId],
       { onResult: (r) => setParticipants(r.rows?._array ?? []) },
       { signal: ac.signal }
@@ -177,7 +128,18 @@ export default function TripDetailScreen({
       {/* ── Expenses tab ── */}
       {activeTab === 'expenses' && (
         <View style={styles.tabShell}>
-          <TabHeader trip={trip} subtitle="All Expenses" insets={insets} onBack={onBack} />
+          <ScreenHeader
+            title={trip?.name ?? '…'}
+            subtitle="All Expenses"
+            paddingTop={Math.max(insets.top, 16)}
+            onBack={onBack}
+            right={!!trip?.is_archived ? (
+              <View style={styles.archivedBadge}>
+                <Text style={styles.archivedText}>Archived</Text>
+              </View>
+            ) : undefined}
+            titleClassName="text-xl font-black"
+          />
 
           <FlatList
             data={expenses}
@@ -256,7 +218,18 @@ export default function TripDetailScreen({
       {/* ── Settle tab ── */}
       {activeTab === 'settle' && (
         <View style={styles.tabShell}>
-          <TabHeader trip={trip} subtitle="Settle Up & Balances" insets={insets} onBack={onBack} />
+          <ScreenHeader
+            title={trip?.name ?? '…'}
+            subtitle="Settle Up & Balances"
+            paddingTop={Math.max(insets.top, 16)}
+            onBack={onBack}
+            right={!!trip?.is_archived ? (
+              <View style={styles.archivedBadge}>
+                <Text style={styles.archivedText}>Archived</Text>
+              </View>
+            ) : undefined}
+            titleClassName="text-xl font-black"
+          />
           <ScrollView
             contentContainerStyle={[
               styles.settleContent,
@@ -289,37 +262,6 @@ const styles = StyleSheet.create({
   shell: { flex: 1, backgroundColor: '#f8fafc' },
 
   tabShell: { flex: 1 },
-  tabHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingBottom: 14,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  backBtnPressed: { backgroundColor: '#e2e8f0' },
-  tabHeaderCenter: { flex: 1 },
-  tabHeaderSub: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#94a3b8',
-    marginTop: 2,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
   archivedBadge: {
     backgroundColor: '#fef3c7',
     borderWidth: 1,

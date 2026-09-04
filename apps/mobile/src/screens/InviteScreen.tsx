@@ -30,16 +30,22 @@ export default function InviteScreen({
   onDone: () => void;
 }) {
   const insets = useSafeAreaInsets();
-  const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [joinCode, setJoinCode] = useState('');
   const [busy, setBusy] = useState<'generate' | 'join' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeInvites, setActiveInvites] = useState<ActiveInvite[]>([]);
 
+  // The displayed invite code is derived from the first active invite synced back
+  // down via PowerSync — no separate local state needed. generateInvite sets it
+  // optimistically while we wait for the db.watch to catch up.
+  const [generatedCode, setGeneratedCode] = useState<string | null>(null);
+  const displayCode = generatedCode ?? activeInvites[0]?.code ?? null;
+
   useEffect(() => {
     const ac = new AbortController();
     db.watch(
-      'SELECT id, code, expires_at, use_count, max_uses FROM trip_invites WHERE trip_id = ? AND revoked_at IS NULL ORDER BY created_at DESC',
+      // Filter out expired and revoked invites — only show codes still redeemable.
+      "SELECT id, code, expires_at, use_count, max_uses FROM trip_invites WHERE trip_id = ? AND revoked_at IS NULL AND expires_at > datetime('now') ORDER BY created_at DESC",
       [tripId],
       { onResult: r => setActiveInvites(r.rows?._array ?? []) },
       { signal: ac.signal }
@@ -51,7 +57,7 @@ export default function InviteScreen({
     setBusy('generate'); setError(null);
     try {
       const result = await callRpc<string>('generate_invite', { p_trip_id: tripId, p_expires_in: '24 hours', p_max_uses: 1 });
-      if (result.status === 'ok') setInviteCode(result.data);
+      if (result.status === 'ok') setGeneratedCode(result.data);
       else setError('Invite will be available once the connection returns.');
     } catch (err) {
       if (isVerificationError(err)) { setBusy(null); onRequireVerification(); return; }
@@ -60,8 +66,8 @@ export default function InviteScreen({
   }
 
   async function shareInvite() {
-    if (!inviteCode) return;
-    await Share.share({ message: `Join my Expensio trip with code ${inviteCode}. It expires in 24 hours.` });
+    if (!displayCode) return;
+    await Share.share({ message: `Join my Expensio trip with code ${displayCode}. It expires in 24 hours.` });
   }
 
   async function joinTrip() {
@@ -78,10 +84,9 @@ export default function InviteScreen({
   }
 
   async function revokeInvite(inviteId: string) {
-    setBusy('generate'); setError(null);
+    setBusy('revoke' as any); setError(null);
     try {
       await callRpc('revoke_invite', { p_invite_id: inviteId }, { idempotent: false });
-      setInviteCode(null);
     } catch (err) { setError(formatError(err)); }
     finally { setBusy(null); }
   }
@@ -115,13 +120,13 @@ export default function InviteScreen({
       {/* Invite section */}
       <Text style={s.sectionLabel}>Invite someone to this trip</Text>
 
-      {inviteCode ? (
+      {displayCode ? (
         <View style={s.codeCard}>
           <View style={s.codeIconWrap}>
             <Ticket size={20} color="#2563eb" />
           </View>
           <Text style={s.codeHint}>Invite code</Text>
-          <Text style={s.codeText}>{inviteCode}</Text>
+          <Text style={s.codeText}>{displayCode}</Text>
           <Pressable
             onPress={shareInvite}
             style={({ pressed }) => [s.shareBtn, pressed && s.shareBtnPressed]}

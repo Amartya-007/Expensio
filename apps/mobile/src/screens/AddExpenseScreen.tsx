@@ -26,13 +26,14 @@ type Category = { id: string; name: string; icon: string };
 type SplitType = 'equal' | 'exact' | 'percentage' | 'shares' | 'adjustment' | 'itemized' | 'reimbursement';
 type Item = { id: string; label: string; amount: string; sharedBy: string[] };
 
+// Only the split types that have input UIs wired up. adjustment and itemized
+// have their split-config logic ready but no input forms yet — omitting them
+// prevents users from selecting them and hitting "invalid split values".
 const SPLIT_TYPES: Array<{ value: SplitType; label: string }> = [
   { value: 'equal', label: 'Equal' },
   { value: 'exact', label: 'Exact' },
   { value: 'percentage', label: '%' },
   { value: 'shares', label: 'Shares' },
-  { value: 'adjustment', label: 'Adjust' },
-  { value: 'itemized', label: 'Items' },
   { value: 'reimbursement', label: 'Reimburse' },
 ];
 
@@ -95,11 +96,28 @@ export default function AddExpenseScreen({
           ? [{ id: randomUUID(), label: '', amount: '', sharedBy: rows.map((p: Participant) => p.id) }]
           : c.map(item => ({ ...item, sharedBy: item.sharedBy.filter((id: string) => rows.some((p: Participant) => p.id === id)) }))
         );
-        if (paidBy === null && rows.length > 0) {
-          const { data: { session } } = await supabase.auth.getSession();
-          const mine = await db.getAll<{ id: string }>('SELECT id FROM participants WHERE trip_id = ? AND linked_user_id = ?', [tripId, session?.user.id ?? '']);
-          setPaidBy(mine[0]?.id ?? rows[0].id);
-        }
+        // Default paidBy to the current user's participant on first load.
+        // Use a functional setter so we read the latest paidBy state, not a
+        // stale closure capture — the watcher can fire multiple times (e.g.
+        // when a new participant is added) and we must not clobber a choice
+        // the user has already made.
+        setPaidBy((current) => {
+          if (current !== null && rows.some((p: Participant) => p.id === current)) {
+            return current; // keep the selection if it's still valid
+          }
+          // Current selection is null or the participant was removed — pick the
+          // current user's participant, or fall back to the first row.
+          return null; // will be resolved asynchronously below
+        });
+        // Resolve the current user's participant id asynchronously so we don't
+        // call supabase inside a setState updater.
+        const { data: { session } } = await supabase.auth.getSession();
+        const mine = await db.getAll<{ id: string }>('SELECT id FROM participants WHERE trip_id = ? AND linked_user_id = ?', [tripId, session?.user.id ?? '']);
+        setPaidBy((current) => {
+          // Only override if still unset or the previous selection was removed.
+          if (current !== null && rows.some((p: Participant) => p.id === current)) return current;
+          return mine[0]?.id ?? rows[0]?.id ?? null;
+        });
       },
     }, { signal: ac.signal });
     return () => ac.abort();

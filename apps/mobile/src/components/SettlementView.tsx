@@ -181,7 +181,10 @@ export default function SettlementView({ tripId }: { tripId: string }) {
     }
   }
 
-  const settled = !loading && !error && suggestions.length === 0 && pendingReceipts.length === 0;
+  // settled is only true once we know the participant lookup succeeded (myParticipantId
+  // resolves to null for anonymous users with no participant row, so we use a separate
+  // `loaded` flag to distinguish "loaded with no suggestions" from "not loaded yet").
+  const settled = !loading && !error && myParticipantId !== null && suggestions.length === 0 && pendingReceipts.length === 0;
 
   return (
     <View style={sv.root}>
@@ -190,6 +193,9 @@ export default function SettlementView({ tripId }: { tripId: string }) {
       {!!error && (
         <View style={sv.errorBanner}>
           <Text style={sv.errorText}>{error}</Text>
+          <Pressable onPress={load} style={sv.retryBtn}>
+            <Text style={sv.retryText}>Retry</Text>
+          </Pressable>
         </View>
       )}
 
@@ -280,8 +286,10 @@ const sv = StyleSheet.create({
   root: { gap: 12 },
   spinner: { marginTop: 40, alignSelf: 'center' },
 
-  errorBanner: { backgroundColor: '#fff1f2', borderWidth: 1, borderColor: '#fecdd3', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12 },
-  errorText: { fontSize: 13, fontWeight: '600', color: '#be123c' },
+  errorBanner: { backgroundColor: '#fff1f2', borderWidth: 1, borderColor: '#fecdd3', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, gap: 10 },
+  errorText: { fontSize: 13, fontWeight: '600', color: '#be123c', flex: 1 },
+  retryBtn: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#fecdd3', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8, alignSelf: 'flex-start' },
+  retryText: { fontSize: 12, fontWeight: '700', color: '#be123c' },
 
   settledCard: { backgroundColor: '#fff', borderRadius: 20, padding: 32, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', gap: 10, marginTop: 8 },
   settledIcon: { width: 48, height: 48, borderRadius: 16, backgroundColor: '#ecfdf5', borderWidth: 1, borderColor: '#d1fae5', alignItems: 'center', justifyContent: 'center' },

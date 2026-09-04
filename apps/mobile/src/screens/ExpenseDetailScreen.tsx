@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -59,6 +59,9 @@ export default function ExpenseDetailScreen({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // Tracks whether we have already seeded the edit fields from the expense row.
+  // Using a ref instead of state avoids triggering a re-render on first seed.
+  const hydratedRef = useRef(false);
 
   useEffect(() => {
     const ac = new AbortController();
@@ -68,14 +71,18 @@ export default function ExpenseDetailScreen({
       { onResult: r => {
         const row = r.rows?._array?.[0] ?? null;
         setExpense(row);
-        if (row && description === '' && amount === '') {
-          setDescription(row.description); setAmount(String(row.amount));
+        // Seed edit fields only once — a remote sync update arriving while the user
+        // is editing should never clobber their in-progress changes.
+        if (row && !hydratedRef.current) {
+          hydratedRef.current = true;
+          setDescription(row.description);
+          setAmount(String(row.amount));
         }
       }},
       { signal: ac.signal }
     );
     return () => ac.abort();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- hydratedRef is a ref, not reactive state
   }, [expenseId]);
 
   useEffect(() => {
@@ -93,7 +100,9 @@ export default function ExpenseDetailScreen({
     if (!expense) return;
     const ac = new AbortController();
     db.watch(
-      'SELECT id, display_name FROM participants WHERE trip_id = (SELECT trip_id FROM expenses WHERE id = ?)',
+      // deleted_at IS NULL on the inner SELECT so that if the expense is soft-deleted
+      // while this screen is open, the trip_id subquery resolves correctly.
+      'SELECT id, display_name FROM participants WHERE trip_id = (SELECT trip_id FROM expenses WHERE id = ? AND deleted_at IS NULL)',
       [expenseId],
       { onResult: r => setParticipants(r.rows?._array ?? []) },
       { signal: ac.signal }
@@ -104,6 +113,8 @@ export default function ExpenseDetailScreen({
   useEffect(() => {
     const ac = new AbortController();
     db.watch(
+      // expense_splits has no soft-delete column in the current schema, but
+      // guard here in case it is added later.
       'SELECT participant_id, share_amount FROM expense_splits WHERE expense_id = ?',
       [expenseId],
       { onResult: r => setSplits(r.rows?._array ?? []) },

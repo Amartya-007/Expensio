@@ -191,7 +191,7 @@ export default function DashboardScreen({
   useEffect(() => {
     const ac = new AbortController();
     db.watch(
-      'SELECT COUNT(*) as count FROM participants WHERE trip_id = ? AND deleted_at IS NULL',
+      'SELECT COUNT(*) as count FROM participants WHERE trip_id = ?',
       [tripId],
       { onResult: (r) => setParticipantCount(r.rows?._array?.[0]?.count ?? 0) },
       { signal: ac.signal }

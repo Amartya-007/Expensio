@@ -41,7 +41,7 @@ async function isOffline(err: unknown): Promise<boolean> {
   try {
     const state = await NetInfo.fetch();
     if (state.isConnected === false || state.isInternetReachable === false) return true;
-    if (state.isConnected === true && state.isInternetReachable !== false) return false;
+    if (state.isConnected === true && state.isInternetReachable === true) return false;
     // isInternetReachable can be null right after a state change on some Android devices,
     // before NetInfo has finished probing -- fall back to the old message heuristic only
     // for this narrow "genuinely don't know yet" case rather than trusting it generally.
