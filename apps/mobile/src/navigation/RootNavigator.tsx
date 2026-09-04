@@ -163,7 +163,7 @@ function TripDetailRoute({ navigation, route }: NativeStackScreenProps<RootStack
   return (
     <TripDetailScreen
       tripId={tripId}
-      onBack={() => navigation.navigate('Trips')}
+      onBack={() => navigation.goBack()}
       onAddExpense={() => navigation.navigate('AddExpense', { tripId, currency })}
       onOpenExpense={(expenseId) => navigation.navigate('ExpenseDetail', { expenseId, tripId, currency })}
       onOpenMembers={() => navigation.navigate('Members', { tripId, currency })}
@@ -230,7 +230,7 @@ function InviteRoute({ navigation, route }: NativeStackScreenProps<RootStackPara
     <InviteScreen
       tripId={route.params.tripId}
       onRequireVerification={() => navigation.navigate('VerifyPhone')}
-      onJoined={() => navigation.navigate('Trips')}
+      onJoined={(joinedTripId) => navigation.replace('TripDetail', { tripId: joinedTripId, currency: 'USD' })}
       onDone={() => navigation.goBack()}
     />
   );

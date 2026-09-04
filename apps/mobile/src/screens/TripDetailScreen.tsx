@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ArrowLeft, PlusCircle } from 'lucide-react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { EdgeInsets, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { db } from '../powersync/db';
 import GradientText from '../components/GradientText';
 import SettlementView from '../components/SettlementView';
@@ -31,6 +31,47 @@ function formatTimestamp(iso: string): string {
     hour: 'numeric',
     minute: '2-digit',
   });
+}
+
+// ── TabHeader is defined OUTSIDE TripDetailScreen so React never unmounts/remounts
+// it when TripDetailScreen's state changes. Defining it inside the parent creates a
+// new function reference on every render, which React treats as a different component
+// type and fully unmounts + remounts the subtree on every state update.
+function TabHeader({
+  trip,
+  subtitle,
+  insets,
+  onBack,
+}: {
+  trip: Trip | null;
+  subtitle: string;
+  insets: EdgeInsets;
+  onBack: () => void;
+}) {
+  return (
+    <View style={[styles.tabHeader, { paddingTop: Math.max(insets.top, 16) }]}>
+      <Pressable
+        onPress={onBack}
+        style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]}
+        hitSlop={8}
+      >
+        <ArrowLeft size={18} color="#334155" />
+      </Pressable>
+
+      <View style={styles.tabHeaderCenter}>
+        <GradientText className="text-xl font-black" numberOfLines={1}>
+          {trip?.name ?? '…'}
+        </GradientText>
+        <Text style={styles.tabHeaderSub}>{subtitle}</Text>
+      </View>
+
+      {!!trip?.is_archived && (
+        <View style={styles.archivedBadge}>
+          <Text style={styles.archivedText}>Archived</Text>
+        </View>
+      )}
+    </View>
+  );
 }
 
 export default function TripDetailScreen({
@@ -82,7 +123,7 @@ export default function TripDetailScreen({
   useEffect(() => {
     const ac = new AbortController();
     db.watch(
-      'SELECT id, display_name, type FROM participants WHERE trip_id = ?',
+      'SELECT id, display_name, type FROM participants WHERE trip_id = ? AND deleted_at IS NULL',
       [tripId],
       { onResult: (r) => setParticipants(r.rows?._array ?? []) },
       { signal: ac.signal }
@@ -92,11 +133,12 @@ export default function TripDetailScreen({
 
   useEffect(() => {
     const ac = new AbortController();
+    // Added e.deleted_at IS NULL so splits from soft-deleted expenses don't appear.
     db.watch(
       `SELECT s.expense_id, s.participant_id, s.share_amount
        FROM expense_splits s
        JOIN expenses e ON e.id = s.expense_id
-       WHERE e.trip_id = ?`,
+       WHERE e.trip_id = ? AND e.deleted_at IS NULL`,
       [tripId],
       { onResult: (r) => setSplits(r.rows?._array ?? []) },
       { signal: ac.signal }
@@ -104,47 +146,26 @@ export default function TripDetailScreen({
     return () => ac.abort();
   }, [tripId]);
 
-  const nameFor = (id: string) =>
-    participants.find((p) => p.id === id)?.display_name ?? '…';
+  // O(1) participant name lookup — recomputed only when participants change.
+  const nameMap = useMemo(
+    () => Object.fromEntries(participants.map((p) => [p.id, p.display_name])),
+    [participants]
+  );
+  const nameFor = (id: string) => nameMap[id] ?? '…';
+
+  // Pre-index splits by expense_id so summary lookup is O(k) not O(n).
+  const splitsByExpense = useMemo(() => {
+    const map: Record<string, Split[]> = {};
+    for (const s of splits) {
+      (map[s.expense_id] ??= []).push(s);
+    }
+    return map;
+  }, [splits]);
 
   const splitSummary = (expenseId: string, cur: string) =>
-    splits
-      .filter((s) => s.expense_id === expenseId)
+    (splitsByExpense[expenseId] ?? [])
       .map((s) => `${nameFor(s.participant_id)} · ${cur} ${s.share_amount.toFixed(2)}`)
       .join('   ');
-
-  // ── Shared screen header (expenses + settle tabs) ──────────────────────────
-  function TabHeader({ subtitle }: { subtitle: string }) {
-    return (
-      <View
-        style={[
-          styles.tabHeader,
-          { paddingTop: Math.max(insets.top, 16) },
-        ]}
-      >
-        <Pressable
-          onPress={onBack}
-          style={({ pressed }) => [styles.backBtn, pressed && styles.backBtnPressed]}
-          hitSlop={8}
-        >
-          <ArrowLeft size={18} color="#334155" />
-        </Pressable>
-
-        <View style={styles.tabHeaderCenter}>
-          <GradientText className="text-xl font-black" numberOfLines={1}>
-            {trip?.name ?? '…'}
-          </GradientText>
-          <Text style={styles.tabHeaderSub}>{subtitle}</Text>
-        </View>
-
-        {!!trip?.is_archived && (
-          <View style={styles.archivedBadge}>
-            <Text style={styles.archivedText}>Archived</Text>
-          </View>
-        )}
-      </View>
-    );
-  }
 
   return (
     <View style={styles.shell}>
@@ -156,7 +177,7 @@ export default function TripDetailScreen({
       {/* ── Expenses tab ── */}
       {activeTab === 'expenses' && (
         <View style={styles.tabShell}>
-          <TabHeader subtitle="All Expenses" />
+          <TabHeader trip={trip} subtitle="All Expenses" insets={insets} onBack={onBack} />
 
           <FlatList
             data={expenses}
@@ -178,21 +199,32 @@ export default function TripDetailScreen({
             renderItem={({ item }) => {
               const color = colorFor(item.paid_by);
               const dateStr = item.expense_date
-                ? new Date(item.expense_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+                ? new Date(item.expense_date).toLocaleDateString(undefined, {
+                    month: 'short',
+                    day: 'numeric',
+                  })
                 : formatTimestamp(item.created_at);
+              // Cache per-item to avoid calling twice (once for the guard, once for render)
+              const summary = splitSummary(item.id, item.currency);
               return (
                 <Pressable
                   onPress={() => onOpenExpense(item.id)}
-                  style={({ pressed }) => [styles.expenseCard, pressed && styles.expenseCardPressed]}
+                  style={({ pressed }) => [
+                    styles.expenseCard,
+                    pressed && styles.expenseCardPressed,
+                  ]}
                 >
-                  {/* Avatar */}
-                  <View style={[styles.expenseAvatar, { backgroundColor: color.rawBg, borderColor: color.rawBorder }]}>
+                  <View
+                    style={[
+                      styles.expenseAvatar,
+                      { backgroundColor: color.rawBg, borderColor: color.rawBorder },
+                    ]}
+                  >
                     <Text style={[styles.expenseAvatarText, { color: color.rawText }]}>
                       {item.description[0]?.toUpperCase() ?? '?'}
                     </Text>
                   </View>
 
-                  {/* Info */}
                   <View style={styles.expenseInfo}>
                     <View style={styles.expenseTopRow}>
                       <Text style={styles.expenseDesc} numberOfLines={1}>
@@ -208,9 +240,9 @@ export default function TripDetailScreen({
                       {'  ·  '}
                       {dateStr}
                     </Text>
-                    {splitSummary(item.id, item.currency) !== '' && (
+                    {summary !== '' && (
                       <Text style={styles.expenseSplits} numberOfLines={1}>
-                        {splitSummary(item.id, item.currency)}
+                        {summary}
                       </Text>
                     )}
                   </View>
@@ -224,8 +256,7 @@ export default function TripDetailScreen({
       {/* ── Settle tab ── */}
       {activeTab === 'settle' && (
         <View style={styles.tabShell}>
-          <TabHeader subtitle="Settle Up & Balances" />
-
+          <TabHeader trip={trip} subtitle="Settle Up & Balances" insets={insets} onBack={onBack} />
           <ScrollView
             contentContainerStyle={[
               styles.settleContent,
@@ -255,15 +286,9 @@ export default function TripDetailScreen({
 }
 
 const styles = StyleSheet.create({
-  shell: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-  },
+  shell: { flex: 1, backgroundColor: '#f8fafc' },
 
-  // ── Tab header ──
-  tabShell: {
-    flex: 1,
-  },
+  tabShell: { flex: 1 },
   tabHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -285,12 +310,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexShrink: 0,
   },
-  backBtnPressed: {
-    backgroundColor: '#e2e8f0',
-  },
-  tabHeaderCenter: {
-    flex: 1,
-  },
+  backBtnPressed: { backgroundColor: '#e2e8f0' },
+  tabHeaderCenter: { flex: 1 },
   tabHeaderSub: {
     fontSize: 11,
     fontWeight: '600',
@@ -307,18 +328,9 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 20,
   },
-  archivedText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#92400e',
-  },
+  archivedText: { fontSize: 11, fontWeight: '700', color: '#92400e' },
 
-  // ── Expense list ──
-  expenseList: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    gap: 10,
-  },
+  expenseList: { paddingHorizontal: 16, paddingTop: 12, gap: 10 },
   expenseCard: {
     backgroundColor: '#fff',
     borderRadius: 20,
@@ -334,10 +346,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
-  expenseCardPressed: {
-    backgroundColor: '#f8fafc',
-    transform: [{ scale: 0.99 }],
-  },
+  expenseCardPressed: { backgroundColor: '#f8fafc', transform: [{ scale: 0.99 }] },
   expenseAvatar: {
     width: 44,
     height: 44,
@@ -347,68 +356,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexShrink: 0,
   },
-  expenseAvatarText: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  expenseInfo: {
-    flex: 1,
-    gap: 3,
-  },
+  expenseAvatarText: { fontSize: 16, fontWeight: '800' },
+  expenseInfo: { flex: 1, gap: 3 },
   expenseTopRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: 8,
   },
-  expenseDesc: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0f172a',
-    flex: 1,
-    letterSpacing: -0.1,
-  },
-  expenseAmt: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0f172a',
-    letterSpacing: -0.2,
-    flexShrink: 0,
-  },
-  expenseMeta: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#64748b',
-  },
-  expenseSplits: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: '#94a3b8',
-  },
+  expenseDesc: { fontSize: 15, fontWeight: '700', color: '#0f172a', flex: 1, letterSpacing: -0.1 },
+  expenseAmt: { fontSize: 15, fontWeight: '800', color: '#0f172a', letterSpacing: -0.2, flexShrink: 0 },
+  expenseMeta: { fontSize: 12, fontWeight: '500', color: '#64748b' },
+  expenseSplits: { fontSize: 11, fontWeight: '500', color: '#94a3b8' },
 
-  // ── Empty state ──
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 72,
-    paddingHorizontal: 32,
-    gap: 10,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#334155',
-  },
-  emptyBody: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#94a3b8',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
+  emptyState: { alignItems: 'center', paddingVertical: 72, paddingHorizontal: 32, gap: 10 },
+  emptyTitle: { fontSize: 16, fontWeight: '800', color: '#334155' },
+  emptyBody: { fontSize: 13, fontWeight: '500', color: '#94a3b8', textAlign: 'center', lineHeight: 20 },
 
-  // ── Settle ──
-  settleContent: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-  },
+  settleContent: { paddingHorizontal: 16, paddingTop: 16 },
 });

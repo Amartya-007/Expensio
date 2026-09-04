@@ -18,11 +18,14 @@ export default function GradientText({ children, style, ...rest }: TextProps) {
       maskElement={<Text {...rest} style={[style, weightFix, { backgroundColor: 'transparent' }]}>{children}</Text>}
     >
       <LinearGradient
-        colors={['#1d4ed8', '#3b82f6']} // tailwind blue-700 -> blue-500, matching the original
+        colors={['#1d4ed8', '#3b82f6']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
       >
-        <Text {...rest} style={[style, weightFix, { opacity: 0 }]}>
+        {/* opacity:0 makes the text invisible but keeps the gradient sized to it.
+            accessible=false prevents screen readers from announcing it a second time
+            since the mask element above is already the accessible copy. */}
+        <Text {...rest} style={[style, weightFix, { opacity: 0 }]} accessible={false}>
           {children}
         </Text>
       </LinearGradient>

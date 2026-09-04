@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   AlertTriangle,
@@ -191,7 +191,7 @@ export default function DashboardScreen({
   useEffect(() => {
     const ac = new AbortController();
     db.watch(
-      'SELECT COUNT(*) as count FROM participants WHERE trip_id = ?',
+      'SELECT COUNT(*) as count FROM participants WHERE trip_id = ? AND deleted_at IS NULL',
       [tripId],
       { onResult: (r) => setParticipantCount(r.rows?._array?.[0]?.count ?? 0) },
       { signal: ac.signal }
@@ -247,18 +247,24 @@ export default function DashboardScreen({
 
   // ── Derived state ─────────────────────────────────────────────────────────────
 
-  const stats = trip
-    ? calculateStats({
-        totalBudget: trip.total_budget,
-        startDate: trip.start_date,
-        endDate: trip.end_date,
-        peopleCount: participantCount,
-        expenses: expenses.map((e) => ({
-          amount: e.amount,
-          date: e.expense_date ?? e.created_at.slice(0, 10),
-        })),
-      })
-    : null;
+  // Memoised so calculateStats only re-runs when its inputs actually change, not on
+  // every render caused by any of the 5 independent db.watch state updates.
+  const stats = useMemo(
+    () =>
+      trip
+        ? calculateStats({
+            totalBudget: trip.total_budget,
+            startDate: trip.start_date,
+            endDate: trip.end_date,
+            peopleCount: participantCount,
+            expenses: expenses.map((e) => ({
+              amount: e.amount,
+              date: e.expense_date ?? e.created_at.slice(0, 10),
+            })),
+          })
+        : null,
+    [trip, participantCount, expenses]
+  );
 
   const daysUntilStart = trip?.start_date
     ? differenceInDays(startOfDay(parseISO(trip.start_date)), startOfDay(new Date()))
@@ -528,7 +534,7 @@ export default function DashboardScreen({
                     ]}
                     numberOfLines={1}
                   >
-                    {fmt(stats.remainingBalance / participantCount)}
+                    {fmt(participantCount > 0 ? stats.remainingBalance / participantCount : 0)}
                   </Text>
                 </View>
                 <View style={[styles.perPersonBlock, styles.perPersonRight]}>

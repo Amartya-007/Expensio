@@ -1,5 +1,5 @@
 import './global.css';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -19,25 +19,11 @@ import { flushPendingActions } from './src/rpc';
 import { formatError } from './src/utils/errors';
 import RootNavigator from './src/navigation/RootNavigator';
 
-// ─── Root cause of the "Couldn't find a navigation context" crash ─────────────
-//
-// NativeWind's react-native-css-interop patches EVERY React Native primitive
-// (View, Text, Pressable, ScrollView, …) at MODULE LOAD TIME when global.css is
-// imported. After that patch is applied, every one of those components reads from
-// NavigationStateContext on every render — even ones with no className prop and
-// even ones inside plain StyleSheet views.
-//
-// The invariant is therefore: NavigationContainer MUST be mounted before ANY
-// NativeWind-patched component is rendered, with NO exceptions. The loading
-// state, error state, and everything else must live INSIDE NavigationContainer.
-// Rendering anything — even a StyleSheet-only View — outside it after global.css
-// has run will crash with the missing-context error.
-//
-// The solution: NavigationContainer is always mounted unconditionally. The
-// ready/loading/error state is passed as props to RootNavigator which renders
-// a static loading screen as its first stack route when not ready. That screen
-// uses className-free Views backed by StyleSheet so it never causes a navigation
-// hook call itself, but it IS inside NavigationContainer so the context is there.
+// ─── Why NavigationContainer is always mounted ────────────────────────────────
+// NativeWind's jsxImportSource transform wraps every JSX element at compile time.
+// After global.css is imported the wrapped primitives access NavigationStateContext
+// on every render. NavigationContainer must therefore always be mounted before any
+// component renders — no conditional branch around it, ever.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function App() {
@@ -51,10 +37,19 @@ export default function App() {
     Inter_900Black,
   });
 
+  // Track whether we have ever connected so React 18 Strict Mode's double-invoke
+  // of effects doesn't open two PowerSync connections or call disconnect on a
+  // connection that was already cleaned up.
+  const connectedRef = useRef(false);
+
   useEffect(() => {
     let cancelled = false;
 
     async function start() {
+      // Guard against Strict Mode double-fire.
+      if (connectedRef.current) return;
+      connectedRef.current = true;
+
       try {
         const { data } = await supabase.auth.getSession();
         if (!data.session) {
@@ -67,9 +62,15 @@ export default function App() {
         await connectPowerSync();
         if (cancelled) return;
 
-        await flushPendingActions();
+        // Mark ready immediately — don't let a failed flush block the app.
         setReady(true);
         setStatus('connected');
+
+        // Replay queued offline actions best-effort; errors are logged but do
+        // not surface to the user since the app is already usable at this point.
+        flushPendingActions().catch((err) =>
+          console.warn('[App] flushPendingActions failed on startup:', err)
+        );
       } catch (err) {
         if (!cancelled) setError(formatError(err));
       }
@@ -78,26 +79,43 @@ export default function App() {
     start();
     return () => {
       cancelled = true;
-      db.disconnect();
+      // Only disconnect if we actually connected — avoids a Strict Mode
+      // double-disconnect that leaves the second mount with a dead db.
+      if (connectedRef.current) {
+        connectedRef.current = false;
+        db.disconnect();
+      }
     };
   }, []);
 
   useEffect(() => {
     if (!ready) return;
-    let wasOffline = false;
+
+    // Initialise wasOffline from the actual current network state so that the
+    // first NetInfo event (which may fire immediately with isConnected: true)
+    // is handled correctly even when the app started offline.
+    let wasOffline: boolean | null = null;
+
     const unsubscribe = NetInfo.addEventListener((state) => {
       const online = state.isConnected === true && state.isInternetReachable !== false;
-      if (online && wasOffline) void flushPendingActions();
+
+      // On the very first event, just record the baseline.
+      if (wasOffline === null) {
+        wasOffline = !online;
+        return;
+      }
+
+      if (online && wasOffline) {
+        void flushPendingActions();
+      }
       wasOffline = !online;
     });
+
     return unsubscribe;
   }, [ready]);
 
   const isReady = ready && fontsLoaded;
 
-  // NavigationContainer is ALWAYS mounted — no conditional rendering around it.
-  // RootNavigator receives ready/status/error and renders either a loading screen
-  // (inside the stack, inside NavigationContainer) or the real app.
   return (
     <SafeAreaProvider>
       <GestureHandlerRootView style={styles.flex}>
