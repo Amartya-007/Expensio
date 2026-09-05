@@ -14,7 +14,10 @@
 --   trip.budget            -> trips_budget_range
 --   trip.dateMin/dateMax   -> trips_start_date_range, trips_end_date_range
 --   participant.displayName -> participants_display_name_length
---   participant.phone      -> participants_phone_format
+--   participant.phone      -> participants_phone_format (India-only: +91 + 10 digits,
+--                              leading digit 6-9 -- matches COUNTRY_CODE/toE164() in
+--                              limits.ts, which prepends +91 to whatever 10 digits the
+--                              person typed before it's ever sent anywhere)
 --   expense.description    -> expenses_description_length
 --   expense.amount (upper) -> expenses_amount_max
 --   category.name          -> custom_categories_name_length
@@ -43,7 +46,7 @@ alter table participants
   add constraint participants_display_name_length
     check (char_length(display_name) between 1 and 60) not valid,
   add constraint participants_phone_format
-    check (phone is null or phone ~ '^\+[1-9][0-9]{7,14}$') not valid;
+    check (phone is null or phone ~ '^\+91[6-9][0-9]{9}$') not valid;
 
 alter table expenses
   add constraint expenses_description_length
