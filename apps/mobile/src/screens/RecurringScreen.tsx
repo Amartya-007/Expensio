@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { db } from '../powersync/db';
 import { callRpc } from '../rpc';
 import { formatError } from '../utils/errors';
+import { LIMITS, validateRecurringDescription, validateRecurringAmount, validateTripDate } from '../constants/limits';
 import PrimaryButton from '../components/PrimaryButton';
 import ScreenHeader from '../components/ScreenHeader';
 import Chip from '../components/Chip';
@@ -81,7 +82,13 @@ export default function RecurringScreen({
   }, [tripId]);
 
   async function createTemplate() {
-    if (!description.trim() || !amount || !paidBy || Number(amount) <= 0) return;
+    const descError = validateRecurringDescription(description);
+    if (descError) { setError(descError); return; }
+    const amountError = validateRecurringAmount(amount);
+    if (amountError) { setError(amountError); return; }
+    const dateError = validateTripDate(nextRunDate);
+    if (dateError) { setError(dateError); return; }
+    if (!paidBy) { setError('Select who pays.'); return; }
     setBusy(true);
     setError(null);
     try {
@@ -153,6 +160,7 @@ export default function RecurringScreen({
             onChangeText={setDescription}
             placeholder="e.g. Rent, Subscription"
             placeholderTextColor="#94a3b8"
+            maxLength={LIMITS.recurring.description.max}
           />
         </View>
 
@@ -172,6 +180,7 @@ export default function RecurringScreen({
               placeholder="0.00"
               placeholderTextColor="#94a3b8"
               keyboardType="decimal-pad"
+              maxLength={String(LIMITS.recurring.amount.max).length + 3}
             />
           </View>
         </View>

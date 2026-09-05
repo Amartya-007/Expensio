@@ -26,6 +26,7 @@ import { db } from '../powersync/db';
 import { callRpc } from '../rpc';
 import { currencyIcon } from '../utils/currencyIcon';
 import { formatError } from '../utils/errors';
+import { LIMITS, validateTripBudget, validateTripDate } from '../constants/limits';
 import PrimaryButton from '../components/PrimaryButton';
 import DatePicker from '../components/DatePicker';
 
@@ -106,10 +107,10 @@ export default function TripSettingsScreen({
   }, [trip, hydrated]);
 
   const budgetNum = Number(budget);
-  const budgetError =
-    budget !== '' && (!Number.isFinite(budgetNum) || budgetNum <= 0)
-      ? 'Enter a budget greater than 0.' : '';
-  const dateError = endDate < startDate ? "End date can't be before start date." : '';
+  const budgetError = validateTripBudget(budget) ?? '';
+  const dateError =
+    (endDate < startDate ? "End date can't be before start date." : '') ||
+    (validateTripDate(startDate) ?? validateTripDate(endDate) ?? '');
   const BudgetIcon = currencyIcon(trip?.currency);
 
   async function handleSave() {
@@ -270,6 +271,7 @@ export default function TripSettingsScreen({
                 placeholder="No budget set"
                 placeholderTextColor="#94a3b8"
                 keyboardType="decimal-pad"
+                maxLength={String(LIMITS.trip.budget.max).length + 3}
               />
             </View>
             {!!budgetError && <Text style={s.fieldError}>{budgetError}</Text>}

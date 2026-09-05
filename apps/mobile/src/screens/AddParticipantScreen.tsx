@@ -4,6 +4,7 @@ import { ArrowLeft, UserCircle2 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { callRpc } from '../rpc';
 import { formatError } from '../utils/errors';
+import { LIMITS, validateParticipantName, validatePhone, normalisePhone } from '../constants/limits';
 import PrimaryButton from '../components/PrimaryButton';
 import GradientText from '../components/GradientText';
 
@@ -25,13 +26,18 @@ export default function AddParticipantScreen({
   const [error, setError] = useState<string | null>(null);
 
   async function submit() {
-    if (!name.trim()) return;
+    const nameError = validateParticipantName(name);
+    const phoneError = validatePhone(phone, false);
+    if (nameError || phoneError) {
+      setError(nameError ?? phoneError);
+      return;
+    }
     setBusy(true); setError(null);
     try {
       const result = await callRpc('add_placeholder_participant', {
         p_trip_id: tripId,
         p_display_name: name.trim(),
-        p_phone: phone.trim() || null,
+        p_phone: normalisePhone(phone) || null,
       });
       if (result.status === 'ok') {
         onDone();
@@ -95,6 +101,7 @@ export default function AddParticipantScreen({
               onBlur={() => setNameFocused(false)}
               placeholder="Rahul"
               placeholderTextColor="#94a3b8"
+              maxLength={LIMITS.participant.displayName.max}
               autoFocus
             />
           </View>
@@ -112,6 +119,7 @@ export default function AddParticipantScreen({
               placeholder="+91…"
               placeholderTextColor="#94a3b8"
               keyboardType="phone-pad"
+              maxLength={LIMITS.participant.phone.max}
             />
           </View>
         </View>

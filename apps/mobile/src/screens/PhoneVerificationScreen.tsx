@@ -14,11 +14,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../supabaseClient';
 import { callRpc } from '../rpc';
 import { formatError } from '../utils/errors';
+import { LIMITS, validateDisplayName, validatePhone, normalisePhone } from '../constants/limits';
 import PrimaryButton from '../components/PrimaryButton';
 import GradientText from '../components/GradientText';
-
-function normalisePhone(v: string) { return v.replace(/[\s()-]/g, ''); }
-function isValidPhone(v: string) { return /^\+[1-9]\d{7,14}$/.test(v); }
 
 export default function PhoneVerificationScreen({
   onDone,
@@ -45,8 +43,11 @@ export default function PhoneVerificationScreen({
   const canonicalPhone = useMemo(() => normalisePhone(phone), [phone]);
 
   async function sendCode() {
-    if (!isValidPhone(canonicalPhone)) {
-      setError('Enter a phone number in international format, e.g. +919876543210.'); return;
+    const phoneError = validatePhone(phone, true);
+    const nameError = displayName.trim() ? validateDisplayName(displayName) : null;
+    if (phoneError || nameError) {
+      setError(phoneError ?? nameError);
+      return;
     }
     setBusy(true); setError(null);
     try {
@@ -61,7 +62,10 @@ export default function PhoneVerificationScreen({
   }
 
   async function verifyCode() {
-    if (!/^\d{6}$/.test(otp)) { setError('Enter the six-digit code from the SMS.'); return; }
+    if (!new RegExp(`^\\d{${LIMITS.phoneVerification.otp.length}}$`).test(otp)) {
+      setError(`Enter the ${LIMITS.phoneVerification.otp.length}-digit code from the SMS.`);
+      return;
+    }
     setBusy(true); setError(null);
     try {
       const { error: e } = await supabase.auth.verifyOtp({ phone: canonicalPhone, token: otp, type: 'sms' });
@@ -111,6 +115,7 @@ export default function PhoneVerificationScreen({
               onChangeText={setDisplayName}
               placeholder="Your name"
               placeholderTextColor="#94a3b8"
+              maxLength={LIMITS.phoneVerification.displayName.max}
               autoCapitalize="words"
             />
 
@@ -122,6 +127,7 @@ export default function PhoneVerificationScreen({
               placeholder="+91 9876543210"
               placeholderTextColor="#94a3b8"
               keyboardType="phone-pad"
+              maxLength={LIMITS.participant.phone.max}
               autoComplete="tel"
             />
 
@@ -147,11 +153,11 @@ export default function PhoneVerificationScreen({
             <TextInput
               style={[s.input, s.otpInput]}
               value={otp}
-              onChangeText={v => setOtp(v.replace(/\D/g, '').slice(0, 6))}
+              onChangeText={v => setOtp(v.replace(/\D/g, '').slice(0, LIMITS.phoneVerification.otp.length))}
               placeholder="123456"
               placeholderTextColor="#cbd5e1"
               keyboardType="number-pad"
-              maxLength={6}
+              maxLength={LIMITS.phoneVerification.otp.length}
               autoFocus
             />
 

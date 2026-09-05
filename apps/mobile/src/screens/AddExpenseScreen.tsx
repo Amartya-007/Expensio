@@ -17,6 +17,7 @@ import { db } from '../powersync/db';
 import { callRpc } from '../rpc';
 import { randomUUID } from '../utils/uuid';
 import { formatError } from '../utils/errors';
+import { LIMITS, validateExpenseDescription, validateExpenseAmount, validateCategoryName } from '../constants/limits';
 import PrimaryButton from '../components/PrimaryButton';
 import GradientText from '../components/GradientText';
 import Chip from '../components/Chip';
@@ -130,7 +131,10 @@ export default function AddExpenseScreen({
   }, [tripId]);
 
   async function addCategory() {
-    const name = newCategory.trim(); if (!name) return; setError(null);
+    const name = newCategory.trim();
+    const nameError = validateCategoryName(name);
+    if (nameError) { setError(nameError); return; }
+    setError(null);
     try {
       await callRpc<string>('add_custom_category', { p_trip_id: tripId, p_name: name, p_icon: 'tag' });
       setCategory(name); setNewCategory(''); setShowAddCat(false);
@@ -209,8 +213,10 @@ export default function AddExpenseScreen({
   async function submit() {
     setError(null);
     const parsedAmount = Number(amount); const amountMinor = toMinor(amount);
-    if (!description.trim()) { setError('Please enter a description.'); return; }
-    if (!amountMinor || amountMinor <= 0) { setError('Please enter a valid positive amount.'); return; }
+    const descError = validateExpenseDescription(description);
+    if (descError) { setError(descError); return; }
+    const amountError = validateExpenseAmount(amount);
+    if (amountError) { setError(amountError); return; }
     if (!paidBy) { setError('Select who paid.'); return; }
     const splitConfig = buildSplitConfig();
     if (!splitConfig) { setError('Please fill in valid split values for all participants.'); return; }
@@ -226,7 +232,7 @@ export default function AddExpenseScreen({
   function renderParticipantValues(
     map: Record<string, string>,
     setter: React.Dispatch<React.SetStateAction<Record<string, string>>>,
-    title: string, placeholder: string
+    title: string, placeholder: string, maxLength: number
   ) {
     return (
       <View style={s.splitDetailCard}>
@@ -241,6 +247,7 @@ export default function AddExpenseScreen({
               placeholder={placeholder}
               placeholderTextColor="#94a3b8"
               keyboardType="decimal-pad"
+              maxLength={maxLength}
             />
           </View>
         ))}
@@ -275,14 +282,14 @@ export default function AddExpenseScreen({
         {/* Description & amount */}
         <View style={s.card}>
           <Text style={s.fieldLabel}>What was it for?</Text>
-          <TextInput style={s.input} value={description} onChangeText={setDescription} placeholder="e.g. Dinner, Taxi, Groceries" placeholderTextColor="#94a3b8" autoFocus />
+          <TextInput style={s.input} value={description} onChangeText={setDescription} placeholder="e.g. Dinner, Taxi, Groceries" placeholderTextColor="#94a3b8" maxLength={LIMITS.expense.description.max} autoFocus />
 
           <View style={s.divider} />
 
           <Text style={s.fieldLabel}>Amount</Text>
           <View style={s.amountRow}>
             <View style={s.currencyBadge}><Text style={s.currencyBadgeText}>{currency}</Text></View>
-            <TextInput style={s.amountInput} value={amount} onChangeText={setAmount} placeholder="0.00" placeholderTextColor="#cbd5e1" keyboardType="decimal-pad" />
+            <TextInput style={s.amountInput} value={amount} onChangeText={setAmount} placeholder="0.00" placeholderTextColor="#cbd5e1" keyboardType="decimal-pad" maxLength={String(LIMITS.expense.amount.max).length + 3} />
           </View>
         </View>
 
@@ -314,7 +321,7 @@ export default function AddExpenseScreen({
 
           {showAddCat && (
             <View style={s.newCatRow}>
-              <TextInput style={s.newCatInput} value={newCategory} onChangeText={setNewCategory} placeholder="Category name" placeholderTextColor="#94a3b8" />
+              <TextInput style={s.newCatInput} value={newCategory} onChangeText={setNewCategory} placeholder="Category name" placeholderTextColor="#94a3b8" maxLength={LIMITS.category.name.max} />
               <Pressable onPress={addCategory} disabled={!newCategory.trim()} style={[s.newCatSave, !newCategory.trim() && s.newCatSaveDisabled]}>
                 <Text style={s.newCatSaveText}>Save</Text>
               </Pressable>
@@ -353,15 +360,15 @@ export default function AddExpenseScreen({
             <Text style={s.infoBody}>Split evenly among all {participants.length} member{participants.length !== 1 ? 's' : ''}.</Text>
           </View>
         )}
-        {(splitType === 'exact') && renderParticipantValues(exactShares, setExactShares, 'Exact Amount per Person', '0.00')}
+        {(splitType === 'exact') && renderParticipantValues(exactShares, setExactShares, 'Exact Amount per Person', '0.00', String(LIMITS.expense.splitExactAmount.max).length + 3)}
         {splitType === 'reimbursement' && (
           <>
             <View style={s.infoCard}><Text style={s.infoTitle}>Reimbursement</Text><Text style={s.infoBody}>Amounts owed back to the payer.</Text></View>
-            {renderParticipantValues(exactShares, setExactShares, 'Amount to Reimburse', '0.00')}
+            {renderParticipantValues(exactShares, setExactShares, 'Amount to Reimburse', '0.00', String(LIMITS.expense.splitExactAmount.max).length + 3)}
           </>
         )}
-        {splitType === 'percentage' && renderParticipantValues(percentageShares, setPercentageShares, 'Percentage Split (%)', '0.00')}
-        {splitType === 'shares' && renderParticipantValues(shareUnits, setShareUnits, 'Relative Shares', '1')}
+        {splitType === 'percentage' && renderParticipantValues(percentageShares, setPercentageShares, 'Percentage Split (%)', '0.00', 6)}
+        {splitType === 'shares' && renderParticipantValues(shareUnits, setShareUnits, 'Relative Shares', '1', 3)}
 
         {!!error && (
           <View style={s.errorBanner}><Text style={s.errorText}>{error}</Text></View>

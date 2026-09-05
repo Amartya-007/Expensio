@@ -24,6 +24,7 @@ import { callRpc } from '../rpc';
 import { detectCurrency } from '../utils/detectCurrency';
 import { currencyIcon } from '../utils/currencyIcon';
 import { formatError } from '../utils/errors';
+import { LIMITS, validateTripName, validateTripBudget, validateTripDate } from '../constants/limits';
 import GradientText from '../components/GradientText';
 import PrimaryButton from '../components/PrimaryButton';
 import DatePicker from '../components/DatePicker';
@@ -66,11 +67,18 @@ export default function CreateTripScreen({
   const [error, setError] = useState<string | null>(null);
 
   const budgetNum = Number(budget);
-  const budgetValid = budget === '' || (Number.isFinite(budgetNum) && budgetNum > 0);
+  const budgetValid = validateTripBudget(budget) === null;
   const BudgetIcon = currencyIcon(currency);
 
   async function submit() {
-    if (!name.trim() || !budgetValid) return;
+    const nameError = validateTripName(name);
+    const budgetError = validateTripBudget(budget);
+    const dateError = showMore ? validateTripDate(startDate) ?? validateTripDate(endDate) : null;
+    const firstError = nameError ?? budgetError ?? dateError;
+    if (firstError) {
+      setError(firstError);
+      return;
+    }
     setBusy(true); setError(null);
     try {
       const result = await callRpc<string>('create_trip', {
@@ -134,6 +142,7 @@ export default function CreateTripScreen({
               onChangeText={setName}
               placeholder="e.g. Goa Trip, Euro Summer"
               placeholderTextColor="#94a3b8"
+              maxLength={LIMITS.trip.name.max}
               autoFocus
               returnKeyType="next"
             />
@@ -210,6 +219,7 @@ export default function CreateTripScreen({
                   placeholder="No limit"
                   placeholderTextColor="#94a3b8"
                   keyboardType="decimal-pad"
+                  maxLength={String(LIMITS.trip.budget.max).length + 3}
                 />
               </View>
               {!budgetValid && (

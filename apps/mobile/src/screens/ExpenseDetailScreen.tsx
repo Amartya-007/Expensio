@@ -25,6 +25,7 @@ import { format, parseISO } from 'date-fns';
 import { db } from '../powersync/db';
 import { callRpc } from '../rpc';
 import { formatError } from '../utils/errors';
+import { LIMITS, validateExpenseDescription, validateExpenseAmount, validateCommentBody } from '../constants/limits';
 import PrimaryButton from '../components/PrimaryButton';
 
 type Expense = {
@@ -126,8 +127,11 @@ export default function ExpenseDetailScreen({
   const nameFor = (id: string) => participants.find(p => p.id === id)?.display_name ?? '…';
 
   async function saveEdit() {
+    const descError = validateExpenseDescription(description);
+    if (descError) { setError(descError); return; }
+    const amountError = validateExpenseAmount(amount);
+    if (amountError) { setError(amountError); return; }
     const parsed = parseFloat(amount);
-    if (!description.trim() || !parsed || parsed <= 0) return;
     setBusy(true); setError(null);
     try {
       await callRpc('edit_expense', { p_expense_id: expenseId, p_description: description.trim(), p_amount: parsed, p_split_type: 'equal', p_split_config: {} });
@@ -146,7 +150,8 @@ export default function ExpenseDetailScreen({
 
   async function addComment() {
     const body = comment.trim();
-    if (!body) return;
+    const bodyError = validateCommentBody(body);
+    if (bodyError) { setError(bodyError); return; }
     setCommentBusy(true); setError(null);
     try {
       await callRpc('add_comment', { p_expense_id: expenseId, p_body: body }, { idempotent: false });
@@ -198,10 +203,10 @@ export default function ExpenseDetailScreen({
           <Text style={s.editTitle}>Edit expense</Text>
 
           <Text style={s.fieldLabel}>Description</Text>
-          <TextInput style={s.input} value={description} onChangeText={setDescription} />
+          <TextInput style={s.input} value={description} onChangeText={setDescription} maxLength={LIMITS.expense.description.max} />
 
           <Text style={[s.fieldLabel, { marginTop: 12 }]}>Amount ({expense.currency})</Text>
-          <TextInput style={s.input} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />
+          <TextInput style={s.input} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" maxLength={String(LIMITS.expense.amount.max).length + 3} />
 
           {!!error && <View style={s.errorBanner}><Text style={s.errorText}>{error}</Text></View>}
 
@@ -307,6 +312,7 @@ export default function ExpenseDetailScreen({
                 onChangeText={setComment}
                 placeholder="Add a comment"
                 placeholderTextColor="#94a3b8"
+                maxLength={LIMITS.comment.body.max}
                 multiline
               />
               <Pressable

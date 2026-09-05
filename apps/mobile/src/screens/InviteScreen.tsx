@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { callRpc } from '../rpc';
 import { db } from '../powersync/db';
 import { formatError } from '../utils/errors';
+import { LIMITS } from '../constants/limits';
 import PrimaryButton from '../components/PrimaryButton';
 import GradientText from '../components/GradientText';
 
@@ -71,7 +72,10 @@ export default function InviteScreen({
   }
 
   async function joinTrip() {
-    if (!/^\d{6}$/.test(joinCode.trim())) { setError('Enter the six-digit invite code.'); return; }
+    if (!new RegExp(`^\\d{${LIMITS.invite.code.length}}$`).test(joinCode.trim())) {
+      setError(`Enter the ${LIMITS.invite.code.length}-digit invite code.`);
+      return;
+    }
     setBusy('join'); setError(null);
     try {
       const result = await callRpc<string>('join_trip_via_code', { p_code: joinCode.trim() });
@@ -166,11 +170,11 @@ export default function InviteScreen({
       <TextInput
         style={s.joinInput}
         value={joinCode}
-        onChangeText={v => setJoinCode(v.replace(/\D/g, '').slice(0, 6))}
+        onChangeText={v => setJoinCode(v.replace(/\D/g, '').slice(0, LIMITS.invite.code.length))}
         placeholder="123456"
         placeholderTextColor="#cbd5e1"
         keyboardType="number-pad"
-        maxLength={6}
+        maxLength={LIMITS.invite.code.length}
       />
 
       <PrimaryButton
