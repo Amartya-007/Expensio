@@ -210,6 +210,34 @@ export default function AddExpenseScreen({
     return null;
   }
 
+  function validateSplitInputs(): string | null {
+    if (splitType === 'exact' || splitType === 'reimbursement') {
+      for (const p of participants) {
+        const raw = exactShares[p.id];
+        if (raw === undefined || raw.trim() === '') continue; // buildSplitConfig treats missing as invalid separately
+        const e = validateSplitExactAmount(raw);
+        if (e) return `${p.display_name}: ${e}`;
+      }
+    }
+    if (splitType === 'percentage') {
+      for (const p of participants) {
+        const raw = percentageShares[p.id];
+        if (raw === undefined || raw.trim() === '') continue;
+        const e = validateSplitPercentage(raw);
+        if (e) return `${p.display_name}: ${e}`;
+      }
+    }
+    if (splitType === 'shares') {
+      for (const p of participants) {
+        const raw = shareUnits[p.id];
+        if (raw === undefined || raw.trim() === '') continue;
+        const e = validateSplitShares(raw);
+        if (e) return `${p.display_name}: ${e}`;
+      }
+    }
+    return null;
+  }
+
   async function submit() {
     setError(null);
     const parsedAmount = Number(amount); const amountMinor = toMinor(amount);
@@ -218,6 +246,8 @@ export default function AddExpenseScreen({
     const amountError = validateExpenseAmount(amount);
     if (amountError) { setError(amountError); return; }
     if (!paidBy) { setError('Select who paid.'); return; }
+    const splitInputError = validateSplitInputs();
+    if (splitInputError) { setError(splitInputError); return; }
     const splitConfig = buildSplitConfig();
     if (!splitConfig) { setError('Please fill in valid split values for all participants.'); return; }
     const ve = validateSplit(amountMinor, splitConfig); if (ve) { setError(ve); return; }
@@ -232,7 +262,8 @@ export default function AddExpenseScreen({
   function renderParticipantValues(
     map: Record<string, string>,
     setter: React.Dispatch<React.SetStateAction<Record<string, string>>>,
-    title: string, placeholder: string, maxLength: number
+    title: string, placeholder: string, maxLength: number,
+    keyboardType: 'decimal-pad' | 'number-pad' = 'decimal-pad'
   ) {
     return (
       <View style={s.splitDetailCard}>
@@ -246,7 +277,7 @@ export default function AddExpenseScreen({
               onChangeText={v => updateMap(setter, p.id, v)}
               placeholder={placeholder}
               placeholderTextColor="#94a3b8"
-              keyboardType="decimal-pad"
+              keyboardType={keyboardType}
               maxLength={maxLength}
             />
           </View>
@@ -368,7 +399,7 @@ export default function AddExpenseScreen({
           </>
         )}
         {splitType === 'percentage' && renderParticipantValues(percentageShares, setPercentageShares, 'Percentage Split (%)', '0.00', 6)}
-        {splitType === 'shares' && renderParticipantValues(shareUnits, setShareUnits, 'Relative Shares', '1', 3)}
+        {splitType === 'shares' && renderParticipantValues(shareUnits, setShareUnits, 'Relative Shares', '1', 3, 'number-pad')}
 
         {!!error && (
           <View style={s.errorBanner}><Text style={s.errorText}>{error}</Text></View>

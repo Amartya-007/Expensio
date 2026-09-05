@@ -15,6 +15,17 @@
  * for "0009_input_limits" in that migration's header for the mapping.
  */
 
+// India-only for now: people type just the 10-digit local number, no country code.
+// Supabase's phone auth (and the stored value participants.phone gets matched against
+// for the "auto-links when they join later" feature) still needs real E.164 underneath,
+// so COUNTRY_CODE gets silently prepended before anything is sent anywhere. If this app
+// ever supports other countries, this becomes a picker instead of a constant.
+export const COUNTRY_CODE = '+91';
+
+export function toE164(localDigits: string): string {
+  return `${COUNTRY_CODE}${localDigits}`;
+}
+
 export const LIMITS = {
   trip: {
     name: { min: 1, max: 100 },
@@ -27,16 +38,17 @@ export const LIMITS = {
   },
   participant: {
     displayName: { min: 1, max: 60 },
-    // Proper E.164: leading +, then 8-15 digits total, first digit 1-9. Matches what
-    // Supabase's phone auth actually requires for verification, so the same pattern
-    // is used for both placeholder participants (optional, freeform-ish) and the
-    // phone-verification flow (required, must be E.164 to ever pass Supabase's side).
-    phone: { min: 8, max: 20, pattern: /^\+[1-9]\d{7,14}$/ },
+    // Exactly 10 digits, no prefix — the +91 is added programmatically, never typed.
+    // Leading digit 6-9 because that's a real constraint on Indian mobile numbers
+    // (0-5 isn't issued for mobile) — remove the [6-9] and use \d{10} instead if you'd
+    // rather not enforce that and just check length.
+    phone: { length: 10, pattern: /^[6-9]\d{9}$/ },
   },
   expense: {
     description: { min: 1, max: 200 },
     amount: { min: 0.01, max: 10_000_000 },
     splitPercentage: { min: 0, max: 100 },
+    // Integer count of shares, not a decimal — see validateInteger below.
     splitShares: { min: 1, max: 999 },
     // Applies to the "exact amount per person" and "reimbursement" split inputs —
     // same ceiling as the expense amount itself, since a per-person share can't
@@ -73,7 +85,7 @@ export const LIMITS = {
 
 // ── Generic validators ──────────────────────────────────────────────────────────
 // Every screen-specific validate* function below is a thin wrapper around one of
-// these two, so the actual comparison logic exists in exactly one place.
+// these, so the actual comparison logic exists in exactly one place.
 
 export function validateTextField(
   value: string,
@@ -96,14 +108,23 @@ export function validateOptionalTextField(
   return null;
 }
 
+// Plain decimal only: digits, optionally one dot then 1-2 more digits. No leading +,
+// no scientific notation (1e3), no hex (0x10), no whitespace inside the number --
+// Number(value) alone would silently accept all of those, which isn't what anyone
+// typing an amount meant.
+const DECIMAL_PATTERN = /^\d+(\.\d{1,2})?$/;
+
 export function validateAmount(
   value: string,
   limits: { min: number; max: number },
   label: string
 ): string | null {
-  if (value.trim() === '') return `${label} is required.`;
-  const n = Number(value);
-  if (!Number.isFinite(n)) return `Enter a valid ${label.toLowerCase()}.`;
+  const trimmed = value.trim();
+  if (trimmed === '') return `${label} is required.`;
+  if (!DECIMAL_PATTERN.test(trimmed)) {
+    return `Enter ${label.toLowerCase()} as a plain number, e.g. 12.50.`;
+  }
+  const n = Number(trimmed);
   if (n < limits.min) return `${label} must be at least ${limits.min}.`;
   if (n > limits.max) return `${label} must be ${limits.max.toLocaleString()} or less.`;
   return null;
@@ -118,6 +139,24 @@ export function validateOptionalAmount(
   return validateAmount(value, limits, label);
 }
 
+// Whole numbers only (e.g. split shares) -- same idea as validateAmount but rejects
+// any decimal point at all, not just ones beyond 2 places.
+const INTEGER_PATTERN = /^\d+$/;
+
+export function validateInteger(
+  value: string,
+  limits: { min: number; max: number },
+  label: string
+): string | null {
+  const trimmed = value.trim();
+  if (trimmed === '') return `${label} is required.`;
+  if (!INTEGER_PATTERN.test(trimmed)) return `${label} must be a whole number.`;
+  const n = Number(trimmed);
+  if (n < limits.min) return `${label} must be at least ${limits.min}.`;
+  if (n > limits.max) return `${label} must be ${limits.max.toLocaleString()} or less.`;
+  return null;
+}
+
 // ── Field-specific validators ───────────────────────────────────────────────────
 
 export function validateTripName(value: string): string | null {
@@ -128,8 +167,11 @@ export function validateTripBudget(value: string): string | null {
   return validateOptionalAmount(value, LIMITS.trip.budget, 'Budget');
 }
 
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
 export function validateTripDate(iso: string): string | null {
   if (!iso) return null;
+  if (!ISO_DATE_PATTERN.test(iso)) return 'Enter a valid date.';
   if (iso < LIMITS.trip.dateMin || iso > LIMITS.trip.dateMax) {
     return `Date must be between ${LIMITS.trip.dateMin} and ${LIMITS.trip.dateMax}.`;
   }
@@ -140,18 +182,21 @@ export function validateParticipantName(value: string): string | null {
   return validateTextField(value, LIMITS.participant.displayName, 'Name');
 }
 
-export function normalisePhone(value: string): string {
-  return value.trim().replace(/[\s()-]/g, '');
+// Strips everything except digits -- turns "98765 43210" or "(98765) 43210" into
+// "9876543210" so the length/pattern check always runs against just the digits the
+// person actually typed, regardless of how they grouped them visually.
+export function digitsOnly(value: string): string {
+  return value.replace(/\D/g, '');
 }
 
 export function validatePhone(value: string, required = false): string | null {
-  const normalised = normalisePhone(value);
-  if (!normalised) return required ? 'Phone number is required.' : null;
-  if (normalised.length < LIMITS.participant.phone.min || normalised.length > LIMITS.participant.phone.max) {
-    return `Phone number must be ${LIMITS.participant.phone.min}-${LIMITS.participant.phone.max} characters.`;
+  const digits = digitsOnly(value);
+  if (!digits) return required ? 'Phone number is required.' : null;
+  if (digits.length !== LIMITS.participant.phone.length) {
+    return `Phone number must be exactly ${LIMITS.participant.phone.length} digits.`;
   }
-  if (!LIMITS.participant.phone.pattern.test(normalised)) {
-    return 'Enter a phone number in international format, e.g. +919876543210.';
+  if (!LIMITS.participant.phone.pattern.test(digits)) {
+    return 'Enter a valid 10-digit mobile number.';
   }
   return null;
 }
@@ -169,7 +214,7 @@ export function validateSplitPercentage(value: string): string | null {
 }
 
 export function validateSplitShares(value: string): string | null {
-  return validateAmount(value, LIMITS.expense.splitShares, 'Shares');
+  return validateInteger(value, LIMITS.expense.splitShares, 'Shares');
 }
 
 export function validateSplitExactAmount(value: string): string | null {

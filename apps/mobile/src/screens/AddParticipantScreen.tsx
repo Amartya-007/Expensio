@@ -4,7 +4,7 @@ import { ArrowLeft, UserCircle2 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { callRpc } from '../rpc';
 import { formatError } from '../utils/errors';
-import { LIMITS, validateParticipantName, validatePhone, normalisePhone } from '../constants/limits';
+import { LIMITS, validateParticipantName, validatePhone, digitsOnly, toE164, COUNTRY_CODE } from '../constants/limits';
 import PrimaryButton from '../components/PrimaryButton';
 import GradientText from '../components/GradientText';
 
@@ -34,10 +34,11 @@ export default function AddParticipantScreen({
     }
     setBusy(true); setError(null);
     try {
+      const digits = digitsOnly(phone);
       const result = await callRpc('add_placeholder_participant', {
         p_trip_id: tripId,
         p_display_name: name.trim(),
-        p_phone: normalisePhone(phone) || null,
+        p_phone: digits ? toE164(digits) : null,
       });
       if (result.status === 'ok') {
         onDone();
@@ -110,16 +111,18 @@ export default function AddParticipantScreen({
         <View>
           <Text style={s.fieldLabel}>Phone (optional)</Text>
           <View style={[s.inputRow, phoneFocused && s.inputRowFocused]}>
+            <Text style={s.countryCode}>{COUNTRY_CODE}</Text>
+            <View style={s.phoneDivider} />
             <TextInput
               style={[s.input, { paddingLeft: 0 }]}
               value={phone}
-              onChangeText={setPhone}
+              onChangeText={v => setPhone(digitsOnly(v).slice(0, LIMITS.participant.phone.length))}
               onFocus={() => setPhoneFocused(true)}
               onBlur={() => setPhoneFocused(false)}
-              placeholder="+91…"
+              placeholder="9876543210"
               placeholderTextColor="#94a3b8"
-              keyboardType="phone-pad"
-              maxLength={LIMITS.participant.phone.max}
+              keyboardType="number-pad"
+              maxLength={LIMITS.participant.phone.length}
             />
           </View>
         </View>
@@ -168,6 +171,8 @@ const s = StyleSheet.create({
   inputRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12 },
   inputRowFocused: { borderColor: '#2563eb' },
   input: { flex: 1, fontSize: 15, fontWeight: '600', color: '#0f172a' },
+  countryCode: { fontSize: 15, fontWeight: '700', color: '#64748b' },
+  phoneDivider: { width: 1, height: 20, backgroundColor: '#e2e8f0' },
 
   errorBanner: { borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1 },
   errorBannerRed: { backgroundColor: '#fff1f2', borderColor: '#fecdd3' },

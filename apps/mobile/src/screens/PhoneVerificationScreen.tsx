@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../supabaseClient';
 import { callRpc } from '../rpc';
 import { formatError } from '../utils/errors';
-import { LIMITS, validateDisplayName, validatePhone, normalisePhone } from '../constants/limits';
+import { LIMITS, validateDisplayName, validatePhone, digitsOnly, toE164, COUNTRY_CODE } from '../constants/limits';
 import PrimaryButton from '../components/PrimaryButton';
 import GradientText from '../components/GradientText';
 
@@ -40,7 +40,7 @@ export default function PhoneVerificationScreen({
     return () => clearInterval(t);
   }, [cooldown]);
 
-  const canonicalPhone = useMemo(() => normalisePhone(phone), [phone]);
+  const canonicalPhone = useMemo(() => toE164(digitsOnly(phone)), [phone]);
 
   async function sendCode() {
     const phoneError = validatePhone(phone, true);
@@ -120,16 +120,20 @@ export default function PhoneVerificationScreen({
             />
 
             <Text style={[s.fieldLabel, { marginTop: 16 }]}>Phone number</Text>
-            <TextInput
-              style={s.input}
-              value={phone}
-              onChangeText={setPhone}
-              placeholder="+91 9876543210"
-              placeholderTextColor="#94a3b8"
-              keyboardType="phone-pad"
-              maxLength={LIMITS.participant.phone.max}
-              autoComplete="tel"
-            />
+            <View style={s.phoneRow}>
+              <Text style={s.countryCode}>{COUNTRY_CODE}</Text>
+              <View style={s.phoneDivider} />
+              <TextInput
+                style={[s.input, s.phoneInput]}
+                value={phone}
+                onChangeText={v => setPhone(digitsOnly(v).slice(0, LIMITS.participant.phone.length))}
+                placeholder="9876543210"
+                placeholderTextColor="#94a3b8"
+                keyboardType="number-pad"
+                maxLength={LIMITS.participant.phone.length}
+                autoComplete="tel"
+              />
+            </View>
 
             <PrimaryButton
               onPress={sendCode}
@@ -205,6 +209,10 @@ const s = StyleSheet.create({
   section: { gap: 8 },
   fieldLabel: { fontSize: 11, fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.6 },
   input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, fontWeight: '600', color: '#0f172a' },
+  phoneRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14 },
+  countryCode: { fontSize: 15, fontWeight: '700', color: '#64748b' },
+  phoneDivider: { width: 1, height: 20, backgroundColor: '#e2e8f0' },
+  phoneInput: { flex: 1, borderWidth: 0, paddingHorizontal: 0 },
   otpInput: { fontSize: 24, fontWeight: '800', textAlign: 'center', letterSpacing: 8 },
   btn: { marginTop: 8 },
 
