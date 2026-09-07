@@ -17,9 +17,16 @@ import { db } from '../powersync/db';
 import { callRpc } from '../rpc';
 import { randomUUID } from '../utils/uuid';
 import { formatError } from '../utils/errors';
-import { LIMITS, validateExpenseDescription, validateExpenseAmount, validateCategoryName } from '../constants/limits';
+import {
+  LIMITS,
+  validateExpenseDescription,
+  validateExpenseAmount,
+  validateCategoryName,
+  validateSplitExactAmount,
+  validateSplitPercentage,
+  validateSplitShares,
+} from '../constants/limits';
 import PrimaryButton from '../components/PrimaryButton';
-import GradientText from '../components/GradientText';
 import Chip from '../components/Chip';
 
 type Participant = { id: string; display_name: string };
@@ -240,11 +247,12 @@ export default function AddExpenseScreen({
 
   async function submit() {
     setError(null);
-    const parsedAmount = Number(amount); const amountMinor = toMinor(amount);
+    const parsedAmount = Number(amount);
+    const amountMinor = toMinor(amount);
     const descError = validateExpenseDescription(description);
     if (descError) { setError(descError); return; }
     const amountError = validateExpenseAmount(amount);
-    if (amountError) { setError(amountError); return; }
+    if (amountError || amountMinor === null) { setError(amountError ?? 'Invalid amount'); return; }
     if (!paidBy) { setError('Select who paid.'); return; }
     const splitInputError = validateSplitInputs();
     if (splitInputError) { setError(splitInputError); return; }
@@ -301,11 +309,18 @@ export default function AddExpenseScreen({
       >
         {/* Header */}
         <View style={s.header}>
-          <Pressable onPress={onCancel} disabled={busy} style={({ pressed }) => [s.backBtn, pressed && s.backBtnPressed]} hitSlop={8}>
-            <ArrowLeft size={18} color="#334155" />
+          <Pressable
+            onPress={onCancel}
+            disabled={busy}
+            style={({ pressed }) => [s.backBtn, pressed && s.backBtnPressed]}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <ArrowLeft size={18} color="#0b1c30" strokeWidth={2} />
           </Pressable>
           <View style={{ flex: 1 }}>
-            <GradientText className="text-2xl font-black tracking-tight">Add Expense</GradientText>
+            <Text style={s.headerTitle}>Add Expense</Text>
             <Text style={s.headerSub}>Record a new payment or group spend</Text>
           </View>
         </View>
@@ -313,14 +328,30 @@ export default function AddExpenseScreen({
         {/* Description & amount */}
         <View style={s.card}>
           <Text style={s.fieldLabel}>What was it for?</Text>
-          <TextInput style={s.input} value={description} onChangeText={setDescription} placeholder="e.g. Dinner, Taxi, Groceries" placeholderTextColor="#94a3b8" maxLength={LIMITS.expense.description.max} autoFocus />
+          <TextInput
+            style={s.input}
+            value={description}
+            onChangeText={setDescription}
+            placeholder="e.g. Dinner, Taxi, Groceries"
+            placeholderTextColor="#94a3b8"
+            maxLength={LIMITS.expense.description.max}
+            autoFocus
+          />
 
           <View style={s.divider} />
 
           <Text style={s.fieldLabel}>Amount</Text>
           <View style={s.amountRow}>
             <View style={s.currencyBadge}><Text style={s.currencyBadgeText}>{currency}</Text></View>
-            <TextInput style={s.amountInput} value={amount} onChangeText={setAmount} placeholder="0.00" placeholderTextColor="#cbd5e1" keyboardType="decimal-pad" maxLength={String(LIMITS.expense.amount.max).length + 3} />
+            <TextInput
+              style={s.amountInput}
+              value={amount}
+              onChangeText={setAmount}
+              placeholder="0.00"
+              placeholderTextColor="#c3c6d7"
+              keyboardType="decimal-pad"
+              maxLength={String(LIMITS.expense.amount.max).length + 3}
+            />
           </View>
         </View>
 
@@ -422,60 +453,302 @@ export default function AddExpenseScreen({
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#f8fafc' },
+  root: { flex: 1, backgroundColor: '#f8f9ff' },
   scroll: { flex: 1 },
 
   header: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  backBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  backBtnPressed: { backgroundColor: '#e2e8f0' },
-  headerSub: { fontSize: 12, fontWeight: '600', color: '#94a3b8', marginTop: 2 },
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    shadowColor: '#0b1c30',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  backBtnPressed: { backgroundColor: '#f1f5f9' },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    fontFamily: 'Inter_700Bold',
+    color: '#0b1c30',
+    letterSpacing: -0.3,
+  },
+  headerSub: {
+    fontSize: 13,
+    fontWeight: '400',
+    fontFamily: 'Inter_400Regular',
+    color: '#434655',
+    marginTop: 2,
+  },
 
-  card: { backgroundColor: '#fff', borderRadius: 20, padding: 16, borderWidth: 1, borderColor: '#e2e8f0', gap: 12, shadowColor: '#94a3b8', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 1 },
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    gap: 12,
+    shadowColor: '#0b1c30',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
+  },
   cardHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  fieldLabel: { fontSize: 11, fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.6 },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    color: '#434655',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   divider: { height: 1, backgroundColor: '#f1f5f9' },
 
-  input: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, fontWeight: '600', color: '#0f172a' },
-  amountRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 8 },
-  currencyBadge: { backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4 },
-  currencyBadgeText: { fontSize: 11, fontWeight: '800', color: '#1d4ed8' },
-  amountInput: { flex: 1, fontSize: 24, fontWeight: '800', color: '#0f172a' },
+  input: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#c3c6d7',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    height: 48,
+    fontSize: 15,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    color: '#0b1c30',
+  },
+  amountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#c3c6d7',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    minHeight: 52,
+  },
+  currencyBadge: {
+    backgroundColor: '#eff4ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  currencyBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: 'Inter_700Bold',
+    color: '#2563eb',
+  },
+  amountInput: {
+    flex: 1,
+    fontSize: 26,
+    fontWeight: '700',
+    fontFamily: 'Inter_700Bold',
+    color: '#0b1c30',
+    fontVariant: ['tabular-nums'],
+  },
 
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  paidByChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 14, borderWidth: 1 },
-  paidByChipSel: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
-  paidByChipUnsel: { backgroundColor: '#f8fafc', borderColor: '#e2e8f0' },
-  paidByText: { fontSize: 13, fontWeight: '700' },
-  paidByTextSel: { color: '#fff' },
-  paidByTextUnsel: { color: '#334155' },
+  paidByChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    height: 36,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  paidByChipSel: { backgroundColor: '#0b1c30', borderColor: '#0b1c30' },
+  paidByChipUnsel: { backgroundColor: '#f8f9ff', borderColor: '#e2e8f0' },
+  paidByText: { fontSize: 13, fontWeight: '600', fontFamily: 'Inter_600SemiBold' },
+  paidByTextSel: { color: '#ffffff' },
+  paidByTextUnsel: { color: '#0b1c30' },
 
-  newCatBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 },
-  newCatText: { fontSize: 12, fontWeight: '700', color: '#2563eb' },
-  newCatRow: { flexDirection: 'row', gap: 8, backgroundColor: '#f8fafc', borderRadius: 14, borderWidth: 1, borderColor: '#e2e8f0', padding: 8, alignItems: 'center' },
-  newCatInput: { flex: 1, fontSize: 13, fontWeight: '600', color: '#0f172a', paddingHorizontal: 4 },
-  newCatSave: { backgroundColor: '#2563eb', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6 },
-  newCatSaveDisabled: { backgroundColor: '#94a3b8' },
-  newCatSaveText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+  newCatBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  newCatText: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    color: '#2563eb',
+  },
+  newCatRow: {
+    flexDirection: 'row',
+    gap: 8,
+    backgroundColor: '#f8f9ff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 6,
+    alignItems: 'center',
+  },
+  newCatInput: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    color: '#0b1c30',
+    paddingHorizontal: 8,
+  },
+  newCatSave: {
+    backgroundColor: '#2563eb',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  newCatSaveDisabled: { backgroundColor: '#c3c6d7' },
+  newCatSaveText: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    color: '#ffffff',
+  },
 
-  catChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, borderWidth: 1, backgroundColor: '#f8fafc', borderColor: '#e2e8f0' },
+  catChip: {
+    paddingHorizontal: 12,
+    height: 36,
+    justifyContent: 'center',
+    borderRadius: 10,
+    borderWidth: 1,
+    backgroundColor: '#f8f9ff',
+    borderColor: '#e2e8f0',
+  },
   catChipSel: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
-  catChipText: { fontSize: 12, fontWeight: '600', color: '#475569' },
-  catChipTextSel: { color: '#fff' },
+  catChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    color: '#434655',
+  },
+  catChipTextSel: { color: '#ffffff' },
 
-  infoCard: { backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 16, padding: 14, gap: 4 },
-  infoTitle: { fontSize: 13, fontWeight: '800', color: '#1d4ed8' },
-  infoBody: { fontSize: 12, fontWeight: '500', color: '#3b82f6' },
+  infoCard: {
+    backgroundColor: '#eff4ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    borderRadius: 12,
+    padding: 14,
+    gap: 4,
+  },
+  infoTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    fontFamily: 'Inter_700Bold',
+    color: '#2563eb',
+  },
+  infoBody: {
+    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+    color: '#434655',
+  },
 
-  splitDetailCard: { backgroundColor: '#fff', borderRadius: 20, padding: 16, borderWidth: 1, borderColor: '#e2e8f0', gap: 10 },
-  splitRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, backgroundColor: '#f8fafc', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#f1f5f9' },
-  splitName: { flex: 1, fontSize: 13, fontWeight: '700', color: '#334155' },
-  splitInput: { width: 112, textAlign: 'right', fontSize: 13, fontWeight: '700', color: '#0f172a', backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7 },
+  splitDetailCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    gap: 10,
+  },
+  splitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    backgroundColor: '#f8f9ff',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  splitName: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    color: '#0b1c30',
+  },
+  splitInput: {
+    width: 112,
+    textAlign: 'right',
+    fontSize: 13,
+    fontWeight: '700',
+    fontFamily: 'Inter_700Bold',
+    color: '#0b1c30',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#c3c6d7',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    fontVariant: ['tabular-nums'],
+  },
 
-  errorBanner: { backgroundColor: '#fff1f2', borderWidth: 1, borderColor: '#fecdd3', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12 },
-  errorText: { fontSize: 13, fontWeight: '600', color: '#be123c' },
+  errorBanner: {
+    backgroundColor: '#ffdad6',
+    borderWidth: 1,
+    borderColor: '#ffb4ab',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  errorText: {
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    color: '#ba1a1a',
+  },
 
-  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#f1f5f9', paddingHorizontal: 16, paddingTop: 12, flexDirection: 'row', gap: 12, shadowColor: '#0f172a', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 8 },
-  cancelBtn: { flex: 1, paddingVertical: 14, borderRadius: 16, backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' },
-  cancelBtnPressed: { backgroundColor: '#e2e8f0' },
-  cancelText: { fontSize: 14, fontWeight: '700', color: '#334155' },
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    flexDirection: 'row',
+    gap: 12,
+    shadowColor: '#0b1c30',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  cancelBtn: {
+    height: 48,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    backgroundColor: '#f8f9ff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelBtnPressed: { backgroundColor: '#eff4ff' },
+  cancelText: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    color: '#434655',
+  },
 });

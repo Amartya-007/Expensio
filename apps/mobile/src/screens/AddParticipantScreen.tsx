@@ -6,7 +6,6 @@ import { callRpc } from '../rpc';
 import { formatError } from '../utils/errors';
 import { LIMITS, validateParticipantName, validatePhone, digitsOnly, toE164, COUNTRY_CODE } from '../constants/limits';
 import PrimaryButton from '../components/PrimaryButton';
-import GradientText from '../components/GradientText';
 
 export default function AddParticipantScreen({
   tripId,
@@ -70,12 +69,14 @@ export default function AddParticipantScreen({
           onPress={onCancel}
           disabled={busy}
           style={({ pressed }) => [s.backBtn, pressed && s.backBtnPressed]}
-          hitSlop={8}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
         >
-          <ArrowLeft size={18} color="#334155" />
+          <ArrowLeft size={18} color="#0b1c30" strokeWidth={2} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <GradientText className="text-2xl font-black">Add a Person</GradientText>
+          <Text style={s.headerTitle}>Add a Person</Text>
           <Text style={s.headerSub}>For splitting expenses together</Text>
         </View>
       </View>
@@ -83,7 +84,7 @@ export default function AddParticipantScreen({
       {/* Hint card */}
       <View style={s.hintCard}>
         <Text style={s.hintText}>
-          For splitting expenses with someone who isn&apos;t using the app. Give them a phone number
+          For splitting expenses with someone who isn&apos;t using the app yet. Give them a phone number
           now and if they join later with that number, it links to their account automatically.
         </Text>
       </View>
@@ -93,7 +94,7 @@ export default function AddParticipantScreen({
         <View>
           <Text style={s.fieldLabel}>Name</Text>
           <View style={[s.inputRow, nameFocused && s.inputRowFocused]}>
-            <UserCircle2 size={18} color="#94a3b8" />
+            <UserCircle2 size={18} color="#737686" />
             <TextInput
               style={s.input}
               value={name}
@@ -142,6 +143,8 @@ export default function AddParticipantScreen({
           onPress={onCancel}
           disabled={busy}
           style={({ pressed }) => [s.cancelBtn, pressed && s.cancelBtnPressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel"
         >
           <Text style={s.cancelText}>Cancel</Text>
         </Pressable>
@@ -156,33 +159,117 @@ export default function AddParticipantScreen({
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#f8fafc', paddingHorizontal: 16, justifyContent: 'space-between' },
+  root: { flex: 1, backgroundColor: '#f8f9ff', paddingHorizontal: 16, justifyContent: 'space-between' },
 
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
-  backBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  backBtnPressed: { backgroundColor: '#e2e8f0' },
-  headerSub: { fontSize: 12, fontWeight: '600', color: '#94a3b8', marginTop: 2 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 18 },
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    shadowColor: '#0b1c30',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  backBtnPressed: { backgroundColor: '#f1f5f9' },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    fontFamily: 'Inter_700Bold',
+    color: '#0b1c30',
+    letterSpacing: -0.3,
+  },
+  headerSub: {
+    fontSize: 13,
+    fontWeight: '400',
+    fontFamily: 'Inter_400Regular',
+    color: '#434655',
+    marginTop: 2,
+  },
 
-  hintCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 24 },
-  hintText: { fontSize: 13, fontWeight: '500', color: '#64748b', lineHeight: 20 },
+  hintCard: {
+    backgroundColor: '#eff4ff',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    marginBottom: 20,
+  },
+  hintText: {
+    fontSize: 13,
+    fontWeight: '400',
+    fontFamily: 'Inter_400Regular',
+    color: '#1e3a8a',
+    lineHeight: 19,
+  },
 
   form: { gap: 16, flex: 1 },
-  fieldLabel: { fontSize: 11, fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 },
-  inputRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12 },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    color: '#434655',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#c3c6d7',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    height: 48,
+  },
   inputRowFocused: { borderColor: '#2563eb' },
-  input: { flex: 1, fontSize: 15, fontWeight: '600', color: '#0f172a' },
-  countryCode: { fontSize: 15, fontWeight: '700', color: '#64748b' },
+  input: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    color: '#0b1c30',
+  },
+  countryCode: {
+    fontSize: 15,
+    fontWeight: '700',
+    fontFamily: 'Inter_700Bold',
+    color: '#434655',
+  },
   phoneDivider: { width: 1, height: 20, backgroundColor: '#e2e8f0' },
 
-  errorBanner: { borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1 },
-  errorBannerRed: { backgroundColor: '#fff1f2', borderColor: '#fecdd3' },
+  errorBanner: { borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, borderWidth: 1 },
+  errorBannerRed: { backgroundColor: '#ffdad6', borderColor: '#ffb4ab' },
   errorBannerAmber: { backgroundColor: '#fffbeb', borderColor: '#fde68a' },
-  errorText: { fontSize: 13, fontWeight: '600' },
-  errorTextRed: { color: '#be123c' },
+  errorText: { fontSize: 13, fontWeight: '600', fontFamily: 'Inter_600SemiBold' },
+  errorTextRed: { color: '#ba1a1a' },
   errorTextAmber: { color: '#92400e' },
 
-  actions: { flexDirection: 'row', gap: 12, paddingTop: 20 },
-  cancelBtn: { flex: 1, paddingVertical: 14, borderRadius: 16, backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' },
-  cancelBtnPressed: { backgroundColor: '#e2e8f0' },
-  cancelText: { fontSize: 14, fontWeight: '700', color: '#334155' },
+  actions: { flexDirection: 'row', gap: 12, paddingTop: 16 },
+  cancelBtn: {
+    height: 48,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    backgroundColor: '#f8f9ff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelBtnPressed: { backgroundColor: '#eff4ff' },
+  cancelText: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    color: '#434655',
+  },
 });

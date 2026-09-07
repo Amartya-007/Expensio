@@ -29,58 +29,74 @@
 
 @layer components {
   .btn-primary {
-    @apply px-6 py-3 text-white font-semibold rounded-2xl shadow-lg;
+    @apply h-12 px-6 bg-primary text-white font-semibold rounded-xl shadow-md;
   }
 
   .btn-secondary {
-    @apply px-6 py-3 bg-white text-slate-600 font-semibold rounded-2xl border border-slate-200 shadow-sm;
+    @apply h-12 px-6 bg-white text-on-surface font-semibold rounded-xl border border-outline-variant shadow-sm;
   }
 
   .btn-danger {
-    @apply px-6 py-3 bg-red-50 text-red-600 font-semibold rounded-2xl border border-red-200 shadow-sm;
+    @apply h-12 px-6 bg-red-50 text-error font-semibold rounded-xl border border-red-200 shadow-sm;
   }
 
   .card-elevated {
-    @apply bg-white rounded-3xl border border-slate-100 shadow-sm;
+    @apply bg-white rounded-2xl border border-slate-200/70 shadow-sm;
   }
 
   .card-premium {
-    @apply bg-white rounded-3xl border border-slate-200 shadow-md;
+    @apply bg-white rounded-2xl border border-slate-200 shadow-md;
+  }
+
+  .card-container-low {
+    @apply bg-surface-container-low rounded-2xl border border-surface-container;
   }
 
   .input-field {
-    @apply w-full px-4 py-3 rounded-2xl border border-slate-200 bg-white text-slate-900;
+    @apply w-full h-[52px] px-4 rounded-xl border border-slate-200 bg-white text-on-surface;
   }
 
   .input-field-focused {
-    @apply border-blue-500;
+    @apply border-primary;
   }
 
   .badge-primary {
-    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700;
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-primary-container text-on-primary-container;
   }
 
   .badge-success {
-    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700;
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-tertiary-container text-on-tertiary-container;
   }
 
   .badge-warning {
-    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700;
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-warning-container text-on-warning-container;
+  }
+
+  .badge-danger {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-error-container text-on-error-container;
+  }
+
+  .badge-settled {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700;
+  }
+
+  .badge-owed {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700;
   }
 
   .page-shell {
-    @apply pt-7 px-4 pb-24 max-w-md mx-auto;
+    @apply pt-4 px-4 pb-24 max-w-md mx-auto;
   }
 
   .page-header {
-    @apply mb-6;
+    @apply mb-5;
   }
 
   .page-title {
-    @apply text-3xl font-black text-blue-700 tracking-tight;
+    @apply text-2xl font-bold text-on-surface tracking-tight;
   }
 
   .page-subtitle {
-    @apply text-sm text-slate-500 mt-1;
+    @apply text-sm text-on-surface-variant mt-1;
   }
 }

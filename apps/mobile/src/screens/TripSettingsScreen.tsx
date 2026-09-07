@@ -195,7 +195,7 @@ export default function TripSettingsScreen({
     >
       {/* ── Hero header with gradient ── */}
       <LinearGradient
-        colors={['#1e3a8a', '#2563eb']}
+        colors={['#0b1c30', '#1e3a8a']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={[s.heroGradient, { paddingTop: Math.max(insets.top, 20) }]}
@@ -206,7 +206,7 @@ export default function TripSettingsScreen({
             style={({ pressed }) => [s.backBtn, pressed && s.backBtnPressed]}
             hitSlop={8}
           >
-            <ArrowLeft size={18} color="#e0e7ff" />
+            <ArrowLeft size={18} color="#ffffff" />
           </Pressable>
 
           {!!trip?.is_archived && (
@@ -308,27 +308,24 @@ export default function TripSettingsScreen({
         <Text style={s.sectionLabel}>Trip</Text>
         <View style={s.rowGroup}>
           <SettingsRow
-            icon={<Users size={18} color="#0d9488" />}
-            iconBg="#f0fdfa"
-            iconAccent="#ccfbf1"
+            icon={<Users size={18} color="#2563eb" />}
+            iconBg="#eff6ff"
             title="Manage Members"
             subtitle={`${participantCount} participant${participantCount !== 1 ? 's' : ''}`}
             onPress={onOpenMembers}
           />
           <View style={s.rowDivider} />
           <SettingsRow
-            icon={<Clock size={18} color="#6366f1" />}
-            iconBg="#eef2ff"
-            iconAccent="#c7d2fe"
+            icon={<Clock size={18} color="#0b1c30" />}
+            iconBg="#e8ecf4"
             title="Activity Log"
             subtitle="History of all trip events"
             onPress={onOpenActivityLog}
           />
           <View style={s.rowDivider} />
           <SettingsRow
-            icon={<Repeat size={18} color="#7c3aed" />}
-            iconBg="#f5f3ff"
-            iconAccent="#ede9fe"
+            icon={<Repeat size={18} color="#2563eb" />}
+            iconBg="#eff6ff"
             title="Recurring Expenses"
             subtitle="Auto-repeating templates"
             onPress={onOpenRecurring}
@@ -340,8 +337,7 @@ export default function TripSettingsScreen({
         <View style={s.rowGroup}>
           <SettingsRow
             icon={<Archive size={18} color="#d97706" />}
-            iconBg="#fffbeb"
-            iconAccent="#fef3c7"
+            iconBg="#fef3c7"
             title={trip?.is_archived ? 'Unarchive Trip' : 'Archive Trip'}
             subtitle={trip?.is_archived ? 'Make this trip active again' : 'Hide from your active trips'}
             onPress={confirmArchive}
@@ -349,8 +345,7 @@ export default function TripSettingsScreen({
           <View style={s.rowDivider} />
           <SettingsRow
             icon={<LogOut size={18} color="#dc2626" />}
-            iconBg="#fff1f2"
-            iconAccent="#ffe4e6"
+            iconBg="#fee2e2"
             title="Leave Trip"
             subtitle="Remove yourself from this trip"
             titleColor="#dc2626"
@@ -359,8 +354,7 @@ export default function TripSettingsScreen({
           <View style={s.rowDivider} />
           <SettingsRow
             icon={<Trash2 size={18} color="#dc2626" />}
-            iconBg="#fff1f2"
-            iconAccent="#ffe4e6"
+            iconBg="#fee2e2"
             title="Delete Trip"
             subtitle="Permanently remove this trip"
             titleColor="#dc2626"
@@ -375,15 +369,13 @@ export default function TripSettingsScreen({
 function SettingsRow({
   icon,
   iconBg,
-  iconAccent,
   title,
   subtitle,
-  titleColor = '#0f172a',
+  titleColor = '#0b1c30',
   onPress,
 }: {
   icon: React.ReactNode;
   iconBg: string;
-  iconAccent: string;
   title: string;
   subtitle?: string;
   titleColor?: string;
@@ -394,22 +386,17 @@ function SettingsRow({
       onPress={onPress}
       style={({ pressed }) => [s.settingsRow, pressed && s.settingsRowPressed]}
     >
-      {/* Icon with two-tone circle */}
-      <View style={[s.settingsIconOuter, { backgroundColor: iconAccent }]}>
-        <View style={[s.settingsIconInner, { backgroundColor: iconBg }]}>
-          {icon}
-        </View>
+      <View style={[s.settingsIconBox, { backgroundColor: iconBg }]}>
+        {icon}
       </View>
 
-      {/* Text */}
       <View style={s.settingsBody}>
         <Text style={[s.settingsTitle, { color: titleColor }]}>{title}</Text>
         {!!subtitle && <Text style={s.settingsSub}>{subtitle}</Text>}
       </View>
 
-      {/* Chevron */}
       <View style={s.settingsChevron}>
-        <ChevronRight size={15} color="#cbd5e1" />
+        <ChevronRight size={16} color="#94a3b8" />
       </View>
     </Pressable>
   );
@@ -418,7 +405,7 @@ function SettingsRow({
 const s = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f8f9ff',
   },
 
   // ── Hero ──
@@ -433,29 +420,29 @@ const s = StyleSheet.create({
     marginBottom: 20,
   },
   backBtn: {
-    width: 36,
-    height: 36,
+    width: 40,
+    height: 40,
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  backBtnPressed: { backgroundColor: 'rgba(255,255,255,0.25)' },
+  backBtnPressed: { backgroundColor: 'rgba(255,255,255,0.2)' },
   archivedBadge: {
-    backgroundColor: 'rgba(254,243,199,0.9)',
+    backgroundColor: 'rgba(255,255,255,0.15)',
     borderWidth: 1,
-    borderColor: '#fde68a',
+    borderColor: 'rgba(255,255,255,0.25)',
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 20,
+    borderRadius: 8,
   },
-  archivedText: { fontSize: 11, fontWeight: '700', color: '#92400e' },
+  archivedText: { fontSize: 11, fontWeight: '700', color: '#ffffff' },
   heroContent: { gap: 6 },
   heroTitle: {
     fontSize: 26,
-    fontWeight: '800',
+    fontWeight: '700',
     color: '#ffffff',
     letterSpacing: -0.4,
   },
@@ -474,12 +461,13 @@ const s = StyleSheet.create({
   heroStat: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 6,
   },
   heroStatText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#bfdbfe',
+    color: '#e0e7ff',
+    fontVariant: ['tabular-nums'],
   },
 
   // ── Body ──
@@ -493,7 +481,7 @@ const s = StyleSheet.create({
     backgroundColor: '#fff1f2',
     borderWidth: 1,
     borderColor: '#fecdd3',
-    borderRadius: 14,
+    borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
     marginBottom: 16,
@@ -503,7 +491,7 @@ const s = StyleSheet.create({
     backgroundColor: '#f0fdf4',
     borderWidth: 1,
     borderColor: '#bbf7d0',
-    borderRadius: 14,
+    borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
     marginBottom: 16,
@@ -514,9 +502,9 @@ const s = StyleSheet.create({
   sectionLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#94a3b8',
+    color: '#43474e',
     textTransform: 'uppercase',
-    letterSpacing: 1.1,
+    letterSpacing: 0.8,
     marginBottom: 8,
     marginTop: 24,
     paddingHorizontal: 2,
@@ -524,44 +512,40 @@ const s = StyleSheet.create({
 
   // ── Budget/dates card ──
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    padding: 20,
-    shadowColor: '#94a3b8',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    padding: 16,
     gap: 16,
   },
   fieldGroup: { gap: 8 },
   fieldLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#64748b',
+    color: '#43474e',
     textTransform: 'uppercase',
-    letterSpacing: 0.6,
+    letterSpacing: 0.5,
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: '#f8fafc',
-    borderWidth: 1.5,
+    backgroundColor: '#f8f9ff',
+    borderWidth: 1,
     borderColor: '#e2e8f0',
-    borderRadius: 14,
+    borderRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 13,
+    minHeight: 48,
   },
-  inputRowFocused: { borderColor: '#2563eb', backgroundColor: '#fff' },
+  inputRowFocused: { borderColor: '#2563eb', backgroundColor: '#ffffff' },
   inputRowError: { borderColor: '#fca5a5' },
   budgetInput: {
     flex: 1,
     fontSize: 22,
-    fontWeight: '800',
-    color: '#0f172a',
+    fontWeight: '700',
+    color: '#0b1c30',
+    fontVariant: ['tabular-nums'],
   },
   fieldError: { fontSize: 11, fontWeight: '600', color: '#dc2626' },
   divider: { height: 1, backgroundColor: '#f1f5f9' },
@@ -570,27 +554,22 @@ const s = StyleSheet.create({
   dateSubLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#94a3b8',
+    color: '#43474e',
   },
   saveBtn: { marginTop: 16 },
 
   // ── Row group ──
   rowGroup: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     overflow: 'hidden',
-    shadowColor: '#94a3b8',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
   },
   rowDivider: {
     height: 1,
-    backgroundColor: '#f8fafc',
-    marginLeft: 72,
+    backgroundColor: '#f1f5f9',
+    marginLeft: 68,
   },
 
   // ── Settings row ──
@@ -600,22 +579,16 @@ const s = StyleSheet.create({
     gap: 14,
     paddingHorizontal: 16,
     paddingVertical: 14,
+    minHeight: 56,
   },
-  settingsRowPressed: { backgroundColor: '#f8fafc' },
-  settingsIconOuter: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+  settingsRowPressed: { backgroundColor: '#f8f9ff' },
+  settingsIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
-  },
-  settingsIconInner: {
-    width: 36,
-    height: 36,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   settingsBody: { flex: 1 },
   settingsTitle: {
@@ -626,8 +599,8 @@ const s = StyleSheet.create({
   settingsSub: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#94a3b8',
-    marginTop: 1,
+    color: '#43474e',
+    marginTop: 2,
   },
   settingsChevron: {
     width: 24,

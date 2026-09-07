@@ -8,14 +8,61 @@ module.exports = {
   presets: [require('nativewind/preset')],
   theme: {
     extend: {
+      colors: {
+        // ClearBalance Modern design system palette
+        surface: '#f8f9ff',
+        'surface-dim': '#cbdbf5',
+        'surface-bright': '#f8f9ff',
+        'surface-container-lowest': '#ffffff',
+        'surface-container-low': '#eff4ff',
+        'surface-container': '#e5eeff',
+        'surface-container-high': '#dce9ff',
+        'surface-container-highest': '#d3e4fe',
+        'on-surface': '#0b1c30',
+        'on-surface-variant': '#434655',
+        'inverse-surface': '#213145',
+        'inverse-on-surface': '#eaf1ff',
+        outline: '#737686',
+        'outline-variant': '#c3c6d7',
+        'surface-tint': '#0053db',
+        primary: '#2563eb',
+        'primary-strong': '#1d4ed8',
+        'on-primary': '#ffffff',
+        'primary-container': '#eff6ff',
+        'on-primary-container': '#1e40af',
+        secondary: '#1d4ed8',
+        'on-secondary': '#ffffff',
+        'secondary-container': '#4069f2',
+        'on-secondary-container': '#fffbff',
+        tertiary: '#10b981',
+        'on-tertiary': '#ffffff',
+        'tertiary-container': '#ecfdf5',
+        'on-tertiary-container': '#065f46',
+        error: '#ef4444',
+        'on-error': '#ffffff',
+        'error-container': '#fef2f2',
+        'on-error-container': '#991b1b',
+        warning: '#f59e0b',
+        'warning-container': '#fffbeb',
+        'on-warning-container': '#92400e',
+        success: '#10b981',
+        'success-container': '#ecfdf5',
+        debt: '#ef4444',
+        'debt-container': '#fef2f2',
+      },
+      spacing: {
+        'space-2': '2px',
+        'space-4': '4px',
+        'space-8': '8px',
+        'space-12': '12px',
+        'space-16': '16px',
+        'space-20': '20px',
+        'space-24': '24px',
+        'space-32': '32px',
+        'space-40': '40px',
+        'space-48': '48px',
+      },
       fontFamily: {
-        // Only covers the *regular* weight -- Android doesn't auto-resolve fontWeight to
-        // the matching static Inter file the way CSS/iOS does with one @font-face family,
-        // so font-semibold/font-bold/font-black classes still render in this weight on
-        // Android unless a component also sets an explicit weight-specific fontFamily
-        // (Inter_600SemiBold / Inter_700Bold / Inter_900Black -- see App.tsx's useFonts
-        // call and GradientText.tsx/PrimaryButton.tsx for the pattern). Flagged in
-        // docs/architecture/expensio-ui-port-plan.md so future screens don't rediscover it.
         sans: ['Inter_400Regular', 'System'],
       },
     },

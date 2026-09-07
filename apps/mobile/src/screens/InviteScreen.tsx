@@ -7,7 +7,6 @@ import { db } from '../powersync/db';
 import { formatError } from '../utils/errors';
 import { LIMITS } from '../constants/limits';
 import PrimaryButton from '../components/PrimaryButton';
-import GradientText from '../components/GradientText';
 
 type ActiveInvite = { id: string; code: string; expires_at: string; use_count: number; max_uses: number | null };
 
@@ -111,12 +110,14 @@ export default function InviteScreen({
           onPress={onDone}
           disabled={busy !== null}
           style={({ pressed }) => [s.backBtn, pressed && s.backBtnPressed]}
-          hitSlop={8}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
         >
-          <ArrowLeft size={18} color="#334155" />
+          <ArrowLeft size={18} color="#0b1c30" strokeWidth={2} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <GradientText className="text-2xl font-black">Invite or Join</GradientText>
+          <Text style={s.headerTitle}>Invite or Join</Text>
           <Text style={s.headerSub}>Share a one-time code with a verified account</Text>
         </View>
       </View>
@@ -127,15 +128,17 @@ export default function InviteScreen({
       {displayCode ? (
         <View style={s.codeCard}>
           <View style={s.codeIconWrap}>
-            <Ticket size={20} color="#2563eb" />
+            <Ticket size={22} color="#2563eb" strokeWidth={2} />
           </View>
           <Text style={s.codeHint}>Invite code</Text>
           <Text style={s.codeText}>{displayCode}</Text>
           <Pressable
             onPress={shareInvite}
             style={({ pressed }) => [s.shareBtn, pressed && s.shareBtnPressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Share code"
           >
-            <Share2 size={15} color="#334155" />
+            <Share2 size={15} color="#0b1c30" />
             <Text style={s.shareBtnText}>Share code</Text>
           </Pressable>
         </View>
@@ -157,8 +160,10 @@ export default function InviteScreen({
             onPress={() => revokeInvite(invite.id)}
             disabled={busy !== null}
             style={({ pressed }) => [s.revokeBtn, pressed && s.revokeBtnPressed]}
+            accessibilityRole="button"
+            accessibilityLabel={`Revoke code ${invite.code}`}
           >
-            <X size={12} color="#e11d48" />
+            <X size={12} color="#ba1a1a" />
             <Text style={s.revokeText}>Revoke</Text>
           </Pressable>
         </View>
@@ -172,7 +177,7 @@ export default function InviteScreen({
         value={joinCode}
         onChangeText={v => setJoinCode(v.replace(/\D/g, '').slice(0, LIMITS.invite.code.length))}
         placeholder="123456"
-        placeholderTextColor="#cbd5e1"
+        placeholderTextColor="#c3c6d7"
         keyboardType="number-pad"
         maxLength={LIMITS.invite.code.length}
       />
@@ -191,7 +196,7 @@ export default function InviteScreen({
       {!!error && (
         <View style={s.errorBanner}>
           <View style={s.errorRow}>
-            <ShieldAlert size={16} color="#dc2626" />
+            <ShieldAlert size={16} color="#ba1a1a" />
             <Text style={s.errorText}>{error}</Text>
           </View>
           {isVerificationError(error) && (
@@ -206,34 +211,187 @@ export default function InviteScreen({
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#f8fafc' },
+  root: { flex: 1, backgroundColor: '#f8f9ff' },
 
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 24 },
-  backBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  backBtnPressed: { backgroundColor: '#e2e8f0' },
-  headerSub: { fontSize: 12, fontWeight: '600', color: '#94a3b8', marginTop: 2 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    shadowColor: '#0b1c30',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  backBtnPressed: { backgroundColor: '#f1f5f9' },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    fontFamily: 'Inter_700Bold',
+    color: '#0b1c30',
+    letterSpacing: -0.3,
+  },
+  headerSub: {
+    fontSize: 13,
+    fontWeight: '400',
+    fontFamily: 'Inter_400Regular',
+    color: '#434655',
+    marginTop: 2,
+  },
 
-  sectionLabel: { fontSize: 11, fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    color: '#737686',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 10,
+  },
 
-  codeCard: { backgroundColor: '#fff', borderRadius: 20, padding: 24, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', gap: 8, marginBottom: 12, shadowColor: '#94a3b8', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
-  codeIconWrap: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-  codeHint: { fontSize: 11, fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.8 },
-  codeText: { fontSize: 36, fontWeight: '900', color: '#0f172a', letterSpacing: 8, fontFamily: 'Inter_900Black' },
-  shareBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, backgroundColor: '#f1f5f9', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 10 },
-  shareBtnPressed: { backgroundColor: '#e2e8f0' },
-  shareBtnText: { fontSize: 13, fontWeight: '700', color: '#334155' },
+  codeCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+    shadowColor: '#0b1c30',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  codeIconWrap: {
+    width: 46,
+    height: 46,
+    borderRadius: 12,
+    backgroundColor: '#eff4ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  codeHint: {
+    fontSize: 11,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    color: '#737686',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  codeText: {
+    fontSize: 34,
+    fontWeight: '700',
+    fontFamily: 'Inter_700Bold',
+    color: '#0b1c30',
+    letterSpacing: 6,
+    fontVariant: ['tabular-nums'],
+  },
+  shareBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    backgroundColor: '#f8f9ff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    height: 40,
+  },
+  shareBtnPressed: { backgroundColor: '#eff4ff' },
+  shareBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    color: '#0b1c30',
+  },
 
-  activeInviteRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, marginTop: 10, borderWidth: 1, borderColor: '#e2e8f0' },
-  activeInviteText: { fontSize: 13, fontWeight: '600', color: '#334155' },
-  revokeBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, backgroundColor: '#fff1f2' },
-  revokeBtnPressed: { backgroundColor: '#ffe4e6' },
-  revokeText: { fontSize: 12, fontWeight: '700', color: '#e11d48' },
+  activeInviteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  activeInviteText: {
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    color: '#0b1c30',
+    fontVariant: ['tabular-nums'],
+  },
+  revokeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: '#ffdad6',
+  },
+  revokeBtnPressed: { backgroundColor: '#ffb4ab' },
+  revokeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    color: '#ba1a1a',
+  },
 
-  joinInput: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 16, paddingHorizontal: 16, paddingVertical: 16, fontSize: 24, fontWeight: '800', textAlign: 'center', letterSpacing: 8, color: '#0f172a' },
+  joinInput: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#c3c6d7',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    height: 52,
+    fontSize: 22,
+    fontWeight: '700',
+    fontFamily: 'Inter_700Bold',
+    textAlign: 'center',
+    letterSpacing: 6,
+    color: '#0b1c30',
+    fontVariant: ['tabular-nums'],
+  },
 
-  errorBanner: { marginTop: 20, backgroundColor: '#fff1f2', borderWidth: 1, borderColor: '#fecdd3', borderRadius: 14, padding: 14, gap: 8 },
+  errorBanner: {
+    marginTop: 18,
+    backgroundColor: '#ffdad6',
+    borderWidth: 1,
+    borderColor: '#ffb4ab',
+    borderRadius: 12,
+    padding: 14,
+    gap: 8,
+  },
   errorRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  errorText: { flex: 1, fontSize: 13, fontWeight: '600', color: '#be123c' },
+  errorText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    color: '#ba1a1a',
+  },
   verifyLink: { paddingTop: 4 },
-  verifyLinkText: { fontSize: 13, fontWeight: '700', color: '#0f172a' },
+  verifyLinkText: {
+    fontSize: 13,
+    fontWeight: '700',
+    fontFamily: 'Inter_700Bold',
+    color: '#0b1c30',
+  },
 });

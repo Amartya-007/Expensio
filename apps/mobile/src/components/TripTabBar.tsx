@@ -1,6 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ArrowLeftRight, Home, List, Plus, Settings } from 'lucide-react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export type TripTab = 'home' | 'expenses' | 'settle' | 'settings';
@@ -38,16 +37,13 @@ export default function TripTabBar({
           <Pressable
             onPress={onAddExpense}
             style={({ pressed }) => [styles.fabOuter, pressed && styles.fabPressed]}
-            hitSlop={4}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel="Add expense"
           >
-            <LinearGradient
-              colors={['#3b82f6', '#1d4ed8']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.fab}
-            >
-              <Plus size={26} color="#fff" strokeWidth={2.5} />
-            </LinearGradient>
+            <View style={styles.fab}>
+              <Plus size={26} color="#ffffff" strokeWidth={2.5} />
+            </View>
           </Pressable>
         </View>
 
@@ -97,23 +93,20 @@ const styles = StyleSheet.create({
     right: 0,
     backgroundColor: '#ffffff',
     borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
-    shadowColor: '#0f172a',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.07,
-    shadowRadius: 16,
-    elevation: 16,
+    borderTopColor: '#e2e8f0',
+    shadowColor: '#0b1c30',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 8,
     zIndex: 40,
   },
-  // flexDirection row, each of the 4 tab items is flex:1, FAB is fixed-width
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     height: 64,
-    paddingHorizontal: 4,
+    paddingHorizontal: 8,
   },
-
-  // ── Nav item — flex:1 so the 4 items share equal space ──────────────────────
   navItem: {
     flex: 1,
     alignItems: 'center',
@@ -121,55 +114,55 @@ const styles = StyleSheet.create({
     gap: 3,
     paddingVertical: 6,
     paddingHorizontal: 4,
-    borderRadius: 18,
+    borderRadius: 12,
     minWidth: 0,
   },
   navItemActive: {
-    backgroundColor: '#eff6ff',
+    backgroundColor: '#eff4ff',
   },
   navItemPressed: {
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f8f9ff',
   },
   navLabel: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#94a3b8',
-    letterSpacing: 0.1,
+    fontSize: 11,
+    fontWeight: '500',
+    fontFamily: 'Inter_400Regular',
+    color: '#737686',
+    letterSpacing: 0.01,
   },
   navLabelActive: {
-    fontSize: 10,
-    fontWeight: '800',
+    fontSize: 11,
+    fontWeight: '700',
+    fontFamily: 'Inter_600SemiBold',
     color: '#2563eb',
-    letterSpacing: 0.1,
+    letterSpacing: 0.01,
   },
-
-  // ── FAB — fixed 72px wide so it doesn't flex ──────────────────────────────
   fabWrapper: {
-    width: 72,
+    width: 68,
     alignItems: 'center',
     justifyContent: 'center',
-    // Lifts the FAB above the bar
-    marginTop: -24,
+    marginTop: -22,
   },
   fabOuter: {
-    borderRadius: 30,
-    borderWidth: 4,
+    borderRadius: 28,
+    borderWidth: 3,
     borderColor: '#ffffff',
     shadowColor: '#2563eb',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.38,
-    shadowRadius: 14,
-    elevation: 14,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
+    elevation: 8,
   },
   fab: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#2563eb',
     alignItems: 'center',
     justifyContent: 'center',
   },
   fabPressed: {
-    transform: [{ scale: 0.91 }],
-    shadowOpacity: 0.18,
+    transform: [{ scale: 0.94 }],
+    opacity: 0.9,
   },
 });
