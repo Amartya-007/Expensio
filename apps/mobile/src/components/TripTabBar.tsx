@@ -4,13 +4,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export type TripTab = 'home' | 'expenses' | 'settle' | 'settings';
 
-// Defined in order: [home, expenses, FAB, settle, settings]
-// The FAB sits as a standalone View between the two pairs so all 4 tab items
-// get equal flex and the layout is perfectly symmetric.
-const ALL_TABS: Array<{ key: TripTab; label: string; Icon: typeof Home }> = [
-  { key: 'home',     label: 'Home',     Icon: Home },
+// Five equal-flex items in one row: Home, Expenses, Add, Settle, Settings. "Add" is
+// an action rather than a navigable tab, so it's visually distinguished with a filled
+// accent circle behind its icon -- but it sits at the exact same height and baseline
+// as the other four (no raised/floating FAB, no negative margins). That's deliberate:
+// a floating center button is a common pattern, but it puts that item at a different
+// height than the rest of the bar, which reads as misaligned rather than intentional
+// once you're looking for it.
+const TABS: Array<{ key: TripTab; label: string; Icon: typeof Home }> = [
+  { key: 'home', label: 'Home', Icon: Home },
   { key: 'expenses', label: 'Expenses', Icon: List },
-  { key: 'settle',   label: 'Settle',   Icon: ArrowLeftRight },
+  { key: 'settle', label: 'Settle', Icon: ArrowLeftRight },
   { key: 'settings', label: 'Settings', Icon: Settings },
 ];
 
@@ -28,28 +32,23 @@ export default function TripTabBar({
   return (
     <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 10) }]}>
       <View style={styles.row}>
-        {/* Left pair */}
-        <NavItem item={ALL_TABS[0]} active={active === ALL_TABS[0].key} onPress={() => onChange(ALL_TABS[0].key)} />
-        <NavItem item={ALL_TABS[1]} active={active === ALL_TABS[1].key} onPress={() => onChange(ALL_TABS[1].key)} />
+        <NavItem item={TABS[0]} active={active === TABS[0].key} onPress={() => onChange(TABS[0].key)} />
+        <NavItem item={TABS[1]} active={active === TABS[1].key} onPress={() => onChange(TABS[1].key)} />
 
-        {/* Centre FAB — fixed width so it doesn't steal flex from the tab items */}
-        <View style={styles.fabWrapper}>
-          <Pressable
-            onPress={onAddExpense}
-            style={({ pressed }) => [styles.fabOuter, pressed && styles.fabPressed]}
-            hitSlop={6}
-            accessibilityRole="button"
-            accessibilityLabel="Add expense"
-          >
-            <View style={styles.fab}>
-              <Plus size={26} color="#ffffff" strokeWidth={2.5} />
-            </View>
-          </Pressable>
-        </View>
+        <Pressable
+          onPress={onAddExpense}
+          style={({ pressed }) => [styles.navItem, pressed && styles.navItemPressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Add expense"
+        >
+          <View style={styles.addIconWrap}>
+            <Plus size={20} color="#ffffff" strokeWidth={2.5} />
+          </View>
+          <Text style={styles.navLabel}>Add</Text>
+        </Pressable>
 
-        {/* Right pair */}
-        <NavItem item={ALL_TABS[2]} active={active === ALL_TABS[2].key} onPress={() => onChange(ALL_TABS[2].key)} />
-        <NavItem item={ALL_TABS[3]} active={active === ALL_TABS[3].key} onPress={() => onChange(ALL_TABS[3].key)} />
+        <NavItem item={TABS[2]} active={active === TABS[2].key} onPress={() => onChange(TABS[2].key)} />
+        <NavItem item={TABS[3]} active={active === TABS[3].key} onPress={() => onChange(TABS[3].key)} />
       </View>
     </View>
   );
@@ -72,13 +71,16 @@ function NavItem({
         active && styles.navItemActive,
         pressed && !active && styles.navItemPressed,
       ]}
+      accessibilityRole="button"
+      accessibilityLabel={item.label}
+      accessibilityState={{ selected: active }}
     >
       <item.Icon
-        size={active ? 21 : 20}
+        size={20}
         color={active ? '#2563eb' : '#94a3b8'}
-        strokeWidth={active ? 2.5 : 1.8}
+        strokeWidth={active ? 2.4 : 1.8}
       />
-      <Text style={[styles.navLabel, active && styles.navLabelActive]}>
+      <Text style={[styles.navLabel, active && styles.navLabelActive]} numberOfLines={1}>
         {item.label}
       </Text>
     </Pressable>
@@ -96,73 +98,51 @@ const styles = StyleSheet.create({
     borderTopColor: '#e2e8f0',
     shadowColor: '#0b1c30',
     shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.06,
     shadowRadius: 12,
     elevation: 8,
     zIndex: 40,
   },
   row: {
     flexDirection: 'row',
-    alignItems: 'center',
-    height: 64,
-    paddingHorizontal: 8,
+    alignItems: 'stretch',
+    height: 62,
+    paddingHorizontal: 6,
+    paddingTop: 6,
   },
+  // Every one of the 5 items shares this exact shape: same flex, same internal
+  // layout, same padding. Nothing here differs between "Add" and a regular tab --
+  // only the icon/label colors and the accent-circle wrapper around Add's icon do.
   navItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 3,
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    borderRadius: 12,
-    minWidth: 0,
+    gap: 4,
+    borderRadius: 14,
+    marginHorizontal: 2,
   },
   navItemActive: {
     backgroundColor: '#eff4ff',
   },
   navItemPressed: {
-    backgroundColor: '#f8f9ff',
+    backgroundColor: '#f8fafc',
   },
   navLabel: {
     fontSize: 11,
     fontWeight: '500',
-    fontFamily: 'Inter_400Regular',
-    color: '#737686',
-    letterSpacing: 0.01,
+    color: '#64748b',
+    letterSpacing: 0.1,
   },
   navLabelActive: {
-    fontSize: 11,
     fontWeight: '700',
-    fontFamily: 'Inter_600SemiBold',
     color: '#2563eb',
-    letterSpacing: 0.01,
   },
-  fabWrapper: {
-    width: 68,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: -22,
-  },
-  fabOuter: {
-    borderRadius: 28,
-    borderWidth: 3,
-    borderColor: '#ffffff',
-    shadowColor: '#2563eb',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.28,
-    shadowRadius: 10,
-    elevation: 8,
-  },
-  fab: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+  addIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: '#2563eb',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  fabPressed: {
-    transform: [{ scale: 0.94 }],
-    opacity: 0.9,
   },
 });
