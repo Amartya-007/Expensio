@@ -30,7 +30,7 @@ export default function TripTabBar({
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 10) }]}>
+    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 20) }]}>
       <View style={styles.row}>
         <NavItem item={TABS[0]} active={active === TABS[0].key} onPress={() => onChange(TABS[0].key)} />
         <NavItem item={TABS[1]} active={active === TABS[1].key} onPress={() => onChange(TABS[1].key)} />
