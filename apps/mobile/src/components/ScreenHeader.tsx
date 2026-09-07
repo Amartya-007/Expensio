@@ -38,6 +38,7 @@ export default function ScreenHeader({
   paddingTop = 16,
   right,
   backDisabled = false,
+  titleClassName,
 }: ScreenHeaderProps) {
   return (
     <View style={[s.container, { paddingTop }]}>
@@ -53,7 +54,7 @@ export default function ScreenHeader({
       </Pressable>
 
       <View style={s.body}>
-        <Text style={s.title} numberOfLines={1}>
+        <Text style={s.title} className={titleClassName} numberOfLines={1}>
           {title}
         </Text>
         {!!subtitle && <Text style={s.subtitle}>{subtitle}</Text>}

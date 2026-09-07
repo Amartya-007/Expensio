@@ -74,7 +74,6 @@ export default function PhoneVerificationScreen({
       if (e) throw e;
       setStep('otp');
       setCooldown(60);
-      setTimeout(() => otpInputRef.current?.focus(), 150);
     } catch (err) {
       setError(formatError(err));
     } finally {
