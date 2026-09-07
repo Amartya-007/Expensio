@@ -1,15 +1,12 @@
-import React from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 
 export default function Chip({
   selected,
   label,
-  icon,
   onPress,
 }: {
   selected: boolean;
   label: string;
-  icon?: React.ReactNode;
   onPress: () => void;
 }) {
   return (
@@ -25,7 +22,6 @@ export default function Chip({
         pressed && selected && styles.selectedPressed,
       ]}
     >
-      {icon}
       <Text
         style={[
           styles.label,
