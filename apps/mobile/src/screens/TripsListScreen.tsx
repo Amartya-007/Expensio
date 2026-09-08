@@ -206,7 +206,7 @@ export default function TripsListScreen({
         <View style={styles.topBar}>
           <View style={styles.brandRow}>
             <View style={styles.brandIconCircle}>
-              <Plane size={20} color="#4f46e5" strokeWidth={2.5} />
+              <Plane size={20} color="#2563eb" strokeWidth={2.5} />
             </View>
             <Text style={styles.brandText}>Expensio</Text>
           </View>
@@ -226,7 +226,7 @@ export default function TripsListScreen({
             )}
 
             <View style={styles.avatarCircle}>
-              <User size={18} color="#4f46e5" strokeWidth={2} />
+              <User size={18} color="#2563eb" strokeWidth={2} />
             </View>
           </View>
         </View>
