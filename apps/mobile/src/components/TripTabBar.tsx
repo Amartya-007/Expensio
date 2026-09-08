@@ -4,13 +4,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export type TripTab = 'home' | 'expenses' | 'settle' | 'settings';
 
-// Five equal-flex items in one row: Home, Expenses, Add, Settle, Settings. "Add" is
-// an action rather than a navigable tab, so it's visually distinguished with a filled
-// accent circle behind its icon -- but it sits at the exact same height and baseline
-// as the other four (no raised/floating FAB, no negative margins). That's deliberate:
-// a floating center button is a common pattern, but it puts that item at a different
-// height than the rest of the bar, which reads as misaligned rather than intentional
-// once you're looking for it.
+// Five equal-flex slots in one row: Home, Expenses, Add, Settle, Settings. Giving
+// every slot -- including Add -- the same flex: 1 width is what guarantees genuine
+// even horizontal distribution; it doesn't depend on how any one slot's *contents*
+// are drawn. Add's circle is then visually raised above the row via a negative
+// margin on just the circle itself (not the slot), with its own shadow for a real
+// elevated/floating look -- that negative margin shifts the icon upward without
+// changing the slot's width or its participation in the row's flex layout, so it
+// can't pull the other slots off-center the way a separate fixed-width wrapper did
+// in an earlier version of this file.
 const TABS: Array<{ key: TripTab; label: string; Icon: typeof Home }> = [
   { key: 'home', label: 'Home', Icon: Home },
   { key: 'expenses', label: 'Expenses', Icon: List },
@@ -35,17 +37,17 @@ export default function TripTabBar({
         <NavItem item={TABS[0]} active={active === TABS[0].key} onPress={() => onChange(TABS[0].key)} />
         <NavItem item={TABS[1]} active={active === TABS[1].key} onPress={() => onChange(TABS[1].key)} />
 
-        <Pressable
-          onPress={onAddExpense}
-          style={({ pressed }) => [styles.navItem, pressed && styles.navItemPressed]}
-          accessibilityRole="button"
-          accessibilityLabel="Add expense"
-        >
-          <View style={styles.addIconWrap}>
-            <Plus size={20} color="#ffffff" strokeWidth={2.5} />
-          </View>
-          <Text style={styles.navLabel}>Add</Text>
-        </Pressable>
+        <View style={styles.navItem}>
+          <Pressable
+            onPress={onAddExpense}
+            style={({ pressed }) => [styles.addIconWrap, pressed && styles.addIconWrapPressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Add expense"
+            hitSlop={8}
+          >
+            <Plus size={24} color="#ffffff" strokeWidth={2.5} />
+          </Pressable>
+        </View>
 
         <NavItem item={TABS[2]} active={active === TABS[2].key} onPress={() => onChange(TABS[2].key)} />
         <NavItem item={TABS[3]} active={active === TABS[3].key} onPress={() => onChange(TABS[3].key)} />
@@ -138,11 +140,26 @@ const styles = StyleSheet.create({
     color: '#2563eb',
   },
   addIconWrap: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     backgroundColor: '#2563eb',
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: -26,
+    borderWidth: 4,
+    borderColor: '#ffffff',
+    // The actual "elevating" effect: a real shadow directly under the circle,
+    // separate from the bar's own shadow, so it reads as a raised object sitting
+    // on top of the bar rather than just a bigger flat icon.
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  addIconWrapPressed: {
+    backgroundColor: '#1d4ed8',
+    transform: [{ scale: 0.96 }],
   },
 });
