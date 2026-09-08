@@ -64,12 +64,20 @@ const CARD_THEMES = [
   { bg: '#f5f3ff', border: '#ede9fe', arrowBg: '#ede9fe', arrowColor: '#7c3aed' }, // Soft Lavender
 ];
 
-function themeFor(index: number) {
-  return CARD_THEMES[index % CARD_THEMES.length];
+function stableIndex(id: string, length: number) {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  }
+  return hash % length;
 }
 
-function imageFor(index: number) {
-  return DESTINATION_IMAGES[index % DESTINATION_IMAGES.length];
+function themeFor(id: string) {
+  return CARD_THEMES[stableIndex(id, CARD_THEMES.length)];
+}
+
+function imageFor(id: string) {
+  return DESTINATION_IMAGES[stableIndex(id, DESTINATION_IMAGES.length)];
 }
 
 function parseDateIso(iso: string) {
@@ -119,6 +127,7 @@ export default function TripsListScreen({
   const [showArchived, setShowArchived] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [failedImageIds, setFailedImageIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const ac = new AbortController();
@@ -264,9 +273,9 @@ export default function TripsListScreen({
               <Text style={styles.listEmptyText}>No archived trips found.</Text>
             </View>
           }
-          renderItem={({ item, index }) => {
-            const theme = themeFor(index);
-            const imageUrl = imageFor(index);
+          renderItem={({ item }) => {
+            const theme = themeFor(item.id);
+            const imageUrl = imageFor(item.id);
             const dateLabel = formatDateRange(item.start_date, item.end_date, item.created_at);
             const budgetLabel = formatBudget(item.total_budget, item.currency);
 
@@ -288,11 +297,24 @@ export default function TripsListScreen({
                     ]}
                   >
                     {/* Left thumbnail image */}
-                    <Image
-                      source={{ uri: imageUrl }}
-                      style={styles.cardThumb}
-                      resizeMode="cover"
-                    />
+                    {failedImageIds.has(item.id) ? (
+                      <View style={styles.cardThumbFallback}>
+                        <Compass size={28} color="#94a3b8" />
+                      </View>
+                    ) : (
+                      <Image
+                        source={{ uri: imageUrl }}
+                        style={styles.cardThumb}
+                        resizeMode="cover"
+                        onError={() =>
+                          setFailedImageIds((current) => {
+                            const next = new Set(current);
+                            next.add(item.id);
+                            return next;
+                          })
+                        }
+                      />
+                    )}
 
                     {/* Middle: name (right of image) and details (below name) */}
                     <View style={styles.cardBody}>
@@ -566,6 +588,15 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     backgroundColor: '#e2e8f0',
+    flexShrink: 0,
+  },
+  cardThumbFallback: {
+    width: 82,
+    height: 82,
+    borderRadius: 16,
+    backgroundColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
     flexShrink: 0,
   },
   cardBody: {

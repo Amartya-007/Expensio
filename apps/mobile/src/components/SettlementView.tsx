@@ -299,7 +299,7 @@ const sv = StyleSheet.create({
   amberIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fde68a', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   emeraldIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#ecfdf5', borderWidth: 1, borderColor: '#a7f3d0', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   cardBody: { flex: 1 },
-  cardTitle: { fontSize: 13, fontWeight: '500', fontFamily: 'Inter_500Medium', color: '#434655' },
+  cardTitle: { fontSize: 13, fontWeight: '400', fontFamily: 'Inter_400Regular', color: '#434655' },
   cardAmount: { fontSize: 18, fontWeight: '700', fontFamily: 'Inter_700Bold', color: '#0b1c30', marginTop: 2, letterSpacing: -0.3, fontVariant: ['tabular-nums'] },
 
   paidBtn: { backgroundColor: '#2563eb', borderRadius: 12, paddingHorizontal: 14, height: 40, alignItems: 'center', justifyContent: 'center', minWidth: 80 },
