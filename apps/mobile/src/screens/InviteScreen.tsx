@@ -250,7 +250,7 @@ const s = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     fontFamily: 'Inter_600SemiBold',
-    color: '#737686',
+    color: '#6b6f80',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     marginBottom: 10,

@@ -937,7 +937,7 @@ const styles = StyleSheet.create({
   heroBalancePct: {
     fontSize: 12,
     fontWeight: '500',
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'Inter_400Regular',
     color: '#bfdbfe',
     marginTop: 2,
     fontVariant: ['tabular-nums'],
@@ -1437,7 +1437,7 @@ const styles = StyleSheet.create({
   healthRowLabel: {
     fontSize: 13,
     fontWeight: '500',
-    fontFamily: 'Inter_500Medium',
+    fontFamily: 'Inter_400Regular',
     color: '#434655',
   },
   healthRowValue: {

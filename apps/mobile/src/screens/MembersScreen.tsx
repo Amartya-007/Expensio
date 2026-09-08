@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '400',
     fontFamily: 'Inter_400Regular',
     color: '#737686',
   },

@@ -2,7 +2,7 @@
  * ScreenHeader
  *
  * The standard white top-bar used by all stack screens:
- *   [BackButton]  [GradientText title + subtitle]  [optional right slot]
+ *   [BackButton]  [title + subtitle]  [optional right slot]
  *
  * Extracted because ActivityLogScreen, MembersScreen, TripDetailScreen
  * and RecurringScreen all contained identical ~20-line header blocks.
@@ -38,6 +38,7 @@ export default function ScreenHeader({
   paddingTop = 16,
   right,
   backDisabled = false,
+  titleClassName,
 }: ScreenHeaderProps) {
   return (
     <View style={[s.container, { paddingTop }]}>
@@ -53,7 +54,11 @@ export default function ScreenHeader({
       </Pressable>
 
       <View style={s.body}>
-        <Text style={s.title} numberOfLines={1}>
+        <Text
+          style={[s.title, titleClassName?.includes('font-black') && s.titleBlack]}
+          className={titleClassName}
+          numberOfLines={1}
+        >
           {title}
         </Text>
         {!!subtitle && <Text style={s.subtitle}>{subtitle}</Text>}
@@ -94,6 +99,10 @@ const s = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     color: '#0b1c30',
     letterSpacing: -0.3,
+  },
+  titleBlack: {
+    fontWeight: '900',
+    fontFamily: 'Inter_900Black',
   },
   subtitle: {
     fontSize: 13,

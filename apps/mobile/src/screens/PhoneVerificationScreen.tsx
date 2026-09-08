@@ -58,6 +58,7 @@ export default function PhoneVerificationScreen({
   const canonicalPhone = useMemo(() => toE164(digitsOnly(phone)), [phone]);
 
   async function sendCode() {
+    if (cooldown > 0 || busy) return;
     const phoneError = validatePhone(phone, true);
     const nameError = displayName.trim() ? validateDisplayName(displayName) : null;
     if (phoneError || nameError) {
@@ -74,7 +75,6 @@ export default function PhoneVerificationScreen({
       if (e) throw e;
       setStep('otp');
       setCooldown(60);
-      setTimeout(() => otpInputRef.current?.focus(), 150);
     } catch (err) {
       setError(formatError(err));
     } finally {
@@ -228,7 +228,9 @@ export default function PhoneVerificationScreen({
                 onPress={() => {
                   setStep('phone');
                   setOtp('');
+                  setError(null);
                 }}
+                disabled={busy || cooldown > 0}
                 hitSlop={6}
                 style={s.editPhoneBtn}
               >
@@ -278,10 +280,10 @@ export default function PhoneVerificationScreen({
               <Clock size={16} color="#1d4ed8" />
               {cooldown > 0 ? (
                 <Text style={s.timerText}>
-                  Resend code in <Text style={s.timerCountdown}>0:{cooldown < 10 ? `0${cooldown}` : cooldown}s</Text>
+                  Resend code in <Text style={s.timerCountdown}>{Math.floor(cooldown / 60)}:{String(cooldown % 60).padStart(2, '0')}s</Text>
                 </Text>
               ) : (
-                <Pressable onPress={sendCode} disabled={busy} hitSlop={6}>
+                <Pressable onPress={sendCode} disabled={busy || cooldown > 0} hitSlop={6}>
                   <Text style={s.resendActiveText}>Resend code now</Text>
                 </Pressable>
               )}
