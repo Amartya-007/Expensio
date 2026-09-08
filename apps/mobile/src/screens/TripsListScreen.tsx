@@ -22,7 +22,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { db } from '../powersync/db';
 import { flushPendingActions } from '../rpc';
 import SyncStatusBanner from '../components/SyncStatusBanner';
-import PrimaryButton from '../components/PrimaryButton';
 
 type Trip = {
   id: string;
@@ -193,13 +192,15 @@ export default function TripsListScreen({
             Track shared costs, split fairly with friends, and settle balances instantly without spreadsheets.
           </Text>
 
-          <PrimaryButton
+          <Pressable
             onPress={onCreateTrip}
-            icon={<Plus size={18} color="#ffffff" strokeWidth={2.5} />}
+            accessibilityRole="button"
+            accessibilityLabel="Create your first trip"
             style={styles.emptyBtn}
           >
-            Create Your First Trip
-          </PrimaryButton>
+            <Plus size={18} color="#ffffff" strokeWidth={2.5} />
+            <Text style={styles.emptyBtnText}>Create Your First Trip</Text>
+          </Pressable>
         </View>
       </View>
     );
@@ -433,6 +434,19 @@ const styles = StyleSheet.create({
   },
   emptyBtn: {
     width: '100%',
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#2563eb',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  emptyBtnText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
   },
 
   // ── Main shell ──
