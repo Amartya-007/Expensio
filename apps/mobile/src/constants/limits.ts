@@ -87,7 +87,7 @@ export const LIMITS = {
 // Every screen-specific validate* function below is a thin wrapper around one of
 // these, so the actual comparison logic exists in exactly one place.
 
-export function validateTextField(
+function validateTextField(
   value: string,
   limits: { min: number; max: number },
   label: string
@@ -98,7 +98,7 @@ export function validateTextField(
   return null;
 }
 
-export function validateOptionalTextField(
+function validateOptionalTextField(
   value: string,
   limits: { max: number },
   label: string
@@ -114,7 +114,7 @@ export function validateOptionalTextField(
 // typing an amount meant.
 const DECIMAL_PATTERN = /^\d+(\.\d{1,2})?$/;
 
-export function validateAmount(
+function validateAmount(
   value: string,
   limits: { min: number; max: number },
   label: string
@@ -130,7 +130,7 @@ export function validateAmount(
   return null;
 }
 
-export function validateOptionalAmount(
+function validateOptionalAmount(
   value: string,
   limits: { min: number; max: number },
   label: string
@@ -143,7 +143,7 @@ export function validateOptionalAmount(
 // any decimal point at all, not just ones beyond 2 places.
 const INTEGER_PATTERN = /^\d+$/;
 
-export function validateInteger(
+function validateInteger(
   value: string,
   limits: { min: number; max: number },
   label: string

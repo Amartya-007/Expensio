@@ -106,9 +106,9 @@ export default function DatePicker({
           <View style={s.triggerIcon}>
             <CalendarIcon size={16} color="#2563eb" />
           </View>
-          <View>
-            {!!label && <Text style={s.triggerLabel}>{label}</Text>}
-            <Text style={s.triggerValue}>{formatDisplay(value)}</Text>
+          <View style={s.triggerTextWrap}>
+            {!!label && <Text style={s.triggerLabel} numberOfLines={1}>{label}</Text>}
+            <Text style={s.triggerValue} numberOfLines={1}>{formatDisplay(value)}</Text>
           </View>
         </View>
         <View style={s.changePill}>
@@ -226,11 +226,12 @@ const s = StyleSheet.create({
   // Trigger
   trigger: { flexDirection:'row', alignItems:'center', justifyContent:'space-between', paddingHorizontal:16, paddingVertical:14, backgroundColor:'#f8fafc', borderWidth:1, borderColor:'#e2e8f0', borderRadius:16 },
   triggerPressed: { backgroundColor:'#f1f5f9' },
-  triggerLeft: { flexDirection:'row', alignItems:'center', gap:12 },
-  triggerIcon: { width:32, height:32, borderRadius:10, backgroundColor:'#eff6ff', alignItems:'center', justifyContent:'center' },
+  triggerLeft: { flexDirection:'row', alignItems:'center', gap:12, flex:1, minWidth:0 },
+  triggerIcon: { width:32, height:32, borderRadius:10, backgroundColor:'#eff6ff', alignItems:'center', justifyContent:'center', flexShrink:0 },
+  triggerTextWrap: { flexShrink:1, minWidth:0 },
   triggerLabel: { fontSize:10, fontWeight:'700', color:'#94a3b8', textTransform:'uppercase', letterSpacing:0.5 },
   triggerValue: { fontSize:13, fontWeight:'600', color:'#1e293b' },
-  changePill: { backgroundColor:'#fff', borderWidth:1, borderColor:'#e2e8f0', borderRadius:10, paddingHorizontal:10, paddingVertical:4 },
+  changePill: { backgroundColor:'#fff', borderWidth:1, borderColor:'#e2e8f0', borderRadius:10, paddingHorizontal:10, paddingVertical:4, flexShrink:0 },
   changePillText: { fontSize:11, fontWeight:'700', color:'#2563eb' },
 
   // Modal card

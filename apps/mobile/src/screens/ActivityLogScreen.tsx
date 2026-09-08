@@ -16,15 +16,15 @@ type ActivityEntry = {
 // Map event_type to an accent colour so different event kinds are visually distinct
 // without needing a lookup table of every possible string.
 const EVENT_ACCENTS: Record<string, { bg: string; icon: string }> = {
-  expense_added:   { bg: '#f0fdf4', icon: '#16a34a' },
-  expense_edited:  { bg: '#eff6ff', icon: '#2563eb' },
-  expense_deleted: { bg: '#fff1f2', icon: '#e11d48' },
-  member_joined:   { bg: '#f5f3ff', icon: '#7c3aed' },
-  member_left:     { bg: '#fffbeb', icon: '#d97706' },
-  payment_made:    { bg: '#ecfdf5', icon: '#059669' },
+  expense_added:   { bg: '#d1fae5', icon: '#059669' },
+  expense_edited:  { bg: '#dbeafe', icon: '#2563eb' },
+  expense_deleted: { bg: '#fee2e2', icon: '#dc2626' },
+  member_joined:   { bg: '#e8ecf4', icon: '#0b1c30' },
+  member_left:     { bg: '#fef3c7', icon: '#d97706' },
+  payment_made:    { bg: '#d1fae5', icon: '#047857' },
 };
 function accentFor(eventType: string) {
-  return EVENT_ACCENTS[eventType] ?? { bg: '#f8fafc', icon: '#64748b' };
+  return EVENT_ACCENTS[eventType] ?? { bg: '#f1f5f9', icon: '#43474e' };
 }
 
 export default function ActivityLogScreen({
@@ -114,22 +114,23 @@ export default function ActivityLogScreen({
 const styles = StyleSheet.create({
   shell: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f8f9ff',
   },
 
   // ── Header ──
   countBadge: {
-    backgroundColor: '#eff6ff',
+    backgroundColor: '#e8ecf4',
     borderWidth: 1,
-    borderColor: '#bfdbfe',
+    borderColor: '#c5c6d0',
     paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 20,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
   countBadgeText: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#2563eb',
+    fontWeight: '700',
+    color: '#0b1c30',
+    fontVariant: ['tabular-nums'],
   },
 
   // ── List ──
@@ -139,19 +140,23 @@ const styles = StyleSheet.create({
   },
   empty: {
     alignItems: 'center',
-    paddingVertical: 72,
-    paddingHorizontal: 32,
-    gap: 10,
+    paddingVertical: 56,
+    paddingHorizontal: 24,
+    gap: 12,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   emptyTitle: {
     fontSize: 16,
-    fontWeight: '800',
-    color: '#334155',
+    fontWeight: '700',
+    color: '#0b1c30',
   },
   emptyBody: {
     fontSize: 13,
     fontWeight: '500',
-    color: '#94a3b8',
+    color: '#43474e',
     textAlign: 'center',
     lineHeight: 20,
   },
@@ -164,7 +169,7 @@ const styles = StyleSheet.create({
   timelineTrack: {
     width: 20,
     alignItems: 'center',
-    paddingTop: 2,
+    paddingTop: 4,
   },
   timelineDot: {
     width: 10,
@@ -183,37 +188,33 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
-    backgroundColor: '#fff',
+    gap: 12,
+    backgroundColor: '#ffffff',
     borderRadius: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     padding: 14,
     marginBottom: 10,
-    shadowColor: '#94a3b8',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
   },
   entryIconWrap: {
-    width: 30,
-    height: 30,
-    borderRadius: 9,
+    width: 32,
+    height: 32,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
-  entryBody: { flex: 1, gap: 3 },
+  entryBody: { flex: 1, gap: 4 },
   entryDesc: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#0f172a',
-    lineHeight: 19,
+    color: '#0b1c30',
+    lineHeight: 20,
   },
   entryTime: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '500',
-    color: '#94a3b8',
+    color: '#43474e',
+    fontVariant: ['tabular-nums'],
   },
 });

@@ -19,13 +19,11 @@ import {
   Sparkles,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { callRpc } from '../rpc';
 import { detectCurrency } from '../utils/detectCurrency';
 import { currencyIcon } from '../utils/currencyIcon';
 import { formatError } from '../utils/errors';
 import { LIMITS, validateTripName, validateTripBudget, validateTripDate } from '../constants/limits';
-import GradientText from '../components/GradientText';
 import PrimaryButton from '../components/PrimaryButton';
 import DatePicker from '../components/DatePicker';
 
@@ -115,27 +113,29 @@ export default function CreateTripScreen({
           <Pressable
             onPress={onCancel}
             style={({ pressed }) => [s.backBtn, pressed && s.backBtnPressed]}
-            hitSlop={8}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
           >
-            <ArrowLeft size={18} color="#334155" />
+            <ArrowLeft size={18} color="#0b1c30" strokeWidth={2} />
           </Pressable>
           <View style={s.newBadge}>
-            <Sparkles size={11} color="#2563eb" />
+            <Sparkles size={12} color="#2563eb" />
             <Text style={s.newBadgeText}>New Journey</Text>
           </View>
         </View>
 
         {/* Title */}
         <View style={s.titleBlock}>
-          <GradientText className="text-3xl font-black tracking-tight">Where to?</GradientText>
-          <Text style={s.subtitle}>Name your trip, set a currency, and start splitting.</Text>
+          <Text style={s.title}>Where to?</Text>
+          <Text style={s.subtitle}>Name your trip, set a primary currency, and start splitting.</Text>
         </View>
 
         {/* Trip name card */}
         <View style={s.card}>
           <Text style={s.fieldLabel}>Trip Name</Text>
           <View style={s.nameInputRow}>
-            <Compass size={20} color="#2563eb" />
+            <Compass size={20} color="#2563eb" strokeWidth={2} />
             <TextInput
               style={s.nameInput}
               value={name}
@@ -162,6 +162,8 @@ export default function CreateTripScreen({
                 <Pressable
                   key={c.code}
                   onPress={() => setCurrency(c.code)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${c.code} currency`}
                   style={({ pressed }) => [
                     s.currencyChip,
                     selected ? s.currencyChipSelected : s.currencyChipUnselected,
@@ -184,14 +186,16 @@ export default function CreateTripScreen({
         <View style={s.card}>
           <Pressable
             onPress={() => setShowMore(v => !v)}
+            accessibilityRole="button"
+            accessibilityLabel="Toggle dates and budget"
             style={s.collapsibleHeader}
           >
             <View style={s.collapsibleHeaderLeft}>
-              <Calendar size={17} color="#2563eb" />
+              <Calendar size={18} color="#2563eb" strokeWidth={2} />
               <Text style={s.collapsibleTitle}>Dates &amp; Budget (Optional)</Text>
             </View>
             <View style={s.chevronWrap}>
-              {showMore ? <ChevronUp size={16} color="#64748b" /> : <ChevronDown size={16} color="#64748b" />}
+              {showMore ? <ChevronUp size={16} color="#434655" /> : <ChevronDown size={16} color="#434655" />}
             </View>
           </Pressable>
 
@@ -211,7 +215,7 @@ export default function CreateTripScreen({
 
               <Text style={[s.subLabel, { marginTop: 12 }]}>Total Budget ({currency})</Text>
               <View style={s.budgetRow}>
-                <BudgetIcon size={17} color="#64748b" />
+                <BudgetIcon size={18} color="#434655" />
                 <TextInput
                   style={s.budgetInput}
                   value={budget}
@@ -232,7 +236,7 @@ export default function CreateTripScreen({
         {/* Error banner */}
         {!!error && (
           <View style={s.errorBanner}>
-            <AlertCircle size={16} color="#dc2626" />
+            <AlertCircle size={16} color="#ba1a1a" />
             <View style={{ flex: 1 }}>
               <Text style={s.errorTitle}>Could not create trip</Text>
               <Text style={s.errorBody}>{error}</Text>
@@ -244,6 +248,7 @@ export default function CreateTripScreen({
           onPress={submit}
           loading={busy}
           disabled={!name.trim() || !budgetValid}
+          style={{ marginTop: 8 }}
         >
           Start Planning
         </PrimaryButton>
@@ -253,51 +258,221 @@ export default function CreateTripScreen({
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#f8fafc' },
+  root: { flex: 1, backgroundColor: '#f8f9ff' },
   scroll: { flex: 1 },
 
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
-  backBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' },
-  backBtnPressed: { backgroundColor: '#e2e8f0' },
-  newBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 5, backgroundColor: '#eff6ff', borderWidth: 1, borderColor: '#bfdbfe', borderRadius: 20 },
-  newBadgeText: { fontSize: 11, fontWeight: '700', color: '#2563eb' },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#0b1c30',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  backBtnPressed: { backgroundColor: '#f1f5f9' },
+  newBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#eff4ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    borderRadius: 20,
+  },
+  newBadgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    color: '#2563eb',
+  },
 
-  titleBlock: { marginBottom: 24, gap: 6 },
-  subtitle: { fontSize: 13, fontWeight: '500', color: '#64748b', lineHeight: 20 },
+  titleBlock: { marginBottom: 20, gap: 4 },
+  title: {
+    fontSize: 26,
+    fontWeight: '700',
+    fontFamily: 'Inter_700Bold',
+    color: '#0b1c30',
+    letterSpacing: -0.4,
+  },
+  subtitle: {
+    fontSize: 14,
+    fontWeight: '400',
+    fontFamily: 'Inter_400Regular',
+    color: '#434655',
+    lineHeight: 20,
+  },
 
-  card: { backgroundColor: '#fff', borderRadius: 20, padding: 20, borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 16, shadowColor: '#94a3b8', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2, gap: 12 },
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 14,
+    shadowColor: '#0b1c30',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
+    gap: 12,
+  },
   cardHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  fieldLabel: { fontSize: 11, fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.6 },
-  autoLabel: { fontSize: 11, fontWeight: '600', color: '#94a3b8' },
-  subLabel: { fontSize: 11, fontWeight: '700', color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.5 },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    color: '#434655',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  autoLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    fontFamily: 'Inter_400Regular',
+    color: '#737686',
+  },
+  subLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    color: '#434655',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
 
-  nameInputRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12 },
-  nameInput: { flex: 1, fontSize: 18, fontWeight: '700', color: '#0f172a' },
+  nameInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#c3c6d7',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    minHeight: 48,
+  },
+  nameInput: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    color: '#0b1c30',
+  },
 
   currencyGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  currencyChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 14, borderWidth: 1 },
-  currencyChipSelected: { backgroundColor: '#2563eb', borderColor: '#2563eb' },
-  currencyChipUnselected: { backgroundColor: '#f8fafc', borderColor: '#e2e8f0' },
-  currencyChipPressed: { backgroundColor: '#f1f5f9' },
-  currencySymbol: { fontSize: 12, fontWeight: '700' },
+  currencyChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    height: 36,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  currencyChipSelected: {
+    backgroundColor: '#0b1c30',
+    borderColor: '#0b1c30',
+  },
+  currencyChipUnselected: {
+    backgroundColor: '#f8f9ff',
+    borderColor: '#e2e8f0',
+  },
+  currencyChipPressed: { backgroundColor: '#eff4ff' },
+  currencySymbol: { fontSize: 13, fontWeight: '700' },
   currencySymbolSelected: { color: '#bfdbfe' },
-  currencySymbolUnselected: { color: '#94a3b8' },
-  currencyCode: { fontSize: 12, fontWeight: '800' },
-  currencyCodeSelected: { color: '#fff' },
-  currencyCodeUnselected: { color: '#334155' },
+  currencySymbolUnselected: { color: '#737686' },
+  currencyCode: { fontSize: 12, fontWeight: '700', fontFamily: 'Inter_700Bold' },
+  currencyCodeSelected: { color: '#ffffff' },
+  currencyCodeUnselected: { color: '#0b1c30' },
 
-  collapsibleHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  collapsibleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 36,
+  },
   collapsibleHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  collapsibleTitle: { fontSize: 13, fontWeight: '700', color: '#1e293b' },
-  chevronWrap: { width: 28, height: 28, borderRadius: 9, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' },
-  collapsibleBody: { gap: 6 },
-  divider: { height: 1, backgroundColor: '#f1f5f9' },
+  collapsibleTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    color: '#0b1c30',
+  },
+  chevronWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: '#eff4ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  collapsibleBody: { gap: 8, marginTop: 4 },
+  divider: { height: 1, backgroundColor: '#f1f5f9', marginVertical: 4 },
 
-  budgetRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12 },
-  budgetInput: { flex: 1, fontSize: 16, fontWeight: '700', color: '#0f172a' },
-  fieldError: { fontSize: 11, fontWeight: '600', color: '#dc2626' },
+  budgetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#c3c6d7',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    minHeight: 48,
+  },
+  budgetInput: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    color: '#0b1c30',
+    fontVariant: ['tabular-nums'],
+  },
+  fieldError: {
+    fontSize: 12,
+    fontWeight: '500',
+    fontFamily: 'Inter_400Regular',
+    color: '#ba1a1a',
+  },
 
-  errorBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 14, borderRadius: 16, backgroundColor: '#fff1f2', borderWidth: 1, borderColor: '#fecdd3', marginBottom: 16 },
-  errorTitle: { fontSize: 12, fontWeight: '800', color: '#991b1b' },
-  errorBody: { fontSize: 12, fontWeight: '500', color: '#b91c1c', marginTop: 2, lineHeight: 18 },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: '#ffdad6',
+    borderWidth: 1,
+    borderColor: '#ffb4ab',
+    marginBottom: 16,
+  },
+  errorTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: 'Inter_700Bold',
+    color: '#93000a',
+  },
+  errorBody: {
+    fontSize: 12,
+    fontWeight: '400',
+    fontFamily: 'Inter_400Regular',
+    color: '#410002',
+    marginTop: 2,
+    lineHeight: 18,
+  },
 });

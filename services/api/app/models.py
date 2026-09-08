@@ -8,7 +8,7 @@ class SettlementSuggestion(BaseModel):
 
     from_participant: str
     to_participant: str
-    amount: Decimal = Field(gt=Decimal("0"), decimal_places=2)
+    amount: Decimal = Field(gt=Decimal(0), decimal_places=2)
     currency: str
 
     @field_serializer("amount")

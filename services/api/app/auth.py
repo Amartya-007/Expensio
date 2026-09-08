@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import os
 import uuid
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Callable, Mapping
+from typing import Any
 
 
 class AuthError(ValueError):

@@ -2,7 +2,7 @@
  * ScreenHeader
  *
  * The standard white top-bar used by all stack screens:
- *   [BackButton]  [GradientText title + subtitle]  [optional right slot]
+ *   [BackButton]  [title + subtitle]  [optional right slot]
  *
  * Extracted because ActivityLogScreen, MembersScreen, TripDetailScreen
  * and RecurringScreen all contained identical ~20-line header blocks.
@@ -13,12 +13,11 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { ArrowLeft } from 'lucide-react-native';
-import GradientText from './GradientText';
 
 export interface ScreenHeaderProps {
   /** Called when the back button is pressed. */
   onBack: () => void;
-  /** Main heading, rendered inside GradientText. */
+  /** Main heading. */
   title: string;
   /** Optional small caption line below the title. */
   subtitle?: string;
@@ -28,7 +27,7 @@ export interface ScreenHeaderProps {
   right?: React.ReactNode;
   /** Disable the back button while an operation is in flight. */
   backDisabled?: boolean;
-  /** NativeWind class(es) forwarded to GradientText. Default: "text-2xl font-black". */
+  /** Optional class name override for title */
   titleClassName?: string;
 }
 
@@ -39,7 +38,7 @@ export default function ScreenHeader({
   paddingTop = 16,
   right,
   backDisabled = false,
-  titleClassName = 'text-2xl font-black',
+  titleClassName,
 }: ScreenHeaderProps) {
   return (
     <View style={[s.container, { paddingTop }]}>
@@ -47,15 +46,21 @@ export default function ScreenHeader({
         onPress={onBack}
         disabled={backDisabled}
         style={({ pressed }) => [s.backBtn, pressed && s.backBtnPressed]}
-        hitSlop={8}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
       >
-        <ArrowLeft size={18} color="#334155" />
+        <ArrowLeft size={20} color="#0b1c30" strokeWidth={2.2} />
       </Pressable>
 
       <View style={s.body}>
-        <GradientText className={titleClassName} numberOfLines={1}>
+        <Text
+          style={[s.title, titleClassName?.includes('font-black') && s.titleBlack]}
+          className={titleClassName}
+          numberOfLines={1}
+        >
           {title}
-        </GradientText>
+        </Text>
         {!!subtitle && <Text style={s.subtitle}>{subtitle}</Text>}
       </View>
 
@@ -71,27 +76,39 @@ const s = StyleSheet.create({
     gap: 12,
     paddingHorizontal: 16,
     paddingBottom: 14,
-    backgroundColor: '#fff',
+    backgroundColor: '#ffffff',
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: '#e2e8f0',
   },
   backBtn: {
-    width: 36,
-    height: 36,
+    width: 40,
+    height: 40,
     borderRadius: 12,
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    backgroundColor: '#eff4ff',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
-  backBtnPressed: { backgroundColor: '#e2e8f0' },
+  backBtnPressed: {
+    backgroundColor: '#dce9ff',
+  },
   body: { flex: 1 },
+  title: {
+    fontSize: 20,
+    fontWeight: '700',
+    fontFamily: 'Inter_700Bold',
+    color: '#0b1c30',
+    letterSpacing: -0.3,
+  },
+  titleBlack: {
+    fontWeight: '900',
+    fontFamily: 'Inter_900Black',
+  },
   subtitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#94a3b8',
+    fontSize: 13,
+    fontWeight: '400',
+    fontFamily: 'Inter_400Regular',
+    color: '#434655',
     marginTop: 2,
   },
   right: { flexShrink: 0 },

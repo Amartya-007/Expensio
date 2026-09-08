@@ -50,3 +50,6 @@ venv/
 services/api/.env
 
 node_modules
+.impeccable/
+
+stitch_expensio_mobile_design_system

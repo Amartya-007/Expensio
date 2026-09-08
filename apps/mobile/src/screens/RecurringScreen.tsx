@@ -33,9 +33,9 @@ type Template = {
 const RULES = ['weekly', 'monthly', 'yearly'] as const;
 
 const RULE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  weekly:  { bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe' },
-  monthly: { bg: '#f5f3ff', text: '#6d28d9', border: '#ddd6fe' },
-  yearly:  { bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0' },
+  weekly:  { bg: '#e8ecf4', text: '#0b1c30', border: '#c5c6d0' },
+  monthly: { bg: '#dbeafe', text: '#1e40af', border: '#bfdbfe' },
+  yearly:  { bg: '#d1fae5', text: '#065f46', border: '#a7f3d0' },
 };
 
 export default function RecurringScreen({
@@ -132,7 +132,7 @@ export default function RecurringScreen({
         backDisabled={busy}
         right={
           <View style={styles.countBadge}>
-            <Repeat size={12} color="#7c3aed" />
+            <Repeat size={13} color="#2563eb" />
             <Text style={styles.countBadgeText}>{templates.length} active</Text>
           </View>
         }
@@ -262,7 +262,7 @@ export default function RecurringScreen({
               <View key={t.id} style={styles.templateCard}>
                 {/* Icon */}
                 <View style={styles.templateIcon}>
-                  <Repeat size={16} color="#7c3aed" />
+                  <Repeat size={16} color="#2563eb" />
                 </View>
 
                 {/* Info */}
@@ -288,7 +288,7 @@ export default function RecurringScreen({
                   style={({ pressed }) => [styles.deleteBtn, pressed && styles.deleteBtnPressed]}
                   hitSlop={8}
                 >
-                  <Trash2 size={15} color="#e11d48" />
+                  <Trash2 size={16} color="#dc2626" />
                 </Pressable>
               </View>
             );
@@ -303,7 +303,7 @@ export default function RecurringScreen({
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f8f9ff',
   },
   scroll: { flex: 1 },
 
@@ -311,94 +311,91 @@ const styles = StyleSheet.create({
   countBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#f5f3ff',
+    gap: 6,
+    backgroundColor: '#e8ecf4',
     borderWidth: 1,
-    borderColor: '#ddd6fe',
+    borderColor: '#c5c6d0',
     paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
   countBadgeText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#7c3aed',
+    color: '#0b1c30',
   },
 
   // ── Section label ──
   sectionLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#94a3b8',
+    color: '#43474e',
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: 0.8,
     marginBottom: 8,
     paddingHorizontal: 2,
   },
 
   // ── Card ──
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    padding: 20,
+    padding: 16,
     gap: 16,
-    shadowColor: '#94a3b8',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
     marginBottom: 20,
   },
   fieldGroup: { gap: 8 },
   fieldLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#64748b',
+    color: '#43474e',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   textInput: {
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f8f9ff',
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    borderRadius: 14,
+    borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
+    minHeight: 48,
     fontSize: 15,
     fontWeight: '600',
-    color: '#0f172a',
+    color: '#0b1c30',
   },
   amountRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f8f9ff',
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    borderRadius: 14,
+    borderRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    minHeight: 52,
     gap: 10,
   },
   currencyChip: {
-    backgroundColor: '#eff6ff',
+    backgroundColor: '#e8ecf4',
     borderWidth: 1,
-    borderColor: '#bfdbfe',
+    borderColor: '#c5c6d0',
     borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
   },
   currencyChipText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#1d4ed8',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0b1c30',
   },
   amountInput: {
     flex: 1,
     fontSize: 22,
-    fontWeight: '800',
-    color: '#0f172a',
+    fontWeight: '700',
+    color: '#0b1c30',
+    fontVariant: ['tabular-nums'],
   },
   chipRow: {
     flexDirection: 'row',
@@ -413,7 +410,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff1f2',
     borderWidth: 1,
     borderColor: '#fecdd3',
-    borderRadius: 14,
+    borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
@@ -429,15 +426,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     paddingVertical: 40,
-    backgroundColor: '#fff',
-    borderRadius: 20,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
   emptyText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#94a3b8',
+    color: '#43474e',
   },
 
   // ── Template list ──
@@ -445,25 +442,20 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   templateCard: {
-    backgroundColor: '#fff',
-    borderRadius: 18,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     padding: 14,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    shadowColor: '#94a3b8',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 1,
   },
   templateIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: '#f5f3ff',
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#eff6ff',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -473,9 +465,9 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   templateName: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
-    color: '#0f172a',
+    color: '#0b1c30',
   },
   templateMeta: {
     flexDirection: 'row',
@@ -486,7 +478,7 @@ const styles = StyleSheet.create({
   ruleChip: {
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 20,
+    borderRadius: 6,
     borderWidth: 1,
   },
   ruleChipText: {
@@ -495,18 +487,19 @@ const styles = StyleSheet.create({
     textTransform: 'capitalize',
   },
   templateMetaText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '500',
-    color: '#64748b',
+    color: '#43474e',
+    fontVariant: ['tabular-nums'],
   },
   deleteBtn: {
-    width: 34,
-    height: 34,
+    width: 40,
+    height: 40,
     borderRadius: 10,
-    backgroundColor: '#fff1f2',
+    backgroundColor: '#fee2e2',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
-  deleteBtnPressed: { backgroundColor: '#ffe4e6' },
+  deleteBtnPressed: { backgroundColor: '#fecdd3' },
 });

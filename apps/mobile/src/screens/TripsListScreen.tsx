@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   FlatList,
+  Image,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -9,18 +10,17 @@ import {
 } from 'react-native';
 import {
   Archive,
+  ArrowRight,
   Calendar,
-  ChevronRight,
   Compass,
-  MapPin,
+  Plane,
   Plus,
+  User,
   Wallet,
 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { db } from '../powersync/db';
 import { flushPendingActions } from '../rpc';
-import GradientText from '../components/GradientText';
 import SyncStatusBanner from '../components/SyncStatusBanner';
 
 type Trip = {
@@ -34,42 +34,83 @@ type Trip = {
   is_archived: number;
 };
 
-function formatDateRange(start: string | null, end: string | null, created: string): string {
-  if (start) {
-    const s = new Date(start).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    const e = end
-      ? new Date(end).toLocaleDateString(undefined, {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-        })
-      : null;
-    return e ? `${s} – ${e}` : `From ${s}`;
-  }
-  return `Created ${new Date(created).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })}`;
-}
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-// Stable colour palette for card icons
-const CARD_ACCENTS = [
-  { icon: '#2563eb', bg: '#eff6ff', border: '#bfdbfe' },
-  { icon: '#7c3aed', bg: '#f5f3ff', border: '#ddd6fe' },
-  { icon: '#0d9488', bg: '#f0fdfa', border: '#99f6e4' },
-  { icon: '#d97706', bg: '#fffbeb', border: '#fde68a' },
-  { icon: '#e11d48', bg: '#fff1f2', border: '#fecdd3' },
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  INR: '₹',
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+  AUD: 'A$',
+  CAD: 'C$',
+  JPY: '¥',
+  SGD: 'S$',
+};
+
+const DESTINATION_IMAGES = [
+  'https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?auto=format&fit=crop&w=400&q=80', // Greece
+  'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=400&q=80', // Himachal
+  'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=400&q=80', // Dubai
+  'https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=400&q=80', // Bali
+  'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=400&q=80', // Beach
+  'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?auto=format&fit=crop&w=400&q=80', // Road trip
 ];
 
-function hashId(id: string): number {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  return h;
+const CARD_THEMES = [
+  { bg: '#f0f5ff', border: '#e0e7ff', arrowBg: '#e0e7ff', arrowColor: '#4f46e5' }, // Soft Blue
+  { bg: '#f0fdf4', border: '#dcfce7', arrowBg: '#dcfce7', arrowColor: '#16a34a' }, // Soft Mint
+  { bg: '#fff8f0', border: '#ffedd5', arrowBg: '#ffedd5', arrowColor: '#ea580c' }, // Soft Peach
+  { bg: '#f5f3ff', border: '#ede9fe', arrowBg: '#ede9fe', arrowColor: '#7c3aed' }, // Soft Lavender
+];
+
+function stableIndex(id: string, length: number) {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  }
+  return hash % length;
 }
 
-function accentFor(id: string) {
-  return CARD_ACCENTS[hashId(id) % CARD_ACCENTS.length];
+function themeFor(id: string) {
+  return CARD_THEMES[stableIndex(id, CARD_THEMES.length)];
+}
+
+function imageFor(id: string) {
+  return DESTINATION_IMAGES[stableIndex(id, DESTINATION_IMAGES.length)];
+}
+
+function parseDateIso(iso: string) {
+  const parts = iso.split('-').map(Number);
+  if (parts.length === 3 && !parts.some(Number.isNaN)) {
+    return { year: parts[0], month: parts[1], day: parts[2] };
+  }
+  const d = new Date(iso);
+  return { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() };
+}
+
+function formatDateRange(start: string | null, end: string | null, created: string): string {
+  if (start) {
+    const s = parseDateIso(start);
+    const sMonth = MONTHS[s.month - 1];
+    if (end) {
+      const e = parseDateIso(end);
+      const eMonth = MONTHS[e.month - 1];
+      if (s.year === e.year) {
+        return `${s.day} ${sMonth} - ${e.day} ${eMonth} ${e.year}`;
+      }
+      return `${s.day} ${sMonth} ${s.year} - ${e.day} ${eMonth} ${e.year}`;
+    }
+    return `From ${s.day} ${sMonth} ${s.year}`;
+  }
+  const c = parseDateIso(created.slice(0, 10));
+  return `Created ${c.day} ${MONTHS[c.month - 1]} ${c.year}`;
+}
+
+function formatBudget(total_budget: number | null, currency: string): string {
+  if (total_budget == null) return 'Budget: No limit';
+  const symbol = CURRENCY_SYMBOLS[currency] || `${currency} `;
+  const formatted = Number(total_budget).toLocaleString(undefined, { maximumFractionDigits: 0 });
+  return `Budget: ${symbol}${formatted}`;
 }
 
 export default function TripsListScreen({
@@ -85,6 +126,7 @@ export default function TripsListScreen({
   const [showArchived, setShowArchived] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [failedImageIds, setFailedImageIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const ac = new AbortController();
@@ -93,7 +135,13 @@ export default function TripsListScreen({
       [showArchived ? 1 : 0],
       {
         onResult: (r) => {
-          setTrips(r.rows?._array ?? []);
+          const nextTrips = r.rows?._array ?? [];
+          setTrips(nextTrips);
+          const visibleIds = new Set(nextTrips.map((trip) => trip.id));
+          setFailedImageIds((current) => {
+            const next = new Set([...current].filter((id) => visibleIds.has(id)));
+            return next;
+          });
           setLoaded(true);
         },
       },
@@ -115,6 +163,7 @@ export default function TripsListScreen({
 
   async function onRefresh() {
     setRefreshing(true);
+    setFailedImageIds(new Set());
     await flushPendingActions();
     setRefreshing(false);
   }
@@ -131,39 +180,28 @@ export default function TripsListScreen({
           },
         ]}
       >
-        {/* Hero illustration */}
-        <View style={styles.emptyIconOuter}>
-          <LinearGradient
-            colors={['#2563eb', '#1d4ed8']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.emptyIconGradient}
+        <View style={styles.emptyCard}>
+          <View style={styles.emptyIconCircle}>
+            <Compass size={38} color="#2563eb" strokeWidth={2} />
+          </View>
+
+          <Text style={styles.emptyTitle}>
+            Effortless Group Expenses
+          </Text>
+          <Text style={styles.emptySubtitle}>
+            Track shared costs, split fairly with friends, and settle balances instantly without spreadsheets.
+          </Text>
+
+          <Pressable
+            onPress={onCreateTrip}
+            accessibilityRole="button"
+            accessibilityLabel="Create your first trip"
+            style={styles.emptyBtn}
           >
-            <Compass size={40} color="#fff" strokeWidth={1.8} />
-          </LinearGradient>
+            <Plus size={18} color="#ffffff" strokeWidth={2.5} />
+            <Text style={styles.emptyBtnText}>Create Your First Trip</Text>
+          </Pressable>
         </View>
-
-        <GradientText className="text-3xl font-black tracking-tight text-center">
-          Plan Your First Adventure
-        </GradientText>
-        <Text style={styles.emptySubtitle}>
-          Track shared expenses, set budgets, and split bills effortlessly with your travel group.
-        </Text>
-
-        <Pressable
-          onPress={onCreateTrip}
-          style={({ pressed }) => [styles.emptyBtnWrap, pressed && styles.emptyBtnPressed]}
-        >
-          <LinearGradient
-            colors={['#2563eb', '#1d4ed8']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.emptyBtnGradient}
-          >
-            <Plus size={18} color="#fff" strokeWidth={2.5} />
-            <Text style={styles.emptyBtnText}>Create Trip</Text>
-          </LinearGradient>
-        </Pressable>
       </View>
     );
   }
@@ -171,133 +209,172 @@ export default function TripsListScreen({
   // ── Main list ────────────────────────────────────────────────────────────────
   return (
     <View style={[styles.shell, { paddingTop: Math.max(insets.top, 16) }]}>
-      {/* ── Header ── */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <GradientText className="text-3xl font-black">
-            {showArchived ? 'Archived' : 'My Trips'}
-          </GradientText>
-          <Text style={styles.headerSub}>
-            {trips.length} {trips.length === 1 ? 'trip' : 'trips'}
-            {showArchived ? ' archived' : ' active'}
+      <View style={styles.container}>
+        {/* ── Top Bar with Brand & Profile ── */}
+        <View style={styles.topBar}>
+          <View style={styles.brandRow}>
+            <View style={styles.brandIconCircle}>
+              <Plane size={20} color="#2563eb" strokeWidth={2.5} />
+            </View>
+            <Text style={styles.brandText}>Expensio</Text>
+          </View>
+
+          <View style={styles.topBarRight}>
+            {!showArchived && (
+              <Pressable
+                onPress={onCreateTrip}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel="Create new trip"
+                style={({ pressed }) => [styles.newBtn, pressed && styles.newBtnPressed]}
+              >
+                <Plus size={15} color="#ffffff" strokeWidth={2.5} />
+                <Text style={styles.newBtnText}>New Trip</Text>
+              </Pressable>
+            )}
+
+            <View style={styles.avatarCircle}>
+              <User size={18} color="#2563eb" strokeWidth={2} />
+            </View>
+          </View>
+        </View>
+
+        {/* ── Header Title & Description ── */}
+        <View style={styles.headerBlock}>
+          <Text style={styles.headerTitle}>
+            {showArchived ? 'Archived Trips' : 'My Trips'}
+          </Text>
+          <Text style={styles.headerSubtitle}>
+            {showArchived
+              ? 'View and manage your archived trips.'
+              : 'Here are all the trips you\'ve created so far. Click on a trip to view more details, plan your itinerary, and manage your expenses.'}
           </Text>
         </View>
 
-        {!showArchived && (
-          <Pressable
-            onPress={onCreateTrip}
-            style={({ pressed }) => [styles.newBtnWrap, pressed && styles.newBtnPressed]}
-          >
-            <LinearGradient
-              colors={['#2563eb', '#1d4ed8']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.newBtnGradient}
-            >
-              <Plus size={16} color="#fff" strokeWidth={2.5} />
-              <Text style={styles.newBtnText}>New Trip</Text>
-            </LinearGradient>
-          </Pressable>
-        )}
-      </View>
+        {/* ── Sync / pending banners ── */}
+        <View style={styles.bannerArea}>
+          <SyncStatusBanner />
+          {pendingCount > 0 && (
+            <View style={styles.pendingBanner}>
+              <Text style={styles.pendingText}>
+                {pendingCount} change{pendingCount === 1 ? '' : 's'} queued — pull to sync
+              </Text>
+            </View>
+          )}
+        </View>
 
-      {/* ── Sync / pending banners ── */}
-      <View style={styles.bannerArea}>
-        <SyncStatusBanner />
-        {pendingCount > 0 && (
-          <View style={styles.pendingBanner}>
-            <Text style={styles.pendingText}>
-              {pendingCount} change{pendingCount === 1 ? '' : 's'} queued — pull to sync
-            </Text>
-          </View>
-        )}
-      </View>
+        {/* ── Trip list ── */}
+        <FlatList
+          data={trips}
+          keyExtractor={(item) => item.id}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#4f46e5" />
+          }
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: Math.max(insets.bottom, 16) + 32 },
+          ]}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.listEmpty}>
+              <Archive size={32} color="#cbd5e1" />
+              <Text style={styles.listEmptyText}>No archived trips found.</Text>
+            </View>
+          }
+          renderItem={({ item }) => {
+            const theme = themeFor(item.id);
+            const imageUrl = imageFor(item.id);
+            const dateLabel = formatDateRange(item.start_date, item.end_date, item.created_at);
+            const budgetLabel = formatBudget(item.total_budget, item.currency);
 
-      {/* ── Trip list ── */}
-      <FlatList
-        data={trips}
-        keyExtractor={(item) => item.id}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2563eb" />
-        }
-        contentContainerStyle={[
-          styles.listContent,
-          { paddingBottom: Math.max(insets.bottom, 16) + 24 },
-        ]}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.listEmpty}>
-            <Archive size={32} color="#cbd5e1" />
-            <Text style={styles.listEmptyText}>No archived trips found.</Text>
-          </View>
-        }
-        renderItem={({ item }) => {
-          const accent = accentFor(item.id);
-          const dateLabel = formatDateRange(item.start_date, item.end_date, item.created_at);
-          return (
-            <Pressable
-              onPress={() => onOpenTrip(item.id, item.currency)}
-              style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-            >
-              {/* Left: coloured icon circle */}
-              <View
-                style={[
-                  styles.cardIconCircle,
-                  { backgroundColor: accent.bg, borderColor: accent.border },
-                ]}
+            return (
+              <Pressable
+                onPress={() => onOpenTrip(item.id, item.currency)}
+                accessibilityRole="button"
+                accessibilityLabel={`Open trip ${item.name}`}
               >
-                <MapPin size={22} color={accent.icon} strokeWidth={2} />
-              </View>
+                {({ pressed }) => (
+                  <View
+                    style={[
+                      styles.card,
+                      {
+                        backgroundColor: theme.bg,
+                        borderColor: theme.border,
+                      },
+                      pressed && styles.cardPressed,
+                    ]}
+                  >
+                    {/* Left thumbnail image */}
+                    {failedImageIds.has(item.id) ? (
+                      <View style={styles.cardThumbFallback}>
+                        <Compass size={28} color="#94a3b8" />
+                      </View>
+                    ) : (
+                      <Image
+                        source={{ uri: imageUrl }}
+                        style={styles.cardThumb}
+                        resizeMode="cover"
+                        onError={() =>
+                          setFailedImageIds((current) => {
+                            const next = new Set(current);
+                            next.add(item.id);
+                            return next;
+                          })
+                        }
+                      />
+                    )}
 
-              {/* Body */}
-              <View style={styles.cardBody}>
-                <Text style={styles.cardName} numberOfLines={1}>
-                  {item.name}
-                </Text>
+                    {/* Middle: name (right of image) and details (below name) */}
+                    <View style={styles.cardBody}>
+                      <Text style={styles.cardName} numberOfLines={1}>
+                        {item.name}
+                      </Text>
 
-                <View style={styles.cardMetaRow}>
-                  <Calendar size={11} color="#94a3b8" />
-                  <Text style={styles.cardMetaText} numberOfLines={1}>
-                    {dateLabel}
-                  </Text>
-                </View>
+                      <View style={styles.cardMetaRow}>
+                        <Calendar size={14} color="#64748b" strokeWidth={2} />
+                        <Text style={styles.cardMetaText} numberOfLines={1}>
+                          {dateLabel}
+                        </Text>
+                      </View>
 
-                {item.total_budget != null && (
-                  <View style={styles.cardBudgetRow}>
-                    <Wallet size={11} color="#059669" />
-                    <Text style={styles.cardBudgetText}>
-                      {item.currency}{' '}
-                      {Number(item.total_budget).toLocaleString(undefined, {
-                        maximumFractionDigits: 0,
-                      })}{' '}
-                      budget
-                    </Text>
+                      <View style={styles.cardMetaRow}>
+                        <Wallet size={14} color="#64748b" strokeWidth={2} />
+                        <Text style={styles.cardBudgetText} numberOfLines={1}>
+                          {budgetLabel}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Right: arrow circle on rightmost side */}
+                    <View
+                      style={[
+                        styles.arrowCircle,
+                        { backgroundColor: theme.arrowBg },
+                      ]}
+                    >
+                      <ArrowRight size={18} color={theme.arrowColor} strokeWidth={2.5} />
+                    </View>
                   </View>
                 )}
-              </View>
+              </Pressable>
+            );
+          }}
+        />
 
-              {/* Right: currency chip + chevron */}
-              <View style={styles.cardRight}>
-                <View style={styles.currencyChip}>
-                  <Text style={styles.currencyChipText}>{item.currency}</Text>
-                </View>
-                <ChevronRight size={16} color="#cbd5e1" />
-              </View>
-            </Pressable>
-          );
-        }}
-      />
-
-      {/* ── Archive toggle ── */}
-      <Pressable
-        onPress={() => setShowArchived((v) => !v)}
-        style={({ pressed }) => [styles.archiveToggle, pressed && styles.archiveTogglePressed]}
-      >
-        <Archive size={13} color="#94a3b8" />
-        <Text style={styles.archiveToggleText}>
-          {showArchived ? 'Back to active trips' : 'Show archived trips'}
-        </Text>
-      </Pressable>
+        {/* ── Archive toggle ── */}
+        <Pressable
+          onPress={() => setShowArchived((v) => !v)}
+          hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
+          accessibilityRole="button"
+          accessibilityLabel={showArchived ? 'Back to active trips' : 'Show archived trips'}
+          style={({ pressed }) => [styles.archiveToggle, pressed && styles.archiveTogglePressed]}
+        >
+          <Archive size={14} color="#737686" />
+          <Text style={styles.archiveToggleText}>
+            {showArchived ? 'Back to active trips' : 'Show archived trips'}
+          </Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -306,137 +383,197 @@ const styles = StyleSheet.create({
   // ── Empty state ──
   emptyShell: {
     flex: 1,
-    backgroundColor: '#f8fafc',
-    paddingHorizontal: 32,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 16,
   },
-  emptyIconOuter: {
-    borderRadius: 36,
-    shadowColor: '#2563eb',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 18,
-    elevation: 10,
-    marginBottom: 8,
+  emptyCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 24,
+    alignItems: 'center',
+    maxWidth: 360,
+    width: '100%',
+    shadowColor: '#0b1c30',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 3,
   },
-  emptyIconGradient: {
-    width: 88,
-    height: 88,
-    borderRadius: 36,
+  emptyIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 20,
+    backgroundColor: '#eff4ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    fontFamily: 'Inter_700Bold',
+    color: '#0b1c30',
+    textAlign: 'center',
+    letterSpacing: -0.3,
   },
   emptySubtitle: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#64748b',
+    fontWeight: '400',
+    fontFamily: 'Inter_400Regular',
+    color: '#434655',
     textAlign: 'center',
-    lineHeight: 22,
-    maxWidth: 300,
-  },
-  emptyBtnWrap: {
-    borderRadius: 16,
+    lineHeight: 21,
     marginTop: 8,
-    shadowColor: '#2563eb',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 6,
+    marginBottom: 20,
   },
-  emptyBtnPressed: {
-    opacity: 0.88,
-    transform: [{ scale: 0.97 }],
-  },
-  emptyBtnGradient: {
+  emptyBtn: {
+    width: '100%',
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#2563eb',
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 16,
   },
   emptyBtnText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
   },
 
   // ── Main shell ──
   shell: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#ffffff',
     paddingHorizontal: 16,
   },
+  container: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 640,
+    alignSelf: 'center',
+  },
 
-  // ── Header ──
-  header: {
+  // ── Top Bar (Brand + Avatar) ──
+  topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 8,
+    paddingVertical: 12,
     marginBottom: 8,
   },
-  headerLeft: {
-    flex: 1,
-    gap: 2,
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
-  headerSub: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#94a3b8',
-    marginTop: 2,
+  brandIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: '#eff4ff',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  newBtnWrap: {
-    borderRadius: 16,
-    shadowColor: '#2563eb',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
+  brandText: {
+    fontSize: 20,
+    fontWeight: '800',
+    fontFamily: 'Inter_700Bold',
+    color: '#0b1c30',
+    letterSpacing: -0.3,
   },
-  newBtnPressed: {
-    opacity: 0.88,
-    transform: [{ scale: 0.96 }],
+  topBarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
-  newBtnGradient: {
+  avatarCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#eff4ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+  },
+  newBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 16,
+    backgroundColor: '#2563eb',
+    height: 36,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  newBtnPressed: {
+    backgroundColor: '#1d4ed8',
+    opacity: 0.9,
   },
   newBtnText: {
-    color: '#fff',
-    fontSize: 13,
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+  },
+
+  // ── Header Block ──
+  headerBlock: {
+    marginBottom: 16,
+    gap: 6,
+  },
+  headerTitle: {
+    fontSize: 30,
     fontWeight: '800',
+    fontFamily: 'Inter_700Bold',
+    color: '#0b1c30',
+    letterSpacing: -0.5,
+  },
+  headerSubtitle: {
+    fontSize: 13,
+    fontWeight: '400',
+    fontFamily: 'Inter_400Regular',
+    color: '#64748b',
+    lineHeight: 19,
   },
 
   // ── Banners ──
   bannerArea: {
     gap: 6,
-    marginBottom: 4,
+    marginBottom: 12,
   },
   pendingBanner: {
     backgroundColor: '#fffbeb',
     borderWidth: 1,
     borderColor: '#fde68a',
-    borderRadius: 14,
+    borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   pendingText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
     color: '#92400e',
   },
 
   // ── List ──
   listContent: {
-    paddingTop: 8,
-    gap: 10,
+    paddingTop: 2,
+    gap: 14,
   },
   listEmpty: {
     alignItems: 'center',
@@ -445,82 +582,84 @@ const styles = StyleSheet.create({
   },
   listEmptyText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#94a3b8',
+    fontWeight: '500',
+    fontFamily: 'Inter_400Regular',
+    color: '#737686',
   },
 
   // ── Trip card ──
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 24,
-    padding: 16,
+    borderRadius: 20,
+    padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    shadowColor: '#94a3b8',
+    borderWidth: 1,
+    shadowColor: '#0b1c30',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 3,
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1,
   },
   cardPressed: {
-    backgroundColor: '#f8fafc',
-    transform: [{ scale: 0.99 }],
+    opacity: 0.92,
   },
-  cardIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 20,
-    borderWidth: 1,
+  cardThumb: {
+    width: 82,
+    height: 82,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#e2e8f0',
+    flexShrink: 0,
+  },
+  cardThumbFallback: {
+    width: 82,
+    height: 82,
+    borderRadius: 16,
+    backgroundColor: '#e2e8f0',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   cardBody: {
     flex: 1,
-    gap: 4,
+    marginLeft: 14,
+    marginRight: 10,
+    justifyContent: 'center',
   },
   cardName: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#0f172a',
+    fontSize: 16.5,
+    fontWeight: '700',
+    fontFamily: 'Inter_700Bold',
+    color: '#0b1c30',
     letterSpacing: -0.3,
+    marginBottom: 6,
   },
   cardMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    marginBottom: 4,
   },
   cardMetaText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '500',
-    color: '#94a3b8',
-  },
-  cardBudgetRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
+    fontFamily: 'Inter_400Regular',
+    color: '#64748b',
+    marginLeft: 6,
   },
   cardBudgetText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#059669',
+    fontSize: 12.5,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    color: '#334155',
+    marginLeft: 6,
   },
-  cardRight: {
+  arrowCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'center',
     flexShrink: 0,
-  },
-  currencyChip: {
-    backgroundColor: '#f1f5f9',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  currencyChipText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#475569',
   },
 
   // ── Archive toggle ──
@@ -530,14 +669,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     paddingVertical: 14,
+    height: 48,
   },
   archiveTogglePressed: {
     opacity: 0.6,
   },
   archiveToggleText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#94a3b8',
-    letterSpacing: 0.3,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    color: '#737686',
+    letterSpacing: 0.2,
   },
 });
+    

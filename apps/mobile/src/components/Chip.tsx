@@ -12,13 +12,22 @@ export default function Chip({
   return (
     <Pressable
       onPress={onPress}
+      hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
       style={({ pressed }) => [
         styles.base,
         selected ? styles.selected : styles.unselected,
         pressed && !selected && styles.pressed,
+        pressed && selected && styles.selectedPressed,
       ]}
     >
-      <Text style={[styles.label, selected ? styles.labelSelected : styles.labelUnselected]}>
+      <Text
+        style={[
+          styles.label,
+          selected ? styles.labelSelected : styles.labelUnselected,
+        ]}
+      >
         {label}
       </Text>
     </Pressable>
@@ -27,30 +36,40 @@ export default function Chip({
 
 const styles = StyleSheet.create({
   base: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
+    height: 36,
+    paddingHorizontal: 14,
+    borderRadius: 10,
     borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
   },
   selected: {
-    backgroundColor: '#2563eb',
-    borderColor: '#2563eb',
+    backgroundColor: '#0b1c30',
+    borderColor: '#0b1c30',
+  },
+  selectedPressed: {
+    backgroundColor: '#213145',
   },
   unselected: {
-    backgroundColor: '#fff',
+    backgroundColor: '#ffffff',
     borderColor: '#e2e8f0',
   },
   pressed: {
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#f8f9ff',
+    borderColor: '#cbdbf5',
   },
   label: {
     fontSize: 13,
     fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    letterSpacing: 0.01,
   },
   labelSelected: {
-    color: '#fff',
+    color: '#ffffff',
   },
   labelUnselected: {
-    color: '#475569',
+    color: '#434655',
   },
 });
