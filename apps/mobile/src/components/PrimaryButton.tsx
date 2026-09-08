@@ -68,6 +68,7 @@ export default function PrimaryButton({
               isSecondary && styles.secondaryLabel,
               isDestructive && styles.destructiveLabel,
               isGhost && styles.ghostLabel,
+              disabled && styles.disabledLabel,
             ]}
           >
             {children}
@@ -130,9 +131,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#eff4ff',
   },
   disabled: {
-    opacity: 0.5,
+    backgroundColor: '#cbd5e1',
+    borderColor: '#cbd5e1',
+    opacity: 1,
     shadowOpacity: 0,
     elevation: 0,
+  },
+  disabledLabel: {
+    color: '#64748b',
   },
   row: {
     flexDirection: 'row',

@@ -438,7 +438,12 @@ export default function DashboardScreen({
               {/* Safe to spend */}
               <View style={styles.spendCardLeft}>
                 <Text style={styles.spendCardSubLabel}>Safe to spend today</Text>
-                <Text style={styles.spendCardBigValue} numberOfLines={1}>
+                <Text
+                  style={styles.spendCardBigValue}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.6}
+                >
                   {fmt(stats.remainingPerDay)}
                 </Text>
                 <View style={styles.spendCardTag}>
@@ -455,7 +460,12 @@ export default function DashboardScreen({
               {/* Burn rate */}
               <View style={styles.spendCardRight}>
                 <Text style={styles.spendCardSubLabel}>Current burn rate</Text>
-                <Text style={styles.spendCardBurnValue} numberOfLines={1}>
+                <Text
+                  style={styles.spendCardBurnValue}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.6}
+                >
                   {fmt(stats.dailyBurnRate)}
                 </Text>
                 <Text style={styles.spendCardBurnSuffix}>per day</Text>
