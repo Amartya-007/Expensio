@@ -50,7 +50,6 @@ export default function PrimaryButton({
           isSecondary && styles.secondaryLabel,
           isDestructive && styles.destructiveLabel,
           isGhost && styles.ghostLabel,
-          disabled && styles.disabledLabel,
         ]}
       >
         {children}
@@ -75,7 +74,7 @@ export default function PrimaryButton({
               colors={pressed ? ['#1d4ed8', '#1e3a8a'] : ['#2563eb', '#1e40af']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={[StyleSheet.absoluteFillObject, styles.gradientFill]}
+              style={[StyleSheet.absoluteFill, styles.gradientFill]}
             />
             {content}
           </>
@@ -160,14 +159,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#eff4ff',
   },
   disabled: {
-    backgroundColor: '#cbd5e1',
-    borderColor: '#cbd5e1',
-    opacity: 1,
+    opacity: 0.5,
     shadowOpacity: 0,
     elevation: 0,
-  },
-  disabledLabel: {
-    color: '#64748b',
   },
   row: {
     flexDirection: 'row',

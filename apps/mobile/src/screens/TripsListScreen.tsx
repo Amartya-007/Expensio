@@ -136,7 +136,13 @@ export default function TripsListScreen({
       [showArchived ? 1 : 0],
       {
         onResult: (r) => {
-          setTrips(r.rows?._array ?? []);
+          const nextTrips = r.rows?._array ?? [];
+          setTrips(nextTrips);
+          const visibleIds = new Set(nextTrips.map((trip) => trip.id));
+          setFailedImageIds((current) => {
+            const next = new Set([...current].filter((id) => visibleIds.has(id)));
+            return next;
+          });
           setLoaded(true);
         },
       },
@@ -158,6 +164,7 @@ export default function TripsListScreen({
 
   async function onRefresh() {
     setRefreshing(true);
+    setFailedImageIds(new Set());
     await flushPendingActions();
     setRefreshing(false);
   }

@@ -946,7 +946,7 @@ const styles = StyleSheet.create({
   },
   heroBalancePct: {
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '400',
     fontFamily: 'Inter_400Regular',
     color: '#bfdbfe',
     marginTop: 2,
