@@ -429,7 +429,7 @@ export default function DashboardScreen({
           <View style={styles.spendCard}>
             <View style={styles.spendCardHeader}>
               <View style={styles.spendCardIconWrap}>
-                <Flame size={14} color="#ea580c" />
+                <Flame size={14} color="#2563eb" />
               </View>
               <Text style={styles.spendCardTitle}>Daily Spending Guide</Text>
             </View>
@@ -521,8 +521,8 @@ export default function DashboardScreen({
           {participantCount > 1 && (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <View style={[styles.cardIconWrap, { backgroundColor: '#f5f3ff' }]}>
-                  <Users size={15} color="#7c3aed" />
+                <View style={[styles.cardIconWrap, { backgroundColor: '#eff6ff' }]}>
+                  <Users size={15} color="#2563eb" />
                 </View>
                 <Text style={styles.cardTitle}>Per Person</Text>
               </View>
@@ -558,8 +558,8 @@ export default function DashboardScreen({
           {categoryBreakdown.length > 0 && (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <View style={[styles.cardIconWrap, { backgroundColor: '#fff7ed' }]}>
-                  <BarChart2 size={15} color="#ea580c" />
+                <View style={[styles.cardIconWrap, { backgroundColor: '#eff6ff' }]}>
+                  <BarChart2 size={15} color="#2563eb" />
                 </View>
                 <Text style={styles.cardTitle}>Spend by Category</Text>
               </View>
@@ -1067,7 +1067,7 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 8,
-    backgroundColor: '#fff7ed',
+    backgroundColor: '#eff6ff',
     alignItems: 'center',
     justifyContent: 'center',
   },

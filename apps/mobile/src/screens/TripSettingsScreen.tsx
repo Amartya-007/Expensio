@@ -336,8 +336,8 @@ export default function TripSettingsScreen({
         <Text style={s.sectionLabel}>Trip Actions</Text>
         <View style={s.rowGroup}>
           <SettingsRow
-            icon={<Archive size={18} color="#d97706" />}
-            iconBg="#fef3c7"
+            icon={<Archive size={18} color="#2563eb" />}
+            iconBg="#eff6ff"
             title={trip?.is_archived ? 'Unarchive Trip' : 'Archive Trip'}
             subtitle={trip?.is_archived ? 'Make this trip active again' : 'Hide from your active trips'}
             onPress={confirmArchive}

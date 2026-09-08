@@ -8,6 +8,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'destructive' | 'ghost';
 
@@ -32,19 +33,67 @@ export default function PrimaryButton({
   const isSecondary = variant === 'secondary';
   const isDestructive = variant === 'destructive';
   const isGhost = variant === 'ghost';
+  const isDisabled = disabled || loading;
+
+  const content = loading ? (
+    <ActivityIndicator
+      color={isPrimary ? '#ffffff' : isDestructive ? '#ef4444' : '#2563eb'}
+      size="small"
+    />
+  ) : (
+    <View style={styles.row}>
+      {icon}
+      <Text
+        style={[
+          styles.label,
+          isPrimary && styles.primaryLabel,
+          isSecondary && styles.secondaryLabel,
+          isDestructive && styles.destructiveLabel,
+          isGhost && styles.ghostLabel,
+          disabled && styles.disabledLabel,
+        ]}
+      >
+        {children}
+      </Text>
+    </View>
+  );
+
+  // Primary is the app's main call-to-action style, so it's the one that gets the
+  // blue gradient treatment (matching the Dashboard hero card) -- secondary/
+  // destructive/ghost stay flat, since a gradient on every button everywhere would
+  // undercut the "primary action" signal a gradient CTA is meant to carry.
+  if (isPrimary && !isDisabled) {
+    return (
+      <Pressable
+        onPress={onPress}
+        disabled={isDisabled}
+        style={({ pressed }) => [styles.base, styles.primaryShadow, pressed && styles.pressedScale, style]}
+      >
+        {({ pressed }) => (
+          <>
+            <LinearGradient
+              colors={pressed ? ['#1d4ed8', '#1e3a8a'] : ['#2563eb', '#1e40af']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[StyleSheet.absoluteFillObject, styles.gradientFill]}
+            />
+            {content}
+          </>
+        )}
+      </Pressable>
+    );
+  }
 
   return (
     <Pressable
       onPress={onPress}
-      disabled={disabled || loading}
+      disabled={isDisabled}
       style={({ pressed }) => [
         styles.base,
-        isPrimary && styles.primary,
         isSecondary && styles.secondary,
         isDestructive && styles.destructive,
         isGhost && styles.ghost,
-        pressed && !disabled && !loading && (
-          isPrimary ? styles.primaryPressed :
+        pressed && !isDisabled && (
           isSecondary ? styles.secondaryPressed :
           isDestructive ? styles.destructivePressed :
           styles.ghostPressed
@@ -53,28 +102,7 @@ export default function PrimaryButton({
         style,
       ]}
     >
-      {loading ? (
-        <ActivityIndicator
-          color={isPrimary ? '#ffffff' : isDestructive ? '#ef4444' : '#2563eb'}
-          size="small"
-        />
-      ) : (
-        <View style={styles.row}>
-          {icon}
-          <Text
-            style={[
-              styles.label,
-              isPrimary && styles.primaryLabel,
-              isSecondary && styles.secondaryLabel,
-              isDestructive && styles.destructiveLabel,
-              isGhost && styles.ghostLabel,
-              disabled && styles.disabledLabel,
-            ]}
-          >
-            {children}
-          </Text>
-        </View>
-      )}
+      {content}
     </Pressable>
   );
 }
@@ -89,16 +117,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     flexDirection: 'row',
   },
-  primary: {
-    backgroundColor: '#2563eb',
-    shadowColor: '#2563eb',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.22,
-    shadowRadius: 6,
-    elevation: 3,
+  primaryShadow: {
+    shadowColor: '#1e40af',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.28,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  primaryPressed: {
-    backgroundColor: '#1d4ed8',
+  gradientFill: {
+    borderRadius: 12,
+  },
+  pressedScale: {
     transform: [{ scale: 0.99 }],
   },
   secondary: {
